@@ -281,21 +281,66 @@ impl FreeCamera {
 enum CamMode { Spectator, ThirdPerson }
 
 // helper: načte CpuMesh z .glb nebo vrátí kouli
-fn load_cpu_mesh(path: &Path) -> CpuMesh {
-    if path.exists() {
-        if let Ok(mut assets) = three_d_asset::io::load(&[path]) {
-            if let Some(k) = assets.keys().find(|k| k.to_string_lossy().ends_with(".glb")).cloned() {
-                if let Ok(model) = assets.deserialize::<three_d_asset::Model>(&k) {
-                    if let Some(geom) = model.geometries.first() {
-                        if let three_d_asset::geometry::Geometry::Triangles(tri) = &geom.geometry {
-                            return tri.clone().into();
+fn load_cpu_mesh(path: &Path) -> (CpuMesh, String) {
+    println!("Pokouším se načíst: {}", path.display());
+    
+    if !path.exists() {
+        println!("Soubor neexistuje: {}", path.display());
+        return (CpuMesh::sphere(32), format!("Soubor neexistuje: {}", path.display()));
+    }
+
+    match three_d_asset::io::load(&[path]) {
+        Ok(mut assets) => {
+            println!("Úspěšně načteno {} assetů", assets.len());
+            
+            // Vypsat všechny dostupné assety
+            for key in assets.keys() {
+                println!("Dostupný asset: {}", key.to_string_lossy());
+            }
+            
+            // Hledat .glb soubor
+            if let Some(key) = assets.keys().find(|k| {
+                let name = k.to_string_lossy().to_lowercase();
+                name.ends_with(".glb") || name.ends_with(".gltf")
+            }).cloned() {
+                println!("Nalezen GLB/GLTF asset: {}", key.to_string_lossy());
+                
+                match assets.deserialize::<three_d_asset::Model>(&key) {
+                    Ok(model) => {
+                        println!("Model úspěšně deserializován");
+                        println!("Počet geometrií: {}", model.geometries.len());
+                        
+                        if let Some(geom) = model.geometries.first() {
+                            println!("Typ geometrie: {:?}", std::mem::discriminant(&geom.geometry));
+                            
+                            if let three_d_asset::geometry::Geometry::Triangles(tri) = &geom.geometry {
+                                println!("Nalezeny trojúhelníky: {} vrcholů", tri.positions.len());
+                                return (tri.clone().into(), "GLB soubor úspěšně načten".to_string());
+                            } else {
+                                println!("Geometrie není typu Triangles");
+                            }
+                        } else {
+                            println!("Model neobsahuje žádné geometrie");
                         }
+                    },
+                    Err(e) => {
+                        println!("Chyba při deserializaci modelu: {}", e);
+                        return (CpuMesh::sphere(32), format!("Chyba deserializace: {}", e));
                     }
                 }
+            } else {
+                println!("Nebyl nalezen žádný GLB/GLTF asset");
+                return (CpuMesh::sphere(32), "Nebyl nalezen GLB/GLTF asset v souboru".to_string());
             }
+        },
+        Err(e) => {
+            println!("Chyba při načítání souboru: {}", e);
+            return (CpuMesh::sphere(32), format!("Chyba načítání: {}", e));
         }
     }
-    CpuMesh::sphere(32)
+    
+    println!("Žádná vhodná geometrie nebyla nalezena, používám kouli");
+    (CpuMesh::sphere(32), "Žádná vhodná geometrie nebyla nalezena".to_string())
 }
 
 // ---------------- Main --------------------------------------------------- //
@@ -308,15 +353,13 @@ fn main() -> Result<()> {
 
     // stavová proměnná: název aktuálního souboru a úspěšnost načtení
     let initial_path = Path::new("assets/model.glb");
+    let (mut cpu_mesh, mut load_status) = load_cpu_mesh(initial_path);
+    
     let mut loaded_file_name = if initial_path.exists() {
         initial_path.file_name().unwrap().to_string_lossy().into_owned()
     } else {
         "embedded sphere".to_string()
     };
-    let mut file_loaded = initial_path.exists();
-
-    // Načtení CPU mesh (model.glb nebo vestavěná koule)
-    let mut cpu_mesh = load_cpu_mesh(initial_path);
 
     // Vytvoření BSP stromu
     let triangles = cpu_mesh_to_triangles(&cpu_mesh);
@@ -402,9 +445,15 @@ fn main() -> Result<()> {
                 ui.separator();
                 // tlačítko pro výběr .glb souboru
                 if ui.button("Vyber .glb soubor").clicked() {
-                    if let Some(file) = FileDialog::new().add_filter("GLB", &["glb"]).pick_file() {
+                    if let Some(file) = FileDialog::new()
+                        .add_filter("3D Models", &["glb", "gltf"])
+                        .pick_file() 
+                    {
                         glb_path = Some(file.clone());
-                        cpu_mesh = load_cpu_mesh(&file);
+                        let (new_mesh, new_status) = load_cpu_mesh(&file);
+                        cpu_mesh = new_mesh;
+                        load_status = new_status;
+                        
                         model = Gm::new(Mesh::new(&context, &cpu_mesh), material.clone());
                         
                         // Přestavění BSP stromu pro nový model  
@@ -416,20 +465,26 @@ fn main() -> Result<()> {
                             ..Default::default()
                         };
                         
-                        // aktualizace stavu názvu a úspěšnosti
+                        // aktualizace stavu názvu
                         loaded_file_name = file.file_name().unwrap().to_string_lossy().into_owned();
-                        file_loaded = file.exists();
                     }
                 }
 
                 ui.separator();
                 // zobrazení názvu a stavu načtení
                 ui.label(format!("Aktuální soubor: {}", loaded_file_name));
-                ui.label(if file_loaded {
-                    "Soubor byl načten úspěšně"
-                } else {
-                    "Používám vestavěnou kouli"
-                });
+                ui.label(format!("Stav: {}", load_status));
+                
+                // Detailní info o meshu
+                ui.separator();
+                ui.heading("Mesh Info");
+                ui.label(format!("Vrcholy: {}", cpu_mesh.positions.len()));
+                match &cpu_mesh.indices {
+                    Indices::U32(idx) => ui.label(format!("Indexy (U32): {}", idx.len())),
+                    Indices::U16(idx) => ui.label(format!("Indexy (U16): {}", idx.len())),
+                    Indices::None => ui.label("Indexy: žádné"),
+                    &three_d::Indices::U8(_) => todo!(),
+                }
             });
         });
 
