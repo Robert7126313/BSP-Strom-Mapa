@@ -13,6 +13,7 @@
 // anyhow        = "1"
 // cgmath        = "0.18"
 // egui          = "0.29"
+// rfd           = "0.11"
 // three-d       = { version = "0.18", features = ["window", "egui-gui"] }
 // three-d-asset = "0.9"
 // -----------------------------------------------------------------------------
@@ -25,6 +26,8 @@
 
 use anyhow::Result;
 use cgmath::{Deg, InnerSpace, Vector3};
+use rfd::FileDialog;
+use std::path::{Path, PathBuf};
 use three_d::*;
 
 // ---------------- BSP placeholder ---------------------------------------- //
@@ -81,6 +84,24 @@ impl FreeCamera {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum CamMode { Spectator, ThirdPerson }
 
+// helper: načte CpuMesh z .glb nebo vrátí kouli
+fn load_cpu_mesh(path: &Path) -> CpuMesh {
+    if path.exists() {
+        if let Ok(mut assets) = three_d_asset::io::load(&[path]) {
+            if let Some(k) = assets.keys().find(|k| k.to_string_lossy().ends_with(".glb")).cloned() {
+                if let Ok(model) = assets.deserialize::<three_d_asset::Model>(&k) {
+                    if let Some(geom) = model.geometries.first() {
+                        if let three_d_asset::geometry::Geometry::Triangles(tri) = &geom.geometry {
+                            return tri.clone().into();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    CpuMesh::sphere(32)
+}
+
 // ---------------- Main --------------------------------------------------- //
 
 fn main() -> Result<()> {
@@ -88,6 +109,15 @@ fn main() -> Result<()> {
     let window = Window::new(WindowSettings { title: "BSP Viewer (three‑d 0.18)".into(), ..Default::default() })?;
     let context = window.gl();
     let mut gui = GUI::new(&context);
+
+    // stavová proměnná: název aktuálního souboru a úspěšnost načtení
+    let initial_path = Path::new("assets/model.glb");
+    let mut loaded_file_name = if initial_path.exists() {
+        initial_path.file_name().unwrap().to_string_lossy().into_owned()
+    } else {
+        "embedded sphere".to_string()
+    };
+    let mut file_loaded = initial_path.exists();
 
     // Pokus o načtení GLB modelu, fallback na kouli
     let cpu_mesh = if std::path::Path::new("assets/model.glb").exists() {
@@ -138,12 +168,14 @@ fn main() -> Result<()> {
         _ => Vec::new(),
     };
 
-    let mesh = Mesh::new(&context, &cpu_mesh);
-    let material = ColorMaterial::new_opaque(&context, &CpuMaterial {
+    // stav pro vykreslovaný mesh
+    let mut glb_path: Option<PathBuf> = None;
+    let mut cpu_mesh = load_cpu_mesh(Path::new("assets/model.glb"));
+    let mut material = ColorMaterial::new_opaque(&context, &CpuMaterial {
         albedo: Srgba::new(100, 150, 255, 255), // Modrá barva aby byl model viditelný
         ..Default::default()
     });
-    let model = Gm::new(mesh, material);
+    let mut model = Gm::new(Mesh::new(&context, &cpu_mesh), material.clone());
     let light = AmbientLight::new(&context, 1.0, Srgba::WHITE); // Zvýšit intenzitu světla
 
     let _bsp_root = build_bsp(tris);
@@ -180,6 +212,28 @@ fn main() -> Result<()> {
                 ui.separator();
                 ui.label(format!("Rychlost: {:.1}", cam.speed));
                 ui.label(format!("Pozice: ({:.1}, {:.1}, {:.1})", cam.pos.x, cam.pos.y, cam.pos.z));
+
+                ui.separator();
+                // tlačítko pro výběr .glb souboru
+                if ui.button("Vyber .glb soubor").clicked() {
+                    if let Some(file) = FileDialog::new().add_filter("GLB", &["glb"]).pick_file() {
+                        glb_path = Some(file.clone());
+                        cpu_mesh = load_cpu_mesh(&file);
+                        model = Gm::new(Mesh::new(&context, &cpu_mesh), material.clone());
+                        // aktualizace stavu názvu a úspěšnosti
+                        loaded_file_name = file.file_name().unwrap().to_string_lossy().into_owned();
+                        file_loaded = file.exists();
+                    }
+                }
+
+                ui.separator();
+                // zobrazení názvu a stavu načtení
+                ui.label(format!("Aktuální soubor: {}", loaded_file_name));
+                ui.label(if file_loaded {
+                    "Soubor byl načten úspěšně"
+                } else {
+                    "Používám vestavěnou kouli"
+                });
             });
         });
 
