@@ -171,7 +171,7 @@ fn main() -> Result<()> {
     // stav pro vykreslovaný mesh
     let mut glb_path: Option<PathBuf> = None;
     let mut cpu_mesh = load_cpu_mesh(Path::new("assets/model.glb"));
-    let mut material = ColorMaterial::new_opaque(&context, &CpuMaterial {
+    let material = ColorMaterial::new_opaque(&context, &CpuMaterial {
         albedo: Srgba::new(100, 150, 255, 255), // Modrá barva aby byl model viditelný
         ..Default::default()
     });
@@ -205,8 +205,14 @@ fn main() -> Result<()> {
                     ui.label("PageUp/PageDown - Rychlost");
                     ui.label("Tab - Přepnout režim");
                 } else {
-                    ui.label("📷 Third Person Mode:");
-                    ui.label("(Zatím neimplementováno)");
+                    ui.label("📷 Third Person Mode Controls:");
+                    ui.label("W/S - Pohyb dopředu/dozadu");
+                    ui.label("A/D - Pohyb doleva/doprava");
+                    ui.label("Space - Pohyb nahoru");
+                    ui.label("C - Pohyb dolů");
+                    ui.label("LMB + Mouse - Rozhlížení");
+                    ui.label("PageUp/PageDown - Rychlost");
+                    ui.label("Tab - Přepnout režim");
                 }
 
                 ui.separator();
