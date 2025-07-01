@@ -144,7 +144,10 @@ fn main() -> Result<()> {
     let light = AmbientLight::new(&context, 1.0, Srgba::WHITE); // Zvýšit intenzitu světla
 
     let _bsp_root = build_bsp(tris);
-    let mut cam = FreeCamera::new(Vector3::new(0.0, 2.0, 8.0)); // Posunout kameru dál
+    // před inicializací kamery přidáme mutable proměnné pro pozice obou režimů
+    let mut spectator_pos    = Vector3::new(0.0, 2.0, 8.0);
+    let mut third_person_pos = spectator_pos;
+    let mut cam = FreeCamera::new(spectator_pos);
     let mut mode = CamMode::Spectator;
 
     window.render_loop(move |frame_input| {
@@ -209,8 +212,22 @@ fn main() -> Result<()> {
         });
 
         // --- ovládání ---
+        // --- ovládání přepnutí režimu ---
         if events.iter().any(|e| matches!(e, Event::KeyPress { kind: Key::F, .. })) {
+            // ulož aktuální pozici do příslušné proměnné
+            if mode == CamMode::Spectator {
+                spectator_pos = cam.pos;
+            } else {
+                third_person_pos = cam.pos;
+            }
+            // přepni režim
             mode = if mode == CamMode::Spectator { CamMode::ThirdPerson } else { CamMode::Spectator };
+            // obnov pozici nové kamery
+            cam.pos = if mode == CamMode::Spectator {
+                spectator_pos
+            } else {
+                third_person_pos
+            };
         }
         cam.update(events, dt);
 
