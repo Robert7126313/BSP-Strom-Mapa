@@ -11,8 +11,7 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="update project configuration and implement BSP tree structure in main.rs">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="refactor: update project configuration and rename to bsp_viewer with new dependencies">
       <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
@@ -87,7 +86,7 @@
       <updated>1751303019406</updated>
       <workItem from="1751303020856" duration="4000" />
       <workItem from="1751303033538" duration="11039000" />
-      <workItem from="1751378773671" duration="7656000" />
+      <workItem from="1751378773671" duration="8084000" />
     </task>
     <task id="LOCAL-00001" summary="initialize new Rust project with basic structure and configuration files">
       <option name="closed" value="true" />
@@ -105,7 +104,15 @@
       <option name="project" value="LOCAL" />
       <updated>1751382144813</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="refactor: update project configuration and rename to bsp_viewer with new dependencies">
+      <option name="closed" value="true" />
+      <created>1751387371613</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1751387371613</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -114,6 +121,7 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="initialize new Rust project with basic structure and configuration files" />
     <MESSAGE value="update project configuration and implement BSP tree structure in main.rs" />
-    <option name="LAST_COMMIT_MESSAGE" value="update project configuration and implement BSP tree structure in main.rs" />
+    <MESSAGE value="refactor: update project configuration and rename to bsp_viewer with new dependencies" />
+    <option name="LAST_COMMIT_MESSAGE" value="refactor: update project configuration and rename to bsp_viewer with new dependencies" />
   </component>
 </project>

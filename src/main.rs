@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // -----------------------------------------------------------------------------
-// BSP Viewer – minimální demo pro three‑d 0.18.x
+// BSP Viewer – minimální demo pro three‑d 0.18.x
 // -----------------------------------------------------------------------------
 // Cargo.toml
 // -----------------------------------------------------------------------------
@@ -25,9 +25,8 @@
 
 use anyhow::Result;
 use cgmath::{Deg, InnerSpace, Vector3};
-use three_d::asset::CpuMesh;
-use three_d::window::*;
 use three_d::*;
+use three_d::window::*;
 
 // ---------------- BSP placeholder ---------------------------------------- //
 
@@ -86,14 +85,24 @@ enum CamMode { Spectator, ThirdPerson }
 
 fn main() -> Result<()> {
     // okno + GL
-    let window = Window::new(WindowSettings { title: "BSP Viewer (three‑d 0.18)".into(), ..Default::default() })?;
+    let window = Window::new(WindowSettings { title: "BSP Viewer (three‑d 0.18)".into(), ..Default::default() })?;
     let context = window.gl();
     let mut gui = GUI::new(&context);
 
     // demo mesh = koule
     let cpu_mesh = CpuMesh::sphere(32);
-    let tris = cpu_mesh.indices.chunks(3).map(|c| [c[0], c[1], c[2]]).collect();
+    
+    // Extrakce indexů z CpuMesh
+    let tris = match &cpu_mesh.indices {
+        Indices::U32(indices) => indices.chunks(3).map(|c| [c[0], c[1], c[2]]).collect(),
+        Indices::U16(indices) => indices.chunks(3).map(|c| [c[0] as u32, c[1] as u32, c[2] as u32]).collect(),
+        _ => Vec::new(),
+    };
+    
     let mesh = Mesh::new(&context, &cpu_mesh);
+    let material = ColorMaterial::new_opaque(&context, &CpuMaterial::default());
+    let model = Gm::new(mesh, material);
+    let light = AmbientLight::new(&context, 0.7, Srgba::WHITE);
 
     let _bsp_root = build_bsp(tris);
     let mut cam = FreeCamera::new(Vector3::new(0.0, 1.0, 5.0));
@@ -120,7 +129,7 @@ fn main() -> Result<()> {
         // --- vykreslení ---
         let mut screen = frame_input.screen();
         screen.clear(ClearState::default());
-        screen.render(&cam.cam(frame_input.viewport), &[&mesh], &[]);
+        screen.render(&cam.cam(frame_input.viewport), &[&model], &[&light]);
         gui.render();
         FrameOutput::default()
     });
