@@ -27,6 +27,7 @@
 use anyhow::Result;
 use cgmath::{Deg, InnerSpace, Vector3};
 use rfd::FileDialog;
+use std::f32::consts::FRAC_PI_2;
 use std::path::{Path, PathBuf};
 use three_d::*;
 
@@ -48,7 +49,10 @@ struct FreeCamera {
     speed: f32,
 }
 impl FreeCamera {
-    fn new(pos: Vector3<f32>) -> Self { Self { pos, yaw: 0.0, pitch: 0.0, speed: 4.0 } }
+    fn new(pos: Vector3<f32>) -> Self {
+        // kamera směřuje podél -Z, takže je model v popředí
+        Self { pos, yaw: -FRAC_PI_2, pitch: 0.0, speed: 4.0 }
+    }
     fn dir(&self) -> Vector3<f32> {
         Vector3::new(self.yaw.cos() * self.pitch.cos(), self.pitch.sin(), self.yaw.sin() * self.pitch.cos()).normalize()
     }
@@ -119,47 +123,8 @@ fn main() -> Result<()> {
     };
     let mut file_loaded = initial_path.exists();
 
-    // Pokus o načtení GLB modelu, fallback na kouli
-    let cpu_mesh = if std::path::Path::new("assets/model.glb").exists() {
-        println!("Načítám model.glb...");
-        match three_d_asset::io::load(&["assets/model.glb"]) {
-            Ok(mut loaded_assets) => {
-                if let Some(model_key) = loaded_assets.keys().find(|k| k.to_string_lossy().contains(".glb")).cloned() {
-                    match loaded_assets.deserialize::<three_d_asset::Model>(&model_key) {
-                        Ok(model) => {
-                            println!("Model načten: {} geometrií", model.geometries.len());
-                            if let Some(geom) = model.geometries.first() {
-                                if let three_d_asset::geometry::Geometry::Triangles(triangles) = &geom.geometry {
-                                    println!("Používám první geometrii s {} vrcholy", triangles.positions.len());
-                                    triangles.clone().into()
-                                } else {
-                                    println!("První geometrie není triangles, používám kouli");
-                                    CpuMesh::sphere(32)
-                                }
-                            } else {
-                                println!("Model neobsahuje geometrie, používám kouli");
-                                CpuMesh::sphere(32)
-                            }
-                        }
-                        Err(e) => {
-                            println!("Chyba při deserializaci modelu: {}, používám kouli", e);
-                            CpuMesh::sphere(32)
-                        }
-                    }
-                } else {
-                    println!("Nenalezen GLB klíč, používám kouli");
-                    CpuMesh::sphere(32)
-                }
-            }
-            Err(e) => {
-                println!("Chyba při načítání assets: {}, používám kouli", e);
-                CpuMesh::sphere(32)
-            }
-        }
-    } else {
-        println!("Soubor assets/model.glb neexistuje, používám kouli");
-        CpuMesh::sphere(32)
-    };
+    // Načtení CPU mesh (model.glb nebo vestavěná koule)
+    let cpu_mesh = load_cpu_mesh(initial_path);
 
     // Extrakce indexů z CpuMesh
     let tris = match &cpu_mesh.indices {
@@ -203,7 +168,7 @@ fn main() -> Result<()> {
                     ui.label("C - Pohyb dolů");
                     ui.label("LMB + Mouse - Rozhlížení");
                     ui.label("PageUp/PageDown - Rychlost");
-                    ui.label("Tab - Přepnout režim");
+                    ui.label("F - Přepnout režim");
                 } else {
                     ui.label("📷 Third Person Mode Controls:");
                     ui.label("W/S - Pohyb dopředu/dozadu");
@@ -212,7 +177,7 @@ fn main() -> Result<()> {
                     ui.label("C - Pohyb dolů");
                     ui.label("LMB + Mouse - Rozhlížení");
                     ui.label("PageUp/PageDown - Rychlost");
-                    ui.label("Tab - Přepnout režim");
+                    ui.label("F - Přepnout režim");
                 }
 
                 ui.separator();
@@ -244,7 +209,7 @@ fn main() -> Result<()> {
         });
 
         // --- ovládání ---
-        if events.iter().any(|e| matches!(e, Event::KeyPress { kind: Key::Tab, .. })) {
+        if events.iter().any(|e| matches!(e, Event::KeyPress { kind: Key::F, .. })) {
             mode = if mode == CamMode::Spectator { CamMode::ThirdPerson } else { CamMode::Spectator };
         }
         cam.update(events, dt);
