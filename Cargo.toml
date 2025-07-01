@@ -1,6 +1,22 @@
 [package]
-name = "BSP-Strom-Mapa"
+name    = "BSP-Strom-Mapa"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
+three-d        = { version = "0.18", features = ["image"] }
+three-d-asset  = { version = "0.9", features = ["gltf", "image"] }
+anyhow         = "1.0"
+
+# BSP a geometrické knihovny
+parry3d        = "0.13"         # Geometrické výpočty, collision detection
+nalgebra       = "0.32"         # Lineární algebra (kompatibilní s parry3d)
+rstar          = "0.11"         # R*-tree pro prostorové indexování
+kdtree         = "0.6"          # KD-tree alternativa
+
+# Utility knihovny
+rayon          = "1.7"          # Paralelizace
+itertools      = "0.12"         # Rozšířené iterátory
+thiserror      = "1.0"          # Lepší error handling
+log            = "0.4"          # Logging
+env_logger     = "0.10"         # Logger implementace
