@@ -11,9 +11,8 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="refactor: update project configuration and rename to bsp_viewer with new dependencies">
-      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
+    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: add BSP tree controls and update UI for spectator mode">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -86,7 +85,7 @@
       <updated>1751303019406</updated>
       <workItem from="1751303020856" duration="4000" />
       <workItem from="1751303033538" duration="11039000" />
-      <workItem from="1751378773671" duration="8084000" />
+      <workItem from="1751378773671" duration="9234000" />
     </task>
     <task id="LOCAL-00001" summary="initialize new Rust project with basic structure and configuration files">
       <option name="closed" value="true" />
@@ -112,7 +111,23 @@
       <option name="project" value="LOCAL" />
       <updated>1751387371613</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="refactor: rename project to BSP-Strom-Mapa and update dependencies in Cargo files">
+      <option name="closed" value="true" />
+      <created>1751387679036</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1751387679036</updated>
+    </task>
+    <task id="LOCAL-00005" summary="feat: add BSP tree controls and update UI for spectator mode">
+      <option name="closed" value="true" />
+      <created>1751387958264</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1751387958264</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -122,6 +137,8 @@
     <MESSAGE value="initialize new Rust project with basic structure and configuration files" />
     <MESSAGE value="update project configuration and implement BSP tree structure in main.rs" />
     <MESSAGE value="refactor: update project configuration and rename to bsp_viewer with new dependencies" />
-    <option name="LAST_COMMIT_MESSAGE" value="refactor: update project configuration and rename to bsp_viewer with new dependencies" />
+    <MESSAGE value="refactor: rename project to BSP-Strom-Mapa and update dependencies in Cargo files" />
+    <MESSAGE value="feat: add BSP tree controls and update UI for spectator mode" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: add BSP tree controls and update UI for spectator mode" />
   </component>
 </project>

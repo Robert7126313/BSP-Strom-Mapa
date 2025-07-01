@@ -89,8 +89,47 @@ fn main() -> Result<()> {
     let context = window.gl();
     let mut gui = GUI::new(&context);
 
-    // demo mesh = koule
-    let cpu_mesh = CpuMesh::sphere(32);
+    // Pokus o načtení GLB modelu, fallback na kouli
+    let cpu_mesh = if std::path::Path::new("assets/model.glb").exists() {
+        println!("Načítám model.glb...");
+        match three_d_asset::io::load(&["assets/model.glb"]) {
+            Ok(mut loaded_assets) => {
+                if let Some(model_key) = loaded_assets.keys().find(|k| k.to_string_lossy().contains(".glb")).cloned() {
+                    match loaded_assets.deserialize::<three_d_asset::Model>(&model_key) {
+                        Ok(model) => {
+                            println!("Model načten: {} geometrií", model.geometries.len());
+                            if let Some(geom) = model.geometries.first() {
+                                if let three_d_asset::geometry::Geometry::Triangles(triangles) = &geom.geometry {
+                                    println!("Používám první geometrii s {} vrcholy", triangles.positions.len());
+                                    triangles.clone().into()
+                                } else {
+                                    println!("První geometrie není triangles, používám kouli");
+                                    CpuMesh::sphere(32)
+                                }
+                            } else {
+                                println!("Model neobsahuje geometrie, používám kouli");
+                                CpuMesh::sphere(32)
+                            }
+                        }
+                        Err(e) => {
+                            println!("Chyba při deserializaci modelu: {}, používám kouli", e);
+                            CpuMesh::sphere(32)
+                        }
+                    }
+                } else {
+                    println!("Nenalezen GLB klíč, používám kouli");
+                    CpuMesh::sphere(32)
+                }
+            }
+            Err(e) => {
+                println!("Chyba při načítání assets: {}, používám kouli", e);
+                CpuMesh::sphere(32)
+            }
+        }
+    } else {
+        println!("Soubor assets/model.glb neexistuje, používám kouli");
+        CpuMesh::sphere(32)
+    };
 
     // Extrakce indexů z CpuMesh
     let tris = match &cpu_mesh.indices {
@@ -100,12 +139,15 @@ fn main() -> Result<()> {
     };
 
     let mesh = Mesh::new(&context, &cpu_mesh);
-    let material = ColorMaterial::new_opaque(&context, &CpuMaterial::default());
+    let material = ColorMaterial::new_opaque(&context, &CpuMaterial {
+        albedo: Srgba::new(100, 150, 255, 255), // Modrá barva aby byl model viditelný
+        ..Default::default()
+    });
     let model = Gm::new(mesh, material);
-    let light = AmbientLight::new(&context, 0.7, Srgba::WHITE);
+    let light = AmbientLight::new(&context, 1.0, Srgba::WHITE); // Zvýšit intenzitu světla
 
     let _bsp_root = build_bsp(tris);
-    let mut cam = FreeCamera::new(Vector3::new(0.0, 1.0, 5.0));
+    let mut cam = FreeCamera::new(Vector3::new(0.0, 2.0, 8.0)); // Posunout kameru dál
     let mut mode = CamMode::Spectator;
 
     window.render_loop(move |frame_input| {
@@ -149,7 +191,7 @@ fn main() -> Result<()> {
 
         // --- vykreslení ---
         let screen = frame_input.screen();
-        screen.clear(ClearState::default());
+        screen.clear(ClearState::color_and_depth(0.1, 0.1, 0.1, 1.0, 1.0)); // Tmavě šedé pozadí místo černého
         screen.render(&cam.cam(frame_input.viewport), &[&model], &[&light]);
         let _ = gui.render();
         FrameOutput::default()
