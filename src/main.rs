@@ -19,9 +19,9 @@
 // -----------------------------------------------------------------------------
 // build:  $ cargo run --release
 // -----------------------------------------------------------------------------
-// DEMO FUNKCE: Neřeší načítání .glb (pro jednoduchost používá vestavěnou kouli).
+// DEMO FUNKCE: Neřeší načítání .glb (pro jednoduchost používá vestavěnou kouli).
 // Pokud chceš importovat model.glb, přidej kód přes three-d‑asset::io::load
-// a vytvoř Mesh::new(&context, &cpu_mesh).
+// a vytvoř Mesh::new(&context, &cpu_mesh).
 // -----------------------------------------------------------------------------
 
 use anyhow::Result;
@@ -31,13 +31,205 @@ use std::f32::consts::FRAC_PI_2;
 use std::path::{Path, PathBuf};
 use three_d::*;
 
-// ---------------- BSP placeholder ---------------------------------------- //
+// ---------------- BSP Implementation -------------------------------------- //
 
-type Triangle = [u32; 3];
-#[derive(Clone)]
-#[allow(dead_code)]
-struct BspNode { id: usize, tris: Vec<Triangle> }
-fn build_bsp(tris: Vec<Triangle>) -> BspNode { BspNode { id: 0, tris } }
+#[derive(Clone, Debug)]
+struct Triangle {
+    a: Vector3<f32>,
+    b: Vector3<f32>,
+    c: Vector3<f32>,
+}
+
+#[derive(Clone, Debug)]
+struct Plane {
+    n: Vector3<f32>,  // normála
+    d: f32,           // vzdálenost od počátku (ax+by+cz+d=0)
+}
+
+impl Plane {
+    fn new(n: Vector3<f32>, point: Vector3<f32>) -> Self {
+        let n = n.normalize();
+        let d = -n.dot(point);
+        Self { n, d }
+    }
+
+    fn side(&self, point: Vector3<f32>) -> f32 {
+        self.n.dot(point) + self.d
+    }
+
+    fn classify(&self, point: Vector3<f32>) -> i32 {
+        let dist = self.side(point);
+        const EPSILON: f32 = 1e-6;
+        if dist > EPSILON { 1 }        // front
+        else if dist < -EPSILON { -1 } // back  
+        else { 0 }                     // on plane
+    }
+}
+
+struct BspNode {
+    plane: Option<Plane>,
+    front: Option<Box<BspNode>>,
+    back: Option<Box<BspNode>>,
+    triangles: Vec<Triangle>,
+}
+
+#[derive(Default)]
+struct BspStats {
+    nodes_visited: u32,
+    triangles_rendered: u32,
+    total_nodes: u32,
+    total_triangles: u32,
+}
+
+impl BspNode {
+    fn new_leaf(triangles: Vec<Triangle>) -> Self {
+        Self {
+            plane: None,
+            front: None,
+            back: None,
+            triangles,
+        }
+    }
+
+    fn new_node(plane: Plane, front: BspNode, back: BspNode) -> Self {
+        Self {
+            plane: Some(plane),
+            front: Some(Box::new(front)),
+            back: Some(Box::new(back)),
+            triangles: Vec::new(),
+        }
+    }
+
+    fn count_nodes(&self) -> u32 {
+        1 + self.front.as_ref().map_or(0, |n| n.count_nodes()) + 
+            self.back.as_ref().map_or(0, |n| n.count_nodes())
+    }
+
+    fn count_triangles(&self) -> u32 {
+        self.triangles.len() as u32 + 
+        self.front.as_ref().map_or(0, |n| n.count_triangles()) +
+        self.back.as_ref().map_or(0, |n| n.count_triangles())
+    }
+}
+
+fn plane_from_triangle(tri: &Triangle) -> Plane {
+    let edge1 = tri.b - tri.a;
+    let edge2 = tri.c - tri.a;
+    let normal = edge1.cross(edge2).normalize();
+    Plane::new(normal, tri.a)
+}
+
+fn triangle_center(tri: &Triangle) -> Vector3<f32> {
+    (tri.a + tri.b + tri.c) / 3.0
+}
+
+fn build_bsp(triangles: Vec<Triangle>, depth: u32) -> BspNode {
+    const MAX_DEPTH: u32 = 20;
+    const MIN_TRIANGLES: usize = 50;
+
+    if depth >= MAX_DEPTH || triangles.len() <= MIN_TRIANGLES {
+        return BspNode::new_leaf(triangles);
+    }
+
+    if triangles.is_empty() {
+        return BspNode::new_leaf(Vec::new());
+    }
+
+    // Výběr dělicí roviny - použijeme rovinu prvního trojúhelníku
+    let splitting_plane = plane_from_triangle(&triangles[0]);
+
+    let mut front_triangles = Vec::new();
+    let mut back_triangles = Vec::new();
+
+    // Klasifikace trojúhelníků podle střední pozice
+    for triangle in triangles {
+        let center = triangle_center(&triangle);
+        let side = splitting_plane.classify(center);
+        
+        if side >= 0 {
+            front_triangles.push(triangle);
+        } else {
+            back_triangles.push(triangle);
+        }
+    }
+
+    // Rekurzivní stavba podstromů
+    let front_node = build_bsp(front_triangles, depth + 1);
+    let back_node = build_bsp(back_triangles, depth + 1);
+
+    BspNode::new_node(splitting_plane, front_node, back_node)
+}
+
+fn traverse_bsp(
+    node: &BspNode, 
+    camera_pos: Vector3<f32>, 
+    stats: &mut BspStats,
+    visible_triangles: &mut Vec<Triangle>
+) {
+    stats.nodes_visited += 1;
+
+    match &node.plane {
+        None => {
+            // List - přidej všechny trojúhelníky
+            visible_triangles.extend(node.triangles.iter().cloned());
+            stats.triangles_rendered += node.triangles.len() as u32;
+        },
+        Some(plane) => {
+            // Vnitřní uzel - rozhodni o pořadí traversalu
+            let camera_side = plane.side(camera_pos);
+            
+            let (near_node, far_node) = if camera_side > 0.0 {
+                (&node.front, &node.back)
+            } else {
+                (&node.back, &node.front)
+            };
+
+            // Projdi nejdřív blízký uzel, pak vzdálený
+            if let Some(near) = near_node {
+                traverse_bsp(near, camera_pos, stats, visible_triangles);
+            }
+            if let Some(far) = far_node {
+                traverse_bsp(far, camera_pos, stats, visible_triangles);
+            }
+        }
+    }
+}
+
+fn cpu_mesh_to_triangles(cpu_mesh: &CpuMesh) -> Vec<Triangle> {
+    let mut triangles = Vec::new();
+
+    // Konverze z three-d Vec3 na cgmath Vector3
+    let positions: Vec<Vector3<f32>> = cpu_mesh.positions.to_f32()
+        .iter()
+        .map(|pos| Vector3::new(pos.x, pos.y, pos.z))
+        .collect();
+
+    match &cpu_mesh.indices {
+        Indices::U32(indices) => {
+            for chunk in indices.chunks(3) {
+                if chunk.len() == 3 {
+                    let a = positions[chunk[0] as usize];
+                    let b = positions[chunk[1] as usize];
+                    let c = positions[chunk[2] as usize];
+                    triangles.push(Triangle { a, b, c });
+                }
+            }
+        },
+        Indices::U16(indices) => {
+            for chunk in indices.chunks(3) {
+                if chunk.len() == 3 {
+                    let a = positions[chunk[0] as usize];
+                    let b = positions[chunk[1] as usize];
+                    let c = positions[chunk[2] as usize];
+                    triangles.push(Triangle { a, b, c });
+                }
+            }
+        },
+        _ => {}
+    }
+
+    triangles
+}
 
 // ---------------- Free‑fly kamera ---------------------------------------- //
 
@@ -124,18 +316,19 @@ fn main() -> Result<()> {
     let mut file_loaded = initial_path.exists();
 
     // Načtení CPU mesh (model.glb nebo vestavěná koule)
-    let cpu_mesh = load_cpu_mesh(initial_path);
+    let mut cpu_mesh = load_cpu_mesh(initial_path);
 
-    // Extrakce indexů z CpuMesh
-    let tris = match &cpu_mesh.indices {
-        Indices::U32(indices) => indices.chunks(3).map(|c| [c[0], c[1], c[2]]).collect(),
-        Indices::U16(indices) => indices.chunks(3).map(|c| [c[0] as u32, c[1] as u32, c[2] as u32]).collect(),
-        _ => Vec::new(),
+    // Vytvoření BSP stromu
+    let triangles = cpu_mesh_to_triangles(&cpu_mesh);
+    let mut bsp_root = build_bsp(triangles, 0);
+    let mut total_stats = BspStats {
+        total_nodes: bsp_root.count_nodes(),
+        total_triangles: bsp_root.count_triangles(),
+        ..Default::default()
     };
 
     // stav pro vykreslovaný mesh
     let mut glb_path: Option<PathBuf> = None;
-    let mut cpu_mesh = load_cpu_mesh(Path::new("assets/model.glb"));
     let material = ColorMaterial::new_opaque(&context, &CpuMaterial {
         albedo: Srgba::new(100, 150, 255, 255), // Modrá barva aby byl model viditelný
         ..Default::default()
@@ -143,7 +336,6 @@ fn main() -> Result<()> {
     let mut model = Gm::new(Mesh::new(&context, &cpu_mesh), material.clone());
     let light = AmbientLight::new(&context, 1.0, Srgba::WHITE); // Zvýšit intenzitu světla
 
-    let _bsp_root = build_bsp(tris);
     // před inicializací kamery přidáme mutable proměnné pro pozice obou režimů
     let mut spectator_pos    = Vector3::new(0.0, 2.0, 8.0);
     let mut third_person_pos = spectator_pos;
@@ -154,11 +346,31 @@ fn main() -> Result<()> {
         let dt = frame_input.elapsed_time as f32 / 1000.0;
         let events = &frame_input.events;
 
+        // BSP traversal pro aktuální pozici kamery
+        let mut current_stats = BspStats {
+            total_nodes: total_stats.total_nodes,
+            total_triangles: total_stats.total_triangles,
+            ..Default::default()
+        };
+        let mut visible_triangles = Vec::new();
+        traverse_bsp(&bsp_root, cam.pos, &mut current_stats, &mut visible_triangles);
+
         // --- GUI ---
         gui.update(&mut frame_input.events.clone(), frame_input.accumulated_time, frame_input.viewport, frame_input.device_pixel_ratio, |ctx| {
             egui::SidePanel::left("tree").show(ctx, |ui| {
-                ui.heading("BSP strom (placeholder)");
+                ui.heading("BSP Strom");
                 ui.label(format!("Režim: {:?}", mode));
+
+                ui.separator();
+                ui.heading("BSP Statistiky");
+                ui.label(format!("Celkem uzlů: {}", current_stats.total_nodes));
+                ui.label(format!("Celkem trojúhelníků: {}", current_stats.total_triangles));
+                ui.label(format!("Navštíveno uzlů: {}", current_stats.nodes_visited));
+                ui.label(format!("Vykresleno trojúhelníků: {}", current_stats.triangles_rendered));
+                ui.label(format!("Procházka efektivita: {:.1}%", 
+                    if current_stats.total_nodes > 0 {
+                        (current_stats.nodes_visited as f32 / current_stats.total_nodes as f32) * 100.0
+                    } else { 0.0 }));
 
                 ui.separator();
                 ui.heading("Ovládání");
@@ -194,6 +406,16 @@ fn main() -> Result<()> {
                         glb_path = Some(file.clone());
                         cpu_mesh = load_cpu_mesh(&file);
                         model = Gm::new(Mesh::new(&context, &cpu_mesh), material.clone());
+                        
+                        // Přestavění BSP stromu pro nový model  
+                        let triangles = cpu_mesh_to_triangles(&cpu_mesh);
+                        bsp_root = build_bsp(triangles, 0);
+                        total_stats = BspStats {
+                            total_nodes: bsp_root.count_nodes(),
+                            total_triangles: bsp_root.count_triangles(),
+                            ..Default::default()
+                        };
+                        
                         // aktualizace stavu názvu a úspěšnosti
                         loaded_file_name = file.file_name().unwrap().to_string_lossy().into_owned();
                         file_loaded = file.exists();
@@ -233,7 +455,7 @@ fn main() -> Result<()> {
 
         // --- vykreslení ---
         let screen = frame_input.screen();
-        screen.clear(ClearState::color_and_depth(0.1, 0.1, 0.1, 1.0, 1.0)); // Tmavě šedé pozadí místo černého
+        screen.clear(ClearState::color_and_depth(0.1, 0.1, 0.1, 1.0, 1.0)); // Tmavě šedé pozladí místo černého
         screen.render(&cam.cam(frame_input.viewport), &[&model], &[&light]);
         let _ = gui.render();
         FrameOutput::default()
