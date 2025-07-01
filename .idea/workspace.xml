@@ -12,8 +12,6 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="update project configuration and implement BSP tree structure in main.rs">
-      <change afterPath="$PROJECT_DIR$/assets/model.glb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/BSP-Strom-Mapa.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/BSP-Strom-Mapa.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
@@ -89,7 +87,7 @@
       <updated>1751303019406</updated>
       <workItem from="1751303020856" duration="4000" />
       <workItem from="1751303033538" duration="11039000" />
-      <workItem from="1751378773671" duration="3051000" />
+      <workItem from="1751378773671" duration="7656000" />
     </task>
     <task id="LOCAL-00001" summary="initialize new Rust project with basic structure and configuration files">
       <option name="closed" value="true" />
@@ -99,7 +97,15 @@
       <option name="project" value="LOCAL" />
       <updated>1751303053012</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="update project configuration and implement BSP tree structure in main.rs">
+      <option name="closed" value="true" />
+      <created>1751382144813</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1751382144813</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
