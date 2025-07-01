@@ -11,7 +11,11 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: implement BSP tree structure for efficient triangle rendering and traversal" />
+    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: enhance GLB model loading with detailed logging and error handling">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/model.glb" beforeDir="false" afterPath="$PROJECT_DIR$/assets/model.glb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -51,6 +55,11 @@
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\snowflake\RustroverProject\BSP-Strom-Mapa\assets" />
+    </key>
+  </component>
   <component name="RunManager">
     <configuration name="Run" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
       <option name="command" value="run --package BSP-Strom-Mapa --bin BSP-Strom-Mapa" />
@@ -83,6 +92,7 @@
       <workItem from="1751303020856" duration="4000" />
       <workItem from="1751303033538" duration="11039000" />
       <workItem from="1751378773671" duration="9234000" />
+      <workItem from="1751405527609" duration="1334000" />
     </task>
     <task id="LOCAL-00001" summary="initialize new Rust project with basic structure and configuration files">
       <option name="closed" value="true" />
@@ -148,7 +158,15 @@
       <option name="project" value="LOCAL" />
       <updated>1751405476115</updated>
     </task>
-    <option name="localTasksCounter" value="9" />
+    <task id="LOCAL-00009" summary="feat: enhance GLB model loading with detailed logging and error handling">
+      <option name="closed" value="true" />
+      <created>1751405931284</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1751405931284</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -163,6 +181,7 @@
     <MESSAGE value="feat: add rfd dependency and implement file dialog for GLB model loading" />
     <MESSAGE value="feat: refactor GLB model loading and update camera controls" />
     <MESSAGE value="feat: implement BSP tree structure for efficient triangle rendering and traversal" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: implement BSP tree structure for efficient triangle rendering and traversal" />
+    <MESSAGE value="feat: enhance GLB model loading with detailed logging and error handling" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: enhance GLB model loading with detailed logging and error handling" />
   </component>
 </project>
