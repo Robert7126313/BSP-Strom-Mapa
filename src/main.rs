@@ -16,6 +16,7 @@
 // rfd           = "0.11"
 // three-d       = { version = "0.18", features = ["window", "egui-gui"] }
 // three-d-asset = "0.9"
+// gltf           = "0.14"
 // -----------------------------------------------------------------------------
 // build:  $ cargo run --release
 // -----------------------------------------------------------------------------
@@ -280,7 +281,7 @@ impl FreeCamera {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum CamMode { Spectator, ThirdPerson }
 
-// helper: načte CpuMesh z .glb nebo vrátí kouli
+// helper: načte CpuMesh z .glb/.gltf pomocí gltf crate
 fn load_cpu_mesh(path: &Path) -> (CpuMesh, String) {
     println!("Pokouším se načíst: {}", path.display());
 
@@ -289,7 +290,6 @@ fn load_cpu_mesh(path: &Path) -> (CpuMesh, String) {
         return (CpuMesh::sphere(32), format!("Soubor neexistuje: {}", path.display()));
     }
 
-    // Zkus načíst jako raw bytes pro diagnostiku
     match std::fs::metadata(path) {
         Ok(metadata) => {
             println!("Velikost souboru: {} bytes", metadata.len());
@@ -306,148 +306,50 @@ fn load_cpu_mesh(path: &Path) -> (CpuMesh, String) {
         }
     }
 
-    match three_d_asset::io::load(&[path]) {
-        Ok(mut assets) => {
-            println!("Úspěšně načteno {} assetů", assets.len());
-
-            // Vypsat všechny dostupné assety s detaily
-            for key in assets.keys() {
-                let key_str = key.to_string_lossy();
-                println!("Dostupný asset: {} (typ: {:?})", key_str, key.extension());
-            }
-
-            // Hledat .glb/.gltf soubor
-            if let Some(key) = assets.keys().find(|k| {
-                let name = k.to_string_lossy().to_lowercase();
-                name.ends_with(".glb") || name.ends_with(".gltf")
-            }).cloned() {
-                println!("Nalezen GLB/GLTF asset: {}", key.to_string_lossy());
-
-                // Zkus různé typy deserializace
-                println!("Pokus 1: Deserializace jako Model...");
-                match assets.deserialize::<three_d_asset::Model>(&key) {
-                    Ok(model) => {
-                        println!("✓ Model úspěšně deserializován");
-                        println!("Název modelu: {:?}", model.name);
-                        println!("Počet geometrií: {}", model.geometries.len());
-                        println!("Počet materiálů: {}", model.materials.len());
-
-                        // Načíst z primitives
-                        if let Some(cpu_mesh) = load_from_primitives(&model) {
-                            return (cpu_mesh, "GLB soubor úspěšně načten".to_string());
-                        }
-
-                        println!("Nenalezena žádná vhodná geometrie v modelu");
-                        return (CpuMesh::sphere(32), "Nenalezena vhodná geometrie v modelu".to_string());
-                    },
-                    Err(e) => {
-                        println!("✗ Chyba při deserializaci jako Model: {}", e);
-                        return (CpuMesh::sphere(32), format!("Chyba deserializace: {}", e));
-                    }
-                }
-            } else {
-                println!("Nebyl nalezen žádný GLB/GLTF asset");
-                
-                // Pokus 2: Zkus načíst jakýkoliv mesh asset
-                println!("Pokus 2: Hledání mesh assetů...");
-                let keys: Vec<_> = assets.keys().cloned().collect(); // Collect keys to avoid borrow conflicts
-                for key in keys {
-                    let key_str = key.to_string_lossy().to_lowercase();
-                    if key_str.contains("mesh") || key_str.contains("geometry") {
-                        println!("Zkouším načíst mesh asset: {}", key.to_string_lossy());
-                        if let Ok(mesh) = assets.deserialize::<CpuMesh>(&key) {
-                            println!("✓ Úspěšně načten mesh asset");
-                            return (mesh, format!("Načten mesh: {}", key.to_string_lossy()));
-                        }
-                    }
-                }
-                
-                return (CpuMesh::sphere(32), "Nebyl nalezen žádný GLB/GLTF asset v souboru".to_string());
-            }
+    // Pokus načtení pomocí gltf crate
+    match load_gltf_with_gltf_crate(path) {
+        Ok(mesh) => {
+            println!("✓ GLTF úspěšně načten pomocí gltf crate");
+            return (mesh, "GLTF soubor úspěšně načten".to_string());
         },
         Err(e) => {
-            println!("Chyba při načítání souboru: {}", e);
-            
-            // Zkus alternativní přístup - načíst jako raw GLB
-            println!("Pokus 3: Fallback na basic GLB parsing...");
-            if let Some(cpu_mesh) = try_basic_glb_load(path) {
-                return (cpu_mesh, "GLB načten pomocí základního parseru".to_string());
-            }
-            
-            return (CpuMesh::sphere(32), format!("Chyba načítání: {}", e));
+            println!("Chyba při načítání pomocí gltf crate: {}", e);
+            return (CpuMesh::sphere(32), format!("Nepodařilo se načíst GLTF: {}", e));
         }
     }
 }
 
-fn load_from_primitives(model: &three_d_asset::Model) -> Option<CpuMesh> {
+fn load_gltf_with_gltf_crate(path: &Path) -> Result<CpuMesh> {
+    println!("Načítám GLTF pomocí gltf crate...");
+    
+    let (document, buffers, _images) = gltf::import(path)?;
+    
+    println!("GLTF dokument načten:");
+    println!("- Scény: {}", document.scenes().count());
+    println!("- Uzly: {}", document.nodes().count());  
+    println!("- Meshe: {}", document.meshes().count());
+    println!("- Materiály: {}", document.materials().count());
+
     let mut all_positions = Vec::new();
     let mut all_indices = Vec::new();
     let mut vertex_offset = 0u32;
 
-    println!("Načítám z {} primitives", model.geometries.len());
-
-    for primitive in &model.geometries {
-        println!("Zpracovávám primitive: {:?}", primitive.name);
-
-        match &primitive.geometry {
-            three_d_asset::geometry::Geometry::Triangles(triangles) => {
-                println!("Nalezeny trojúhelníky: {} vrcholů", triangles.positions.len());
-
-                // Konverze pozic z three-d Positions na Vec<Vec3>
-                let positions_vec = triangles.positions.to_f32();
-                let positions_count = positions_vec.len();
-
-                // Aplikovat transformaci primitive
-                let transform = primitive.transformation;
-                for pos in &positions_vec {
-                    let transformed = transform * Vec4::new(pos.x, pos.y, pos.z, 1.0);
-                    all_positions.push(Vec3::new(transformed.x, transformed.y, transformed.z));
-                }
-
-                // Přidat indexy s offsetem
-                match &triangles.indices {
-                    Indices::U32(indices) => {
-                        for &idx in indices {
-                            all_indices.push(idx + vertex_offset);
-                        }
-                    },
-                    Indices::U16(indices) => {
-                        for &idx in indices {
-                            all_indices.push(idx as u32 + vertex_offset);
-                        }
-                    },
-                    Indices::None => {
-                        // Bez indexů - vytvoř sekvenční indexy
-                        for i in (0..positions_count).step_by(3) {
-                            if i + 2 < positions_count {
-                                all_indices.push(vertex_offset + i as u32);
-                                all_indices.push(vertex_offset + i as u32 + 1);
-                                all_indices.push(vertex_offset + i as u32 + 2);
-                            }
-                        }
-                    },
-                    _ => {
-                        println!("Neznámý typ indexů, přeskakuji");
-                        continue;
-                    }
-                }
-
-                vertex_offset += positions_count as u32;
-            },
-            _ => {
-                println!("Geometrie není typu Triangles, přeskakuji");
-            }
+    // Projdi všechny meshe ve scéně
+    for scene in document.scenes() {
+        println!("Zpracovávám scénu: {:?}", scene.name());
+        
+        for node in scene.nodes() {
+            process_node(&node, &buffers, &mut all_positions, &mut all_indices, &mut vertex_offset, cgmath::Matrix4::identity())?;
         }
     }
 
     if all_positions.is_empty() {
-        println!("Žádné pozice nenalezeny v primitives");
-        return None;
+        anyhow::bail!("Žádné pozice nenalezeny v GLTF souboru");
     }
 
     println!("Celkem načteno {} vrcholů a {} indexů", all_positions.len(), all_indices.len());
 
-    Some(CpuMesh {
+    Ok(CpuMesh {
         positions: Positions::F32(all_positions),
         indices: if all_indices.is_empty() { 
             Indices::None 
@@ -458,41 +360,107 @@ fn load_from_primitives(model: &three_d_asset::Model) -> Option<CpuMesh> {
     })
 }
 
-fn try_load_direct_geometries(assets: &mut std::collections::HashMap<std::path::PathBuf, Vec<u8>>) -> Option<CpuMesh> {
-    println!("Hledám geometrie přímo v assetech...");
-    
-    // Zjednodušená implementace - zkusíme načíst přímo základní mesh
-    // V reálné aplikaci by zde byl komplexnější parser
-    println!("Fallback načítání geometrií není implementováno");
-    None
-}
+fn process_node(
+    node: &gltf::Node,
+    buffers: &[gltf::buffer::Data],
+    all_positions: &mut Vec<Vec3>,
+    all_indices: &mut Vec<u32>,
+    vertex_offset: &mut u32,
+    parent_transform: cgmath::Matrix4<f32>
+) -> Result<()> {
+    // Získej transformaci uzlu
+    let transform_matrix = cgmath::Matrix4::from(node.transform().matrix());
+    let current_transform = parent_transform * transform_matrix;
 
-fn try_basic_glb_load(path: &Path) -> Option<CpuMesh> {
-    println!("Pokus o základní GLB parsing...");
-    
-    // Pro jednoduchost: pokud selže vše ostatní, vrať alespoň nějaký základní mesh
-    // V reálné aplikaci by zde byl custom GLB parser
-    match path.extension().and_then(|s| s.to_str()) {
-        Some("glb") | Some("gltf") => {
-            println!("GLB soubor rozpoznán, ale nelze načíst - použiji placeholder");
-            // Vytvoř složitější placeholder než jen kouli
-            Some(create_placeholder_mesh())
-        },
-        _ => None
+    println!("Zpracovávám uzel: {:?}", node.name());
+
+    // Zpracuj mesh pokud existuje
+    if let Some(mesh) = node.mesh() {
+        println!("Zpracovávám mesh: {:?} s {} primitivy", mesh.name(), mesh.primitives().count());
+        
+        for primitive in mesh.primitives() {
+            process_primitive(&primitive, buffers, all_positions, all_indices, vertex_offset, current_transform)?;
+        }
     }
+
+    // Rekurzivně zpracuj potomky
+    for child in node.children() {
+        process_node(&child, buffers, all_positions, all_indices, vertex_offset, current_transform)?;
+    }
+
+    Ok(())
 }
 
-fn create_placeholder_mesh() -> CpuMesh {
-    // Vytvoř složitější placeholder - například krychli místo koule
-    let mesh = CpuMesh::cube();
+fn process_primitive(
+    primitive: &gltf::Primitive,
+    buffers: &[gltf::buffer::Data],
+    all_positions: &mut Vec<Vec3>,
+    all_indices: &mut Vec<u32>,
+    vertex_offset: &mut u32,
+    transform: cgmath::Matrix4<f32>
+) -> Result<()> {
+    println!("Zpracovávám primitiv s modem: {:?}", primitive.mode());
+
+    // Pouze trojúhelníky
+    if primitive.mode() != gltf::mesh::Mode::Triangles {
+        println!("Přeskakuji primitiv - není trojúhelníkový");
+        return Ok(());
+    }
+
+    // Získej pozice vrcholů
+    let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
     
-    // Přidej nějaké detaily pro testování BSP
-    let _cube2 = CpuMesh::cube();
-    let _sphere = CpuMesh::sphere(16);
-    
-    // Kombinuj více objektů pro zajímavější BSP strom
-    // (V reálné aplikaci by se používal proper mesh combining)
-    mesh
+    if let Some(positions) = reader.read_positions() {
+        let start_vertex_count = all_positions.len();
+        
+        // Přidej pozice s transformací
+        for position in positions {
+            let pos = cgmath::Vector4::new(position[0], position[1], position[2], 1.0);
+            let transformed = transform * pos;
+            all_positions.push(Vec3::new(transformed.x, transformed.y, transformed.z));
+        }
+        
+        let vertex_count = all_positions.len() - start_vertex_count;
+        println!("Přidáno {} vrcholů", vertex_count);
+
+        // Získej indexy
+        if let Some(indices) = reader.read_indices() {
+            match indices {
+                gltf::mesh::util::ReadIndices::U8(iter) => {
+                    for idx in iter {
+                        all_indices.push(idx as u32 + *vertex_offset);
+                    }
+                },
+                gltf::mesh::util::ReadIndices::U16(iter) => {
+                    for idx in iter {
+                        all_indices.push(idx as u32 + *vertex_offset);
+                    }
+                },
+                gltf::mesh::util::ReadIndices::U32(iter) => {
+                    for idx in iter {
+                        all_indices.push(idx + *vertex_offset);
+                    }
+                }
+            }
+            println!("Přidáno {} indexů", all_indices.len());
+        } else {
+            // Bez indexů - vytvoř sekvenční
+            for i in (0..vertex_count).step_by(3) {
+                if i + 2 < vertex_count {
+                    all_indices.push(*vertex_offset + i as u32);
+                    all_indices.push(*vertex_offset + i as u32 + 1);
+                    all_indices.push(*vertex_offset + i as u32 + 2);
+                }
+            }
+            println!("Vytvořeno {} sekvenčních indexů", (vertex_count / 3) * 3);
+        }
+
+        *vertex_offset += vertex_count as u32;
+    } else {
+        println!("Primitiv nemá pozice vrcholů");
+    }
+
+    Ok(())
 }
 
 // ---------------- Main --------------------------------------------------- //
