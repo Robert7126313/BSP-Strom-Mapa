@@ -11,10 +11,8 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: improve GLB model loading with enhanced diagnostics and fallback mechanisms">
+    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: enhance FreeCamera with mouse capture and sensitivity settings">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -95,7 +93,8 @@
       <workItem from="1751303033538" duration="11039000" />
       <workItem from="1751378773671" duration="9234000" />
       <workItem from="1751405527609" duration="1334000" />
-      <workItem from="1751475843871" duration="979000" />
+      <workItem from="1751475843871" duration="1426000" />
+      <workItem from="1751491451670" duration="2088000" />
     </task>
     <task id="LOCAL-00001" summary="initialize new Rust project with basic structure and configuration files">
       <option name="closed" value="true" />
@@ -169,7 +168,23 @@
       <option name="project" value="LOCAL" />
       <updated>1751405931284</updated>
     </task>
-    <option name="localTasksCounter" value="10" />
+    <task id="LOCAL-00010" summary="feat: add gltf crate for improved GLTF model loading and processing">
+      <option name="closed" value="true" />
+      <created>1751477170520</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1751477170520</updated>
+    </task>
+    <task id="LOCAL-00011" summary="feat: enhance FreeCamera with mouse capture and sensitivity settings">
+      <option name="closed" value="true" />
+      <created>1751492032019</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1751492032019</updated>
+    </task>
+    <option name="localTasksCounter" value="12" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -185,6 +200,8 @@
     <MESSAGE value="feat: refactor GLB model loading and update camera controls" />
     <MESSAGE value="feat: implement BSP tree structure for efficient triangle rendering and traversal" />
     <MESSAGE value="feat: enhance GLB model loading with detailed logging and error handling" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: enhance GLB model loading with detailed logging and error handling" />
+    <MESSAGE value="feat: add gltf crate for improved GLTF model loading and processing" />
+    <MESSAGE value="feat: enhance FreeCamera with mouse capture and sensitivity settings" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: enhance FreeCamera with mouse capture and sensitivity settings" />
   </component>
 </project>

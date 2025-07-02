@@ -240,8 +240,7 @@ struct FreeCamera {
     yaw: f32,
     pitch: f32,
     speed: f32,
-    mouse_sensitivity: f32,
-    mouse_captured: bool,
+    look_speed: f32,
 }
 
 impl FreeCamera {
@@ -252,8 +251,7 @@ impl FreeCamera {
             yaw: -FRAC_PI_2, 
             pitch: 0.0, 
             speed: 4.0,
-            mouse_sensitivity: 0.002,
-            mouse_captured: false,
+            look_speed: 2.0,
         }
     }
     fn dir(&self) -> Vector3<f32> {
@@ -261,7 +259,7 @@ impl FreeCamera {
     }
     fn right(&self) -> Vector3<f32> { self.dir().cross(Vector3::unit_y()).normalize() }
 
-    fn update(&mut self, events: &[Event], dt: f32) {
+    fn update(&mut self, events: &[Event], dt: f32, _viewport: Viewport) {
         // rychlost PageUp/PageDown
         if events.iter().any(|e| matches!(e, Event::KeyPress { kind: Key::PageUp, .. })) { 
             self.speed *= 1.2; 
@@ -270,31 +268,30 @@ impl FreeCamera {
             self.speed /= 1.2; 
         }
 
-        // Toggle mouse capture s ESC
-        if events.iter().any(|e| matches!(e, Event::KeyPress { kind: Key::Escape, .. })) {
-            self.mouse_captured = !self.mouse_captured;
-        }
-
-        // Mouse look - funguje buď s captured mouse nebo při držení LMB
-        let mouse_active = self.mouse_captured || 
-            events.iter().any(|e| matches!(e, Event::MousePress { button: MouseButton::Left, .. }));
-
-        if mouse_active {
-            if let Some(Event::MouseMotion { delta, .. }) = events.iter().find(|e| matches!(e, Event::MouseMotion { .. })) {
-                self.yaw -= delta.0 as f32 * self.mouse_sensitivity;
-                self.pitch = (self.pitch - delta.1 as f32 * self.mouse_sensitivity).clamp(-1.5, 1.5);
-            }
-        }
-
-        // pohyb klávesnicí
+        // Šipky pro rozhlížení kamery (look around)
         let held = |k: Key| events.iter().any(|e| matches!(e, Event::KeyPress { kind, .. } if *kind == k));
+        
+        let look_speed = self.look_speed * dt; // rychlost rotace šipkami
+        
+        // Arrow keys pro rozhlížení
+        if held(Key::ArrowLeft) { self.yaw += look_speed; }
+        if held(Key::ArrowRight) { self.yaw -= look_speed; }
+        if held(Key::ArrowUp) { self.pitch = (self.pitch + look_speed).clamp(-1.5, 1.5); }
+        if held(Key::ArrowDown) { self.pitch = (self.pitch - look_speed).clamp(-1.5, 1.5); }
+
+        // pohyb klávesnicí - pouze WASD
         let mut v = Vector3::new(0.0, 0.0, 0.0);
+        
+        // WASD pro pohyb
         if held(Key::W) { v += self.dir(); }
         if held(Key::S) { v -= self.dir(); }
         if held(Key::A) { v -= self.right(); }
         if held(Key::D) { v += self.right(); }
+        
+        // Nahoru/dolů
         if held(Key::Space) { v += Vector3::unit_y(); }
         if held(Key::C) { v -= Vector3::unit_y(); } // "C" = dolů
+        
         if v.magnitude2() > 0.0 { 
             self.pos += v.normalize() * self.speed * dt; 
         }
@@ -470,7 +467,7 @@ fn process_primitive(
             }
             println!("Přidáno {} indexů", all_indices.len());
         } else {
-            // Bez indexů - vytvoř sekvenční
+            // Bez indexů - vytvoř sekvenčn��
             for i in (0..vertex_count).step_by(3) {
                 if i + 2 < vertex_count {
                     all_indices.push(*vertex_offset + i as u32);
@@ -567,44 +564,68 @@ fn main() -> Result<()> {
                 ui.separator();
                 ui.heading("Ovládání");
 
-                // Mouse capture status
-                if cam.mouse_captured {
-                    ui.colored_label(egui::Color32::GREEN, "🖱️ Myš zachycena (ESC pro uvolnění)");
-                } else {
-                    ui.colored_label(egui::Color32::RED, "🖱️ Myš volná (ESC pro zachycení nebo LMB + pohyb)");
-                }
-
                 if mode == CamMode::Spectator {
                     ui.label("🎮 Spectator Mode Controls:");
-                    ui.label("W/S - Pohyb dopředu/dozadu");
-                    ui.label("A/D - Pohyb doleva/doprava");
+                    ui.label("W/A/S/D - Pohyb (dopředu/doleva/dozadu/doprava)");
+                    ui.label("↑/↓/←/→ - Rozhlížení (nahoru/dolů/doleva/doprava)");
                     ui.label("Space - Pohyb nahoru");
                     ui.label("C - Pohyb dolů");
-                    ui.label("ESC - Zachytit/uvolnit myš");
-                    ui.label("LMB + Mouse - Rozhlížení (alternativa)");
                     ui.label("PageUp/PageDown - Rychlost");
                     ui.label("F - Přepnout režim");
                 } else {
                     ui.label("📷 Third Person Mode Controls:");
-                    ui.label("W/S - Pohyb dopředu/dozadu");
-                    ui.label("A/D - Pohyb doleva/doprava");
+                    ui.label("W/A/S/D - Pohyb (dopředu/doleva/dozadu/doprava)");
+                    ui.label("↑/↓/←/→ - Rozhlížení (nahoru/dolů/doleva/doprava)");
                     ui.label("Space - Pohyb nahoru");
                     ui.label("C - Pohyb dolů");
-                    ui.label("ESC - Zachytit/uvolnit myš");
-                    ui.label("LMB + Mouse - Rozhlížení (alternativa)");
                     ui.label("PageUp/PageDown - Rychlost");
                     ui.label("F - Přepnout režim");
                 }
 
                 ui.separator();
+                ui.heading("Ovládání klávesnice");
+                ui.label("POHYB - WASD:");
+                ui.label("• W - Dopředu");
+                ui.label("• S - Dozadu");
+                ui.label("• A - Doleva");
+                ui.label("• D - Doprava");
+                ui.label("• Space - Nahoru");
+                ui.label("• C - Dolů");
+                ui.separator();
+                ui.label("ROZHLÍŽENÍ - Šipky:");
+                ui.label("• ↑ - Díváš se nahoru");
+                ui.label("• ↓ - Díváš se dolů");
+                ui.label("• ← - Otočit hlavu doleva");
+                ui.label("• → - Otočit hlavu doprava");
+                ui.label(format!("Rychlost rozhlížení: {:.1}°/s", cam.look_speed * 180.0 / std::f32::consts::PI));
+
+                ui.separator();
                 ui.label(format!("Rychlost: {:.1}", cam.speed));
-                ui.label(format!("Citlivost myši: {:.3}", cam.mouse_sensitivity));
                 
-                // Slider pro citlivost myši
-                ui.add(egui::Slider::new(&mut cam.mouse_sensitivity, 0.0005..=0.01)
-                    .text("Citlivost myši"));
+                ui.add(egui::Slider::new(&mut cam.look_speed, 0.5..=5.0)
+                    .text("Rychlost šipek"));
 
                 ui.label(format!("Pozice: ({:.1}, {:.1}, {:.1})", cam.pos.x, cam.pos.y, cam.pos.z));
+
+                // Detailní info o meshu
+                ui.separator();
+                ui.heading("Mesh Info");
+                ui.label(format!("Vrcholy: {}", cpu_mesh.positions.len()));
+                match &cpu_mesh.indices {
+                    Indices::U32(idx) => ui.label(format!("Indexy (U32): {}", idx.len())),
+                    Indices::U16(idx) => ui.label(format!("Indexy (U16): {}", idx.len())),
+                    Indices::None => ui.label("Indexy: žádné"),
+                    &three_d::Indices::U8(_) => todo!(),
+                };
+
+                ui.separator();
+                ui.heading("Ovládání Info");
+                ui.label("Jednoduché klávesnicové ovládání:");
+                ui.label("• WASD - pohyb v prostoru");
+                ui.label("• Šipky - rozhlížení kamery");
+                ui.label("• PageUp/PageDown - rychlost pohybu");
+                ui.label("• F - přepnutí režimu kamery");
+                ui.label(format!("Yaw: {:.3}, Pitch: {:.3}", cam.yaw, cam.pitch));
 
                 ui.separator();
                 // tlačítko pro výběr .glb souboru
@@ -638,17 +659,6 @@ fn main() -> Result<()> {
                 // zobrazení názvu a stavu načtení
                 ui.label(format!("Aktuální soubor: {}", loaded_file_name));
                 ui.label(format!("Stav: {}", load_status));
-
-                // Detailní info o meshu
-                ui.separator();
-                ui.heading("Mesh Info");
-                ui.label(format!("Vrcholy: {}", cpu_mesh.positions.len()));
-                match &cpu_mesh.indices {
-                    Indices::U32(idx) => ui.label(format!("Indexy (U32): {}", idx.len())),
-                    Indices::U16(idx) => ui.label(format!("Indexy (U16): {}", idx.len())),
-                    Indices::None => ui.label("Indexy: žádné"),
-                    &three_d::Indices::U8(_) => todo!(),
-                }
             });
         });
 
@@ -670,7 +680,7 @@ fn main() -> Result<()> {
                 third_person_pos
             };
         }
-        cam.update(events, dt);
+        cam.update(events, dt, frame_input.viewport);
 
         // --- vykreslení ---
         let screen = frame_input.screen();
