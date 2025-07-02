@@ -240,11 +240,21 @@ struct FreeCamera {
     yaw: f32,
     pitch: f32,
     speed: f32,
+    mouse_sensitivity: f32,
+    mouse_captured: bool,
 }
+
 impl FreeCamera {
     fn new(pos: Vector3<f32>) -> Self {
         // kamera směřuje podél -Z, takže je model v popředí
-        Self { pos, yaw: -FRAC_PI_2, pitch: 0.0, speed: 4.0 }
+        Self { 
+            pos, 
+            yaw: -FRAC_PI_2, 
+            pitch: 0.0, 
+            speed: 4.0,
+            mouse_sensitivity: 0.002,
+            mouse_captured: false,
+        }
     }
     fn dir(&self) -> Vector3<f32> {
         Vector3::new(self.yaw.cos() * self.pitch.cos(), self.pitch.sin(), self.yaw.sin() * self.pitch.cos()).normalize()
@@ -253,16 +263,30 @@ impl FreeCamera {
 
     fn update(&mut self, events: &[Event], dt: f32) {
         // rychlost PageUp/PageDown
-        if events.iter().any(|e| matches!(e, Event::KeyPress { kind: Key::PageUp, .. })) { self.speed *= 1.2; }
-        if events.iter().any(|e| matches!(e, Event::KeyPress { kind: Key::PageDown, .. })) { self.speed /= 1.2; }
-        // otáčení (drž LMB)
-        if let Some(Event::MouseMotion { delta, .. }) = events.iter().find(|e| matches!(e, Event::MouseMotion { .. })) {
-            if events.iter().any(|e| matches!(e, Event::MousePress { button: MouseButton::Left, .. })) {
-                self.yaw   -= delta.0 as f32 * 0.002;
-                self.pitch = (self.pitch - delta.1 as f32 * 0.002).clamp(-1.5, 1.5);
+        if events.iter().any(|e| matches!(e, Event::KeyPress { kind: Key::PageUp, .. })) { 
+            self.speed *= 1.2; 
+        }
+        if events.iter().any(|e| matches!(e, Event::KeyPress { kind: Key::PageDown, .. })) { 
+            self.speed /= 1.2; 
+        }
+
+        // Toggle mouse capture s ESC
+        if events.iter().any(|e| matches!(e, Event::KeyPress { kind: Key::Escape, .. })) {
+            self.mouse_captured = !self.mouse_captured;
+        }
+
+        // Mouse look - funguje buď s captured mouse nebo při držení LMB
+        let mouse_active = self.mouse_captured || 
+            events.iter().any(|e| matches!(e, Event::MousePress { button: MouseButton::Left, .. }));
+
+        if mouse_active {
+            if let Some(Event::MouseMotion { delta, .. }) = events.iter().find(|e| matches!(e, Event::MouseMotion { .. })) {
+                self.yaw -= delta.0 as f32 * self.mouse_sensitivity;
+                self.pitch = (self.pitch - delta.1 as f32 * self.mouse_sensitivity).clamp(-1.5, 1.5);
             }
         }
-        // pohyb
+
+        // pohyb klávesnicí
         let held = |k: Key| events.iter().any(|e| matches!(e, Event::KeyPress { kind, .. } if *kind == k));
         let mut v = Vector3::new(0.0, 0.0, 0.0);
         if held(Key::W) { v += self.dir(); }
@@ -271,7 +295,9 @@ impl FreeCamera {
         if held(Key::D) { v += self.right(); }
         if held(Key::Space) { v += Vector3::unit_y(); }
         if held(Key::C) { v -= Vector3::unit_y(); } // "C" = dolů
-        if v.magnitude2() > 0.0 { self.pos += v.normalize() * self.speed * dt; }
+        if v.magnitude2() > 0.0 { 
+            self.pos += v.normalize() * self.speed * dt; 
+        }
     }
     fn cam(&self, vp: Viewport) -> Camera {
         Camera::new_perspective(vp, self.pos, self.pos + self.dir(), Vector3::unit_y(), Deg(60.0), 0.1, 1000.0)
@@ -467,11 +493,14 @@ fn process_primitive(
 
 fn main() -> Result<()> {
     // okno + GL
-    let window = Window::new(WindowSettings { title: "BSP Viewer (three‑d 0.18)".into(), ..Default::default() })?;
+    let window = Window::new(WindowSettings { 
+        title: "BSP Viewer (three‑d 0.18)".into(), 
+        ..Default::default() 
+    })?;
     let context = window.gl();
     let mut gui = GUI::new(&context);
 
-    // stavová proměnná: název aktuálního souboru a úspěšnost načtení
+    // stavová prom��nná: název aktuálního souboru a úspěšnost načtení
     let initial_path = Path::new("assets/model.glb");
     let (mut cpu_mesh, mut load_status) = load_cpu_mesh(initial_path);
 
@@ -538,13 +567,21 @@ fn main() -> Result<()> {
                 ui.separator();
                 ui.heading("Ovládání");
 
+                // Mouse capture status
+                if cam.mouse_captured {
+                    ui.colored_label(egui::Color32::GREEN, "🖱️ Myš zachycena (ESC pro uvolnění)");
+                } else {
+                    ui.colored_label(egui::Color32::RED, "🖱️ Myš volná (ESC pro zachycení nebo LMB + pohyb)");
+                }
+
                 if mode == CamMode::Spectator {
                     ui.label("🎮 Spectator Mode Controls:");
                     ui.label("W/S - Pohyb dopředu/dozadu");
                     ui.label("A/D - Pohyb doleva/doprava");
                     ui.label("Space - Pohyb nahoru");
                     ui.label("C - Pohyb dolů");
-                    ui.label("LMB + Mouse - Rozhlížení");
+                    ui.label("ESC - Zachytit/uvolnit myš");
+                    ui.label("LMB + Mouse - Rozhlížení (alternativa)");
                     ui.label("PageUp/PageDown - Rychlost");
                     ui.label("F - Přepnout režim");
                 } else {
@@ -553,13 +590,20 @@ fn main() -> Result<()> {
                     ui.label("A/D - Pohyb doleva/doprava");
                     ui.label("Space - Pohyb nahoru");
                     ui.label("C - Pohyb dolů");
-                    ui.label("LMB + Mouse - Rozhlížení");
+                    ui.label("ESC - Zachytit/uvolnit myš");
+                    ui.label("LMB + Mouse - Rozhlížení (alternativa)");
                     ui.label("PageUp/PageDown - Rychlost");
                     ui.label("F - Přepnout režim");
                 }
 
                 ui.separator();
                 ui.label(format!("Rychlost: {:.1}", cam.speed));
+                ui.label(format!("Citlivost myši: {:.3}", cam.mouse_sensitivity));
+                
+                // Slider pro citlivost myši
+                ui.add(egui::Slider::new(&mut cam.mouse_sensitivity, 0.0005..=0.01)
+                    .text("Citlivost myši"));
+
                 ui.label(format!("Pozice: ({:.1}, {:.1}, {:.1})", cam.pos.x, cam.pos.y, cam.pos.z));
 
                 ui.separator();
