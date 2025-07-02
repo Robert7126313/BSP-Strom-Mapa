@@ -523,13 +523,40 @@ fn main() -> Result<()> {
         ..Default::default()
     });
     let mut model = Gm::new(Mesh::new(&context, &cpu_mesh), material.clone());
+    
+    // Glow efekty pro pozice kamer
+    let glow_mesh = CpuMesh::sphere(16);
+    
+    // Materiály pro glow efekty
+    let spectator_glow_material = ColorMaterial::new_opaque(&context, &CpuMaterial {
+        albedo: Srgba::new(0, 255, 100, 200), // Zelená pro spectator
+        ..Default::default()
+    });
+    
+    let third_person_glow_material = ColorMaterial::new_opaque(&context, &CpuMaterial {
+        albedo: Srgba::new(255, 100, 0, 200), // Oranžová pro third person
+        ..Default::default()
+    });
+
+    let mut spectator_glow = Gm::new(Mesh::new(&context, &glow_mesh), spectator_glow_material);
+    let mut third_person_glow = Gm::new(Mesh::new(&context, &glow_mesh), third_person_glow_material);
+    
     let light = AmbientLight::new(&context, 1.0, Srgba::WHITE); // Zvýšit intenzitu světla
 
     // před inicializací kamery přidáme mutable proměnné pro pozice obou režimů
     let mut spectator_pos    = Vector3::new(0.0, 2.0, 8.0);
-    let mut third_person_pos = spectator_pos;
+    let mut third_person_pos = Vector3::new(5.0, 2.0, 8.0); // Jiná pozice pro lepší vizualizaci
     let mut cam = FreeCamera::new(spectator_pos);
     let mut mode = CamMode::Spectator;
+
+    // Nastavení pozic glow efektů
+    spectator_glow.set_transformation(Mat4::from_translation(vec3(
+        spectator_pos.x, spectator_pos.y, spectator_pos.z
+    )) * Mat4::from_scale(0.2)); // Malé koule
+    
+    third_person_glow.set_transformation(Mat4::from_translation(vec3(
+        third_person_pos.x, third_person_pos.y, third_person_pos.z
+    )) * Mat4::from_scale(0.2));
 
     window.render_loop(move |frame_input| {
         let dt = frame_input.elapsed_time as f32 / 1000.0;
@@ -668,8 +695,16 @@ fn main() -> Result<()> {
             // ulož aktuální pozici do příslušné proměnné
             if mode == CamMode::Spectator {
                 spectator_pos = cam.pos;
+                // Aktualizuj pozici spectator glow
+                spectator_glow.set_transformation(Mat4::from_translation(vec3(
+                    spectator_pos.x, spectator_pos.y, spectator_pos.z
+                )) * Mat4::from_scale(0.2));
             } else {
                 third_person_pos = cam.pos;
+                // Aktualizuj pozici third person glow
+                third_person_glow.set_transformation(Mat4::from_translation(vec3(
+                    third_person_pos.x, third_person_pos.y, third_person_pos.z
+                )) * Mat4::from_scale(0.2));
             }
             // přepni režim
             mode = if mode == CamMode::Spectator { CamMode::ThirdPerson } else { CamMode::Spectator };
@@ -685,7 +720,25 @@ fn main() -> Result<()> {
         // --- vykreslení ---
         let screen = frame_input.screen();
         screen.clear(ClearState::color_and_depth(0.1, 0.1, 0.1, 1.0, 1.0)); // Tmavě šedé pozladí místo černého
-        screen.render(&cam.cam(frame_input.viewport), &[&model], &[&light]);
+        
+        // Vykresli hlavní model a glow efekty
+        let mut objects_to_render: Vec<&dyn Object> = vec![&model];
+        
+        // Přidej glow koule pouze pokud nejsou na stejné pozici jako aktuální kamera
+        let current_distance_to_spectator = (cam.pos - spectator_pos).magnitude();
+        let current_distance_to_third_person = (cam.pos - third_person_pos).magnitude();
+        
+        // Zobraz spectator glow pouze pokud nejsme v spectator režimu nebo jsme daleko
+        if mode != CamMode::Spectator || current_distance_to_spectator > 1.0 {
+            objects_to_render.push(&spectator_glow);
+        }
+        
+        // Zobraz third person glow pouze pokud nejsme v third person režimu nebo jsme daleko
+        if mode != CamMode::ThirdPerson || current_distance_to_third_person > 1.0 {
+            objects_to_render.push(&third_person_glow);
+        }
+        
+        screen.render(&cam.cam(frame_input.viewport), &objects_to_render, &[&light]);
         let _ = gui.render();
         FrameOutput::default()
     });

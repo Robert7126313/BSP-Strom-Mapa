@@ -11,10 +11,7 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: enhance FreeCamera with mouse capture and sensitivity settings">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
-    </list>
+    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: refactor FreeCamera controls to use look speed and remove mouse capture" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -94,7 +91,7 @@
       <workItem from="1751378773671" duration="9234000" />
       <workItem from="1751405527609" duration="1334000" />
       <workItem from="1751475843871" duration="1426000" />
-      <workItem from="1751491451670" duration="2088000" />
+      <workItem from="1751491451670" duration="2396000" />
     </task>
     <task id="LOCAL-00001" summary="initialize new Rust project with basic structure and configuration files">
       <option name="closed" value="true" />
@@ -184,7 +181,15 @@
       <option name="project" value="LOCAL" />
       <updated>1751492032019</updated>
     </task>
-    <option name="localTasksCounter" value="12" />
+    <task id="LOCAL-00012" summary="feat: refactor FreeCamera controls to use look speed and remove mouse capture">
+      <option name="closed" value="true" />
+      <created>1751493890487</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1751493890487</updated>
+    </task>
+    <option name="localTasksCounter" value="13" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -202,6 +207,7 @@
     <MESSAGE value="feat: enhance GLB model loading with detailed logging and error handling" />
     <MESSAGE value="feat: add gltf crate for improved GLTF model loading and processing" />
     <MESSAGE value="feat: enhance FreeCamera with mouse capture and sensitivity settings" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: enhance FreeCamera with mouse capture and sensitivity settings" />
+    <MESSAGE value="feat: refactor FreeCamera controls to use look speed and remove mouse capture" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: refactor FreeCamera controls to use look speed and remove mouse capture" />
   </component>
 </project>
