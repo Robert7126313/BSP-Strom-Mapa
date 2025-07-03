@@ -209,9 +209,11 @@ impl Plane {
     fn classify(&self, point: Vector3<f32>) -> i32 {
         let dist = self.side(point);
         const EPSILON: f32 = 1e-6;
-        if dist > EPSILON { 1 }        // front
-        else if dist < -EPSILON { -1 } // back  
-        else { 0 }                     // on plane
+        match dist {
+            d if d > EPSILON => 1,     // front
+            d if d < -EPSILON => -1,   // back
+            _ => 0,                    // on plane
+        }
     }
 }
 
@@ -220,6 +222,7 @@ struct BspNode {
     front: Option<Box<BspNode>>,
     back: Option<Box<BspNode>>,
     triangles: Vec<Triangle>,
+    bounds: BoundingBox,
 }
 
 #[derive(Default)]
@@ -236,16 +239,21 @@ impl BspNode {
             plane: None,
             front: None,
             back: None,
-            triangles,
+            triangles: triangles.clone(),
+            bounds: BoundingBox::from_triangles(&triangles),
         }
     }
 
     fn new_node(plane: Plane, front: BspNode, back: BspNode) -> Self {
+        // Nejprve vytvoříme společný obalový objem, než přesuneme hodnoty do boxů
+        let bounds = BoundingBox::encompass(&front.bounds, &back.bounds);
+
         Self {
             plane: Some(plane),
             front: Some(Box::new(front)),
             back: Some(Box::new(back)),
             triangles: Vec::new(),
+            bounds,
         }
     }
 
@@ -344,6 +352,78 @@ fn traverse_bsp(
     }
 }
 
+fn traverse_bsp_with_frustum(
+    node: &BspNode,
+    camera_pos: Vector3<f32>,
+    frustum: &Frustum,
+    stats: &mut BspStats,
+    visible_triangles: &mut Vec<Triangle>
+) {
+    stats.nodes_visited += 1;
+
+    // 1) Culling test - pokud je celý uzel mimo frustum, přeskočíme jej
+    for plane in &frustum.planes {
+        if !node.bounds.intersects_plane(plane) {
+            // Tento uzel (a všechny jeho potomky) je zcela za rovinou frustumu - přeskočíme
+            return;
+        }
+    }
+
+    match &node.plane {
+        None => {
+            // List - přidej všechny trojúhelníky, které jsou viditelné z pozice kamery
+            for triangle in &node.triangles {
+                // Pro každý trojúhelník ověříme, zda je viditelný z pozice kamery
+                let center = triangle_center(triangle);
+                
+                // Získáme normálu trojúhelníku pro backface culling
+                let edge1 = triangle.b - triangle.a;
+                let edge2 = triangle.c - triangle.a;
+                let normal = edge1.cross(edge2).normalize();
+                
+                // Vypočítáme vektor od kamery k trojúhelníku
+                let to_triangle = center - camera_pos;
+                
+                // Pokud je úhel mezi normálou a vektorem ke kameře menší než 90°, 
+                // trojúhelník je otočen směrem ke kameře
+                if normal.dot(to_triangle) < 0.0 {
+                    // Ověříme, zda střed trojúhelníku je uvnitř frustumu
+                    let mut is_inside = true;
+                    for plane in &frustum.planes {
+                        if plane.side(center) < 0.0 {
+                            is_inside = false;
+                            break;
+                        }
+                    }
+                    
+                    if is_inside {
+                        visible_triangles.push(triangle.clone());
+                        stats.triangles_rendered += 1;
+                    }
+                }
+            }
+        },
+        Some(plane) => {
+            // Vnitřní uzel - rozhodni o pořadí traversalu
+            let camera_side = plane.side(camera_pos);
+
+            let (near_node, far_node) = if camera_side > 0.0 {
+                (&node.front, &node.back)
+            } else {
+                (&node.back, &node.front)
+            };
+
+            // Projdi nejdřív blízký uzel, pak vzdálený
+            if let Some(near) = near_node {
+                traverse_bsp_with_frustum(near, camera_pos, frustum, stats, visible_triangles);
+            }
+            if let Some(far) = far_node {
+                traverse_bsp_with_frustum(far, camera_pos, frustum, stats, visible_triangles);
+            }
+        }
+    }
+}
+
 fn cpu_mesh_to_triangles(cpu_mesh: &CpuMesh) -> Vec<Triangle> {
     let mut triangles = Vec::new();
 
@@ -353,26 +433,26 @@ fn cpu_mesh_to_triangles(cpu_mesh: &CpuMesh) -> Vec<Triangle> {
         .map(|pos| Vector3::new(pos.x, pos.y, pos.z))
         .collect();
 
+    // Pomocná funkce pro zpracování indexů
+    let mut process_indices = |indices: &[u32]| {
+        for chunk in indices.chunks(3) {
+            if chunk.len() == 3 {
+                let a = positions[chunk[0] as usize];
+                let b = positions[chunk[1] as usize];
+                let c = positions[chunk[2] as usize];
+                triangles.push(Triangle { a, b, c });
+            }
+        }
+    };
+
     match &cpu_mesh.indices {
         Indices::U32(indices) => {
-            for chunk in indices.chunks(3) {
-                if chunk.len() == 3 {
-                    let a = positions[chunk[0] as usize];
-                    let b = positions[chunk[1] as usize];
-                    let c = positions[chunk[2] as usize];
-                    triangles.push(Triangle { a, b, c });
-                }
-            }
+            process_indices(indices);
         },
         Indices::U16(indices) => {
-            for chunk in indices.chunks(3) {
-                if chunk.len() == 3 {
-                    let a = positions[chunk[0] as usize];
-                    let b = positions[chunk[1] as usize];
-                    let c = positions[chunk[2] as usize];
-                    triangles.push(Triangle { a, b, c });
-                }
-            }
+            // Konvertujeme U16 indexy na U32 a pak použijeme stejnou funkci
+            let indices_u32: Vec<u32> = indices.iter().map(|&idx| idx as u32).collect();
+            process_indices(&indices_u32);
         },
         _ => {}
     }
@@ -682,6 +762,41 @@ fn process_primitive(
     Ok(())
 }
 
+// Funkce pro vytvoření meshe z viditelných trojúhelníků
+fn create_visible_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, ColorMaterial> {
+    let mut positions = Vec::new();
+    let mut indices = Vec::new();
+
+    for (i, tri) in triangles.iter().enumerate() {
+        let base_idx = (i * 3) as u32;
+        
+        // Přidáme vrcholy trojúhelníku
+        positions.push(vec3(tri.a.x, tri.a.y, tri.a.z));
+        positions.push(vec3(tri.b.x, tri.b.y, tri.b.z));
+        positions.push(vec3(tri.c.x, tri.c.y, tri.c.z));
+        
+        // Přidáme indexy trojúhelníku
+        indices.push(base_idx);
+        indices.push(base_idx + 1);
+        indices.push(base_idx + 2);
+    }
+
+    // Vytvoření nového meshe
+    let visible_mesh = CpuMesh {
+        positions: Positions::F32(positions),
+        indices: Indices::U32(indices),
+        ..Default::default()
+    };
+    
+    // Vytvoření materiálu a modelu
+    let material = ColorMaterial::new_opaque(context, &CpuMaterial {
+        albedo: Srgba::new(100, 150, 255, 255),
+        ..Default::default()
+    });
+    
+    Gm::new(Mesh::new(context, &visible_mesh), material)
+}
+
 // ---------------- Main --------------------------------------------------- //
 
 fn main() -> Result<()> {
@@ -695,9 +810,9 @@ fn main() -> Result<()> {
 
     // stavová prom��nná: název aktuálního souboru a úspěšnost načtení
     let initial_path = Path::new("assets/model.glb");
-    let (mut cpu_mesh, mut load_status) = load_cpu_mesh(initial_path);
+    let (cpu_mesh, load_status) = load_cpu_mesh(initial_path);
 
-    let mut loaded_file_name = if initial_path.exists() {
+    let _loaded_file_name = if initial_path.exists() {
         initial_path.file_name().unwrap().to_string_lossy().into_owned()
     } else {
         "embedded sphere".to_string()
@@ -705,20 +820,20 @@ fn main() -> Result<()> {
 
     // Vytvoření BSP stromu
     let triangles = cpu_mesh_to_triangles(&cpu_mesh);
-    let mut bsp_root = build_bsp(triangles, 0);
-    let mut total_stats = BspStats {
+    let bsp_root = build_bsp(triangles, 0);
+    let total_stats = BspStats {
         total_nodes: bsp_root.count_nodes(),
         total_triangles: bsp_root.count_triangles(),
         ..Default::default()
     };
 
     // stav pro vykreslovaný mesh
-    let mut glb_path: Option<PathBuf> = None;
+    let _glb_path: Option<PathBuf> = None;
     let material = ColorMaterial::new_opaque(&context, &CpuMaterial {
         albedo: Srgba::new(100, 150, 255, 255), // Modrá barva aby byl model viditelný
         ..Default::default()
     });
-    let mut model = Gm::new(Mesh::new(&context, &cpu_mesh), material.clone());
+    let model = Gm::new(Mesh::new(&context, &cpu_mesh), material.clone());
     
     // Glow efekty pro pozice kamer
     let glow_mesh = CpuMesh::sphere(16);
@@ -752,7 +867,7 @@ fn main() -> Result<()> {
     // Nastavení výchozích pozic pro kamery (spawnpoint)
     let default_spectator_pos = Vector3::new(0.0, 2.0, 8.0);
     let default_third_person_pos = Vector3::new(5.0, 2.0, 8.0);
-    
+
     // před inicializací kamery přidáme mutable proměnné pro stavy kamer obou režimů
     let mut cam = FreeCamera::new(default_spectator_pos);
     let mut spectator_state = CameraState::from_camera(&cam);
@@ -784,14 +899,50 @@ fn main() -> Result<()> {
         // Aktualizuj stav kláves v InputManageru
         input_manager.update_key_states(events);
 
-        // BSP traversal pro aktuální pozici kamery
+        // Vytvoření frustumu kamery pro view-culling
+        let camera_obj = cam.cam(frame_input.viewport);
+        
+        // Použij správnou pozici pozorovatele pro traverzování BSP stromu
+        let observer_position = match mode {
+            CamMode::Spectator => cam.pos,  // V režimu Spectator používáme pozici kamery
+            CamMode::ThirdPerson => spectator_state.pos,  // V režimu ThirdPerson používáme pozici Spectator kamery
+        };
+        
+        // V třetí osobě vytvoříme frustum z pozice pozorovatele
+        let frustum = if mode == CamMode::ThirdPerson {
+            // Vytvoříme kameru z pozice spectator
+            let spectator_dir = Vector3::new(
+                spectator_state.yaw.cos() * spectator_state.pitch.cos(),
+                spectator_state.pitch.sin(),
+                spectator_state.yaw.sin() * spectator_state.pitch.cos()
+            ).normalize();
+            
+            let spectator_camera = Camera::new_perspective(
+                frame_input.viewport,
+                spectator_state.pos,
+                spectator_state.pos + spectator_dir,
+                Vector3::unit_y(),
+                Deg(60.0),
+                0.1,
+                1000.0
+            );
+            Frustum::from_camera(&spectator_camera)
+        } else {
+            Frustum::from_camera(&camera_obj)
+        };
+
+        // BSP traversal pro aktuální pozici kamery s využitím frustum cullingu
         let mut current_stats = BspStats {
             total_nodes: total_stats.total_nodes,
             total_triangles: total_stats.total_triangles,
             ..Default::default()
         };
         let mut visible_triangles = Vec::new();
-        traverse_bsp(&bsp_root, cam.pos, &mut current_stats, &mut visible_triangles);
+        
+        traverse_bsp_with_frustum(&bsp_root, observer_position, &frustum, &mut current_stats, &mut visible_triangles);
+
+        // Vytvoř mesh z viditelných trojúhelníků pro vykreslení
+        let visible_model = create_visible_mesh(&visible_triangles, &context);
 
         // --- GUI ---
         gui.update(&mut frame_input.events.clone(), frame_input.accumulated_time, frame_input.viewport, frame_input.device_pixel_ratio, |ctx| {
@@ -821,7 +972,7 @@ fn main() -> Result<()> {
 
                 ui.separator();
                 ui.heading("Ovládání");
-                
+
                 ui.label("POHYB:");
                 ui.label("• W - Dopředu");
                 ui.label("• S - Dozadu");
@@ -830,7 +981,7 @@ fn main() -> Result<()> {
                 ui.label("• Space - Nahoru");
                 ui.label("• C - Dolů");
                 ui.label(format!("Rychlost: {:.1}", cam.speed));
-                
+
                 ui.separator();
                 ui.label("ROZHLÍŽENÍ:");
                 ui.label("• ↑ - Díváš se nahoru");
@@ -840,13 +991,13 @@ fn main() -> Result<()> {
                 ui.label(format!("Rychlost rozhlížení: {:.1}°/s", cam.look_speed * 180.0 / std::f32::consts::PI));
                 ui.add(egui::Slider::new(&mut cam.look_speed, 0.5..=5.0)
                     .text("Rychlost rozhlížení"));
-                
+
                 ui.separator();
                 ui.label("OSTATNÍ:");
                 ui.label("• F - Přepnout režim");
                 ui.label("• Home - Návrat na výchozí pozici");
                 ui.label("• PageUp/PageDown - Upravit rychlost");
-                
+
                 ui.separator();
                 ui.heading("Informace o kameře");
                 ui.label(format!("Pozice: ({:.1}, {:.1}, {:.1})", cam.pos.x, cam.pos.y, cam.pos.z));
@@ -857,7 +1008,7 @@ fn main() -> Result<()> {
         // --- ovládání ---
         // --- ovládání přepnutí režimu pomocí kláves F a G ---
         let current_time = frame_input.accumulated_time;
-        
+
         // Pomocná funkce pro přepínání režimů
         let mut switch_camera_mode = |target_mode: CamMode| {
             if switch_delay.can_switch(current_time) && mode != target_mode {
@@ -865,28 +1016,28 @@ fn main() -> Result<()> {
                     CamMode::Spectator => {
                         // Ulož aktuální pozici do ThirdPerson stavu
                         third_person_state = CameraState::from_camera(&cam);
-                        
+
                         // Přepni na Spectator režim a použij jeho stav
                         mode = CamMode::Spectator;
                         spectator_state.apply_to_camera(&mut cam);
-                        
+
                         println!("Přepnuto na režim: Spectator");
                     },
                     CamMode::ThirdPerson => {
                         // Ulož aktuální pozici do Spectator stavu
                         spectator_state = CameraState::from_camera(&cam);
-                        
+
                         // Přepni na ThirdPerson režim a použij jeho stav
                         mode = CamMode::ThirdPerson;
                         third_person_state.apply_to_camera(&mut cam);
-                        
+
                         println!("Přepnuto na režim: ThirdPerson");
                     }
                 }
-                
+
                 // Zaznamenej čas posledního přepnutí
                 switch_delay.record_switch(current_time);
-                
+
                 // Aktualizuj pozice glow značek
                 spectator_glow.set_transformation(Mat4::from_translation(vec3(
                     spectator_state.pos.x, spectator_state.pos.y, spectator_state.pos.z
@@ -897,17 +1048,17 @@ fn main() -> Result<()> {
                 )) * Mat4::from_scale(0.2));
             }
         };
-        
+
         // Klávesa F - přepnutí na Spectator režim
         if input_manager.is_key_pressed(KeyCode::F) {
             switch_camera_mode(CamMode::Spectator);
         }
-        
+
         // Klávesa G - přepnutí na ThirdPerson režim
         if input_manager.is_key_pressed(KeyCode::G) {
             switch_camera_mode(CamMode::ThirdPerson);
         }
-        
+
         // Zpracování změny rychlosti pomocí PageUp/PageDown přes InputManager
         if input_manager.is_key_pressed(KeyCode::PageUp) {
             cam.speed *= 1.2;
@@ -934,7 +1085,7 @@ fn main() -> Result<()> {
                 println!("Kamera resetována na výchozí third person pozici");
             }
         }
-        
+
         // Aktualizace kamery pomocí nové metody pro hladký pohyb
         cam.update_smooth(&input_manager, dt);
         
@@ -1065,8 +1216,8 @@ fn main() -> Result<()> {
         let screen = frame_input.screen();
         screen.clear(ClearState::color_and_depth(0.1, 0.1, 0.1, 1.0, 1.0)); // Tmavě šedé pozladí místo černého
 
-        // Vykresli hlavní model a glow efekty
-        let mut objects_to_render: Vec<&dyn Object> = vec![&model];
+        // Vykresli viditelný model místo celého modelu
+        let mut objects_to_render: Vec<&dyn Object> = vec![&visible_model];
 
         // Přidej glow koule pouze pokud nejsou na stejné pozici jako aktuální kamera
         let current_distance_to_spectator = (cam.pos - spectator_state.pos).magnitude();
@@ -1151,5 +1302,159 @@ impl CameraState {
         camera.yaw = self.yaw;
         camera.pitch = self.pitch;
         camera.speed = self.speed;
+    }
+}
+
+#[derive(Clone, Debug)]
+struct BoundingBox {
+    min: Vector3<f32>,
+    max: Vector3<f32>,
+}
+
+impl BoundingBox {
+    fn new_empty() -> Self {
+        Self {
+            min: Vector3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY),
+            max: Vector3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY),
+        }
+    }
+
+    fn from_triangle(tri: &Triangle) -> Self {
+        let min = Vector3::new(
+            tri.a.x.min(tri.b.x).min(tri.c.x),
+            tri.a.y.min(tri.b.y).min(tri.c.y),
+            tri.a.z.min(tri.b.z).min(tri.c.z),
+        );
+        let max = Vector3::new(
+            tri.a.x.max(tri.b.x).max(tri.c.x),
+            tri.a.y.max(tri.b.y).max(tri.c.y),
+            tri.a.z.max(tri.b.z).max(tri.c.z),
+        );
+        BoundingBox { min, max }
+    }
+
+    fn from_triangles(triangles: &[Triangle]) -> Self {
+        if triangles.is_empty() {
+            return Self::new_empty();
+        }
+
+        let mut bounds = Self::from_triangle(&triangles[0]);
+        for tri in triangles.iter().skip(1) {
+            let tri_bounds = Self::from_triangle(tri);
+            bounds = Self::encompass(&bounds, &tri_bounds);
+        }
+        bounds
+    }
+
+    fn encompass(box1: &Self, box2: &Self) -> Self {
+        BoundingBox {
+            min: Vector3::new(
+                box1.min.x.min(box2.min.x),
+                box1.min.y.min(box2.min.y),
+                box1.min.z.min(box2.min.z),
+            ),
+            max: Vector3::new(
+                box1.max.x.max(box2.max.x),
+                box1.max.y.max(box2.max.y),
+                box1.max.z.max(box2.max.z),
+            ),
+        }
+    }
+
+    /// Test against a single plane: return true if any part of the box is in front of the plane.
+    fn intersects_plane(&self, plane: &Plane) -> bool {
+        // compute the "positive vertex" for this plane's normal
+        let p = Vector3::new(
+            if plane.n.x >= 0.0 { self.max.x } else { self.min.x },
+            if plane.n.y >= 0.0 { self.max.y } else { self.min.y },
+            if plane.n.z >= 0.0 { self.max.z } else { self.min.z },
+        );
+        // if this farthest point is in front, the box may intersect or be in front
+        plane.side(p) >= 0.0
+    }
+}
+
+// Struktura pro reprezentaci frustumu kamery
+struct Frustum {
+    planes: [Plane; 6],
+}
+
+impl Frustum {
+    fn from_camera(camera: &Camera) -> Self {
+        // Získáme view-projection matici
+        let vp_matrix = camera.projection() * camera.view();
+
+        // Převedeme na pole - Matrix4 nemá as_slice(), musíme použít jiný přístup
+        let mat = [
+            vp_matrix.x.x, vp_matrix.x.y, vp_matrix.x.z, vp_matrix.x.w,
+            vp_matrix.y.x, vp_matrix.y.y, vp_matrix.y.z, vp_matrix.y.w,
+            vp_matrix.z.x, vp_matrix.z.y, vp_matrix.z.z, vp_matrix.z.w,
+            vp_matrix.w.x, vp_matrix.w.y, vp_matrix.w.z, vp_matrix.w.w,
+        ];
+
+        // Extrahujeme 6 rovin frustumu
+        // Levá rovina
+        let left = Plane {
+            n: Vector3::new(
+                mat[3] + mat[0],
+                mat[7] + mat[4],
+                mat[11] + mat[8],
+            ).normalize(),
+            d: (mat[15] + mat[12]) / (mat[3] + mat[0]).hypot((mat[7] + mat[4]).hypot(mat[11] + mat[8])),
+        };
+
+        // Pravá rovina
+        let right = Plane {
+            n: Vector3::new(
+                mat[3] - mat[0],
+                mat[7] - mat[4],
+                mat[11] - mat[8],
+            ).normalize(),
+            d: (mat[15] - mat[12]) / (mat[3] - mat[0]).hypot((mat[7] - mat[4]).hypot(mat[11] - mat[8])),
+        };
+
+        // Spodní rovina
+        let bottom = Plane {
+            n: Vector3::new(
+                mat[3] + mat[1],
+                mat[7] + mat[5],
+                mat[11] + mat[9],
+            ).normalize(),
+            d: (mat[15] + mat[13]) / (mat[3] + mat[1]).hypot((mat[7] + mat[5]).hypot(mat[11] + mat[9])),
+        };
+
+        // Horní rovina
+        let top = Plane {
+            n: Vector3::new(
+                mat[3] - mat[1],
+                mat[7] - mat[5],
+                mat[11] - mat[9],
+            ).normalize(),
+            d: (mat[15] - mat[13]) / (mat[3] - mat[1]).hypot((mat[7] - mat[5]).hypot(mat[11] - mat[9])),
+        };
+
+        // Blízká rovina
+        let near = Plane {
+            n: Vector3::new(
+                mat[3] + mat[2],
+                mat[7] + mat[6],
+                mat[11] + mat[10],
+            ).normalize(),
+            d: (mat[15] + mat[14]) / (mat[3] + mat[2]).hypot((mat[7] + mat[6]).hypot(mat[11] + mat[10])),
+        };
+
+        // Vzdálená rovina
+        let far = Plane {
+            n: Vector3::new(
+                mat[3] - mat[2],
+                mat[7] - mat[6],
+                mat[11] - mat[10],
+            ).normalize(),
+            d: (mat[15] - mat[14]) / (mat[3] - mat[2]).hypot((mat[7] - mat[6]).hypot(mat[11] - mat[10])),
+        };
+
+        Frustum {
+            planes: [left, right, bottom, top, near, far],
+        }
     }
 }
