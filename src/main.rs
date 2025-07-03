@@ -56,6 +56,8 @@ enum KeyCode {
     PageUp,
     PageDown,
     F,
+    G,    // Přidána nová klávesa G pro přepnutí do ThirdPerson
+    Home,  // Přidána nová klávesa Home
 }
 
 impl KeyCode {
@@ -76,6 +78,8 @@ impl KeyCode {
                 Key::PageUp => Some(PageUp),
                 Key::PageDown => Some(PageDown),
                 Key::F => Some(F),
+                Key::G => Some(G),  // Přiřazení klávesy G
+                Key::Home => Some(Home),  // Přiřazení klávesy Home
                 _ => None,
             },
             _ => None,
@@ -745,10 +749,14 @@ fn main() -> Result<()> {
     
     let light = AmbientLight::new(&context, 1.0, Srgba::WHITE); // Zvýšit intenzitu světla
 
+    // Nastavení výchozích pozic pro kamery (spawnpoint)
+    let default_spectator_pos = Vector3::new(0.0, 2.0, 8.0);
+    let default_third_person_pos = Vector3::new(5.0, 2.0, 8.0);
+    
     // před inicializací kamery přidáme mutable proměnné pro stavy kamer obou režimů
-    let mut cam = FreeCamera::new(Vector3::new(0.0, 2.0, 8.0));
+    let mut cam = FreeCamera::new(default_spectator_pos);
     let mut spectator_state = CameraState::from_camera(&cam);
-    let mut third_person_state = CameraState::new(Vector3::new(5.0, 2.0, 8.0)); // Jiná pozice pro lepší vizualizaci
+    let mut third_person_state = CameraState::new(default_third_person_pos); // Jiná pozice pro lepší vizualizaci
     let mut mode = CamMode::Spectator;
     
     // Proměnná pro sledování, zda zobrazit směr pohledu kamery
@@ -803,138 +811,69 @@ fn main() -> Result<()> {
                     } else { 0.0 }));
 
                 ui.separator();
-                ui.heading("Ovládání");
-
-                if mode == CamMode::Spectator {
-                    ui.label("🎮 Spectator Mode Controls:");
-                    ui.label("W/A/S/D - Pohyb (dopředu/doleva/dozadu/doprava)");
-                    ui.label("↑/↓/←/→ - Rozhlížení (nahoru/dolů/doleva/doprava)");
-                    ui.label("Space - Pohyb nahoru");
-                    ui.label("C - Pohyb dolů");
-                    ui.label("PageUp/PageDown - Rychlost");
-                    ui.label("F - Přepnout režim");
-                } else {
-                    ui.label("📷 Third Person Mode Controls:");
-                    ui.label("W/A/S/D - Pohyb (dopředu/doleva/dozadu/doprava)");
-                    ui.label("↑/↓/←/→ - Rozhlížení (nahoru/dolů/doleva/doprava)");
-                    ui.label("Space - Pohyb nahoru");
-                    ui.label("C - Pohyb dolů");
-                    ui.label("PageUp/PageDown - Rychlost");
-                    ui.label("F - Přepnout režim");
-                }
+                ui.heading("Mesh Info");
+                ui.label(format!("Vrcholy: {}", cpu_mesh.positions.len()));
+                match &cpu_mesh.indices {
+                    Indices::U32(idx) => ui.label(format!("Indexy (U32): {}", idx.len())),
+                    Indices::U16(idx) => ui.label(format!("Indexy (U16): {}", idx.len())),
+                    _ => ui.label("Indexy: žádné"),
+                };
 
                 ui.separator();
-                ui.heading("Ovládání klávesnice");
-                ui.label("POHYB - WASD:");
+                ui.heading("Ovládání");
+                
+                ui.label("POHYB:");
                 ui.label("• W - Dopředu");
                 ui.label("• S - Dozadu");
                 ui.label("• A - Doleva");
                 ui.label("• D - Doprava");
                 ui.label("• Space - Nahoru");
                 ui.label("• C - Dolů");
+                ui.label(format!("Rychlost: {:.1}", cam.speed));
+                
                 ui.separator();
-                ui.label("ROZHLÍŽENÍ - Šipky:");
+                ui.label("ROZHLÍŽENÍ:");
                 ui.label("• ↑ - Díváš se nahoru");
                 ui.label("• ↓ - Díváš se dolů");
                 ui.label("• ← - Otočit hlavu doleva");
                 ui.label("• → - Otočit hlavu doprava");
                 ui.label(format!("Rychlost rozhlížení: {:.1}°/s", cam.look_speed * 180.0 / std::f32::consts::PI));
-
-                ui.separator();
-                ui.label(format!("Rychlost: {:.1}", cam.speed));
-                
                 ui.add(egui::Slider::new(&mut cam.look_speed, 0.5..=5.0)
-                    .text("Rychlost šipek"));
-
+                    .text("Rychlost rozhlížení"));
+                
+                ui.separator();
+                ui.label("OSTATNÍ:");
+                ui.label("• F - Přepnout režim");
+                ui.label("• Home - Návrat na výchozí pozici");
+                ui.label("• PageUp/PageDown - Upravit rychlost");
+                
+                ui.separator();
+                ui.heading("Informace o kameře");
                 ui.label(format!("Pozice: ({:.1}, {:.1}, {:.1})", cam.pos.x, cam.pos.y, cam.pos.z));
-
-                // Přidáme checkbox pro zobrazení směru pohledu kamery
-                ui.separator();
-                ui.heading("Nastavení zobrazení");
                 ui.checkbox(&mut show_camera_direction, "Zobrazit směr pohledu kamery");
-
-                // Detailní info o meshu
-                ui.separator();
-                ui.heading("Mesh Info");
-                ui.label(format!("Vrcholy: {}", cpu_mesh.positions.len()));
-                match &cpu_mesh.indices {
-                    Indices::U32(idx) => ui.label(format!("Indexy (U32): {}", idx.len())),
-                    Indices::U16(idx) => ui.label(format!("Indexy (U16): {}", idx.len())),
-                    Indices::None => ui.label("Indexy: žádné"),
-                    &three_d::Indices::U8(_) => todo!(),
-                };
-
-                ui.separator();
-                ui.heading("Ovládání Info");
-                ui.label("Jednoduché klávesnicové ovládání:");
-                ui.label("• WASD - pohyb v prostoru");
-                ui.label("• Šipky - rozhlížení kamery");
-                ui.label("• PageUp/PageDown - rychlost pohybu");
-                ui.label("• F - přepnutí režimu kamery");
-                ui.label(format!("Yaw: {:.3}, Pitch: {:.3}", cam.yaw, cam.pitch));
-
-                ui.separator();
-                // tlačítko pro výběr .glb souboru
-                if ui.button("Vyber .glb soubor").clicked() {
-                    if let Some(file) = FileDialog::new()
-                        .add_filter("3D Models", &["glb", "gltf"])
-                        .pick_file()
-                    {
-                        glb_path = Some(file.clone());
-                        let (new_mesh, new_status) = load_cpu_mesh(&file);
-                        cpu_mesh = new_mesh;
-                        load_status = new_status;
-
-                        model = Gm::new(Mesh::new(&context, &cpu_mesh), material.clone());
-                        
-                        // Přestavění BSP stromu pro nový model  
-                        let triangles = cpu_mesh_to_triangles(&cpu_mesh);
-                        bsp_root = build_bsp(triangles, 0);
-                        total_stats = BspStats {
-                            total_nodes: bsp_root.count_nodes(),
-                            total_triangles: bsp_root.count_triangles(),
-                            ..Default::default()
-                        };
-                        
-                        // aktualizace stavu názvu
-                        loaded_file_name = file.file_name().unwrap().to_string_lossy().into_owned();
-                    }
-                }
-
-                ui.separator();
-                // zobrazení názvu a stavu načtení
-                ui.label(format!("Aktuální soubor: {}", loaded_file_name));
-                ui.label(format!("Stav: {}", load_status));
             });
         });
 
         // --- ovládání ---
-        // --- ovládání přepnutí režimu ---
+        // --- ovládání přepnutí režimu pomocí kláves F a G ---
+        // Klávesa F - přímo na Spectator režim
         if input_manager.is_key_pressed(KeyCode::F) {
             let current_time = frame_input.accumulated_time;
             
-            // Pokud uplynul dostatečný čas od posledního přepnutí
-            if switch_delay.can_switch(current_time) {
-                // ulož aktuální pozici do příslušné proměnné
-                if mode == CamMode::Spectator {
-                    spectator_state = CameraState::from_camera(&cam);
-                } else {
-                    third_person_state = CameraState::from_camera(&cam);
-                }
-                // přepni režim
-                mode = if mode == CamMode::Spectator { CamMode::ThirdPerson } else { CamMode::Spectator };
-                // obnov pozici a orientaci nové kamery
-                if mode == CamMode::Spectator {
-                    spectator_state.apply_to_camera(&mut cam);
-                } else {
-                    third_person_state.apply_to_camera(&mut cam);
-                }
+            // Pokud uplynul dostatečný čas od posledního přepnutí a nejsme už v Spectator režimu
+            if switch_delay.can_switch(current_time) && mode != CamMode::Spectator {
+                // Ulož aktuální pozici do ThirdPerson stavu
+                third_person_state = CameraState::from_camera(&cam);
+                
+                // Přepni na Spectator režim a použij jeho stav
+                mode = CamMode::Spectator;
+                spectator_state.apply_to_camera(&mut cam);
 
                 // Zaznamenej čas posledního přepnutí
                 switch_delay.record_switch(current_time);
-                println!("Režim přepnut na: {:?}", mode);
+                println!("Přepnuto na režim: Spectator");
                 
-                // Aktualizuj pozice glow značek pro nové pozice kamer
+                // Aktualizuj pozice glow značek
                 spectator_glow.set_transformation(Mat4::from_translation(vec3(
                     spectator_state.pos.x, spectator_state.pos.y, spectator_state.pos.z
                 )) * Mat4::from_scale(0.2));
@@ -944,7 +883,35 @@ fn main() -> Result<()> {
                 )) * Mat4::from_scale(0.2));
             }
         }
+        
+        // Klávesa G - přímo na ThirdPerson režim
+        if input_manager.is_key_pressed(KeyCode::G) {
+            let current_time = frame_input.accumulated_time;
+            
+            // Pokud uplynul dostatečný čas od posledního přepnutí a nejsme už v ThirdPerson režimu
+            if switch_delay.can_switch(current_time) && mode != CamMode::ThirdPerson {
+                // Ulož aktuální pozici do Spectator stavu
+                spectator_state = CameraState::from_camera(&cam);
+                
+                // Přepni na ThirdPerson režim a použij jeho stav
+                mode = CamMode::ThirdPerson;
+                third_person_state.apply_to_camera(&mut cam);
 
+                // Zaznamenej čas posledního přepnutí
+                switch_delay.record_switch(current_time);
+                println!("Přepnuto na režim: ThirdPerson");
+                
+                // Aktualizuj pozice glow značek
+                spectator_glow.set_transformation(Mat4::from_translation(vec3(
+                    spectator_state.pos.x, spectator_state.pos.y, spectator_state.pos.z
+                )) * Mat4::from_scale(0.2));
+                
+                third_person_glow.set_transformation(Mat4::from_translation(vec3(
+                    third_person_state.pos.x, third_person_state.pos.y, third_person_state.pos.z
+                )) * Mat4::from_scale(0.2));
+            }
+        }
+        
         // Zpracování změny rychlosti pomocí PageUp/PageDown přes InputManager
         if input_manager.is_key_pressed(KeyCode::PageUp) {
             cam.speed *= 1.2;
@@ -953,6 +920,23 @@ fn main() -> Result<()> {
         if input_manager.is_key_pressed(KeyCode::PageDown) {
             cam.speed /= 1.2;
             println!("Rychlost snížena na: {:.1}", cam.speed);
+        }
+        
+        // Obsluha klávesy Home - návrat na výchozí pozici pro aktuální režim
+        if input_manager.is_key_pressed(KeyCode::Home) {
+            if mode == CamMode::Spectator {
+                // Vytvoření nového stavu kamery s výchozí pozicí, ale aktuální rychlostí kamery
+                let mut reset_state = CameraState::new(default_spectator_pos);
+                reset_state.speed = cam.speed; // Zachová aktuální rychlost
+                reset_state.apply_to_camera(&mut cam);
+                println!("Kamera resetována na výchozí spectator pozici");
+            } else { // ThirdPerson
+                // Vytvoření nového stavu kamery s výchozí pozicí, ale aktuální rychlostí kamery
+                let mut reset_state = CameraState::new(default_third_person_pos);
+                reset_state.speed = cam.speed; // Zachová aktuální rychlost
+                reset_state.apply_to_camera(&mut cam);
+                println!("Kamera resetována na výchozí third person pozici");
+            }
         }
         
         // Aktualizace kamery pomocí nové metody pro hladký pohyb
