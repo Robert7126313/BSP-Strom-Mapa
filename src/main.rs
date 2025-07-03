@@ -28,9 +28,168 @@
 use anyhow::Result;
 use cgmath::{Deg, InnerSpace, Vector3};
 use rfd::FileDialog;
+use std::collections::HashMap;
 use std::f32::consts::FRAC_PI_2;
 use std::path::{Path, PathBuf};
 use three_d::*;
+
+// před funkci main přidáme enum pro sledování stavu kláves
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum KeyState {
+    Pressed,
+    Released,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Hash)]
+enum KeyCode {
+    W,
+    A,
+    S,
+    D,
+    Up,
+    Down,
+    Left,
+    Right,
+    Space,
+    C,
+    PageUp,
+    PageDown,
+    F,
+}
+
+impl KeyCode {
+    fn from_event(event: &Event) -> Option<Self> {
+        use KeyCode::*;
+        match event {
+            Event::KeyPress { kind, .. } | Event::KeyRelease { kind, .. } => match kind {
+                Key::W => Some(W),
+                Key::A => Some(A),
+                Key::S => Some(S),
+                Key::D => Some(D),
+                Key::ArrowUp => Some(Up),
+                Key::ArrowDown => Some(Down),
+                Key::ArrowLeft => Some(Left),
+                Key::ArrowRight => Some(Right),
+                Key::Space => Some(Space),
+                Key::C => Some(C),
+                Key::PageUp => Some(PageUp),
+                Key::PageDown => Some(PageDown),
+                Key::F => Some(F),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+}
+
+// Struktura pro pohybové konstanty
+struct MovementSettings {
+    move_speed: f32,
+    tilt_speed: f32,
+    rotation_speed: f32,
+}
+
+impl Default for MovementSettings {
+    fn default() -> Self {
+        Self {
+            move_speed: 5.0,
+            tilt_speed: 1.0,
+            rotation_speed: 1.0,
+        }
+    }
+}
+
+// Přidáme strukturu KeyState map pro sledování stavu kláves
+struct InputManager {
+    key_states: HashMap<KeyCode, KeyState>,
+    movement_settings: MovementSettings,
+}
+
+impl Default for InputManager {
+    fn default() -> Self {
+        Self {
+            key_states: HashMap::new(),
+            movement_settings: MovementSettings::default(),
+        }
+    }
+}
+
+impl InputManager {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn update_key_states(&mut self, events: &[Event]) {
+        for event in events {
+            if let Some(key_code) = KeyCode::from_event(event) {
+                match event {
+                    Event::KeyPress { .. } => {
+                        self.key_states.insert(key_code, KeyState::Pressed);
+                    }
+                    Event::KeyRelease { .. } => {
+                        self.key_states.insert(key_code, KeyState::Released);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    fn is_key_pressed(&self, key_code: KeyCode) -> bool {
+        self.key_states.get(&key_code).map_or(false, |state| *state == KeyState::Pressed)
+    }
+
+    // Získá vektor pohybu na základě aktuálního stavu kláves
+    fn get_movement_vector(&self) -> Vector3<f32> {
+        let mut move_vec = Vector3::new(0.0, 0.0, 0.0);
+
+        // Dopředu/dozadu (W/S nebo šipky nahoru/dolů)
+        if self.is_key_pressed(KeyCode::W) || self.is_key_pressed(KeyCode::Up) {
+            move_vec.z += 1.0;
+        }
+        if self.is_key_pressed(KeyCode::S) || self.is_key_pressed(KeyCode::Down) {
+            move_vec.z -= 1.0;
+        }
+
+        // Doleva/doprava (A/D)
+        if self.is_key_pressed(KeyCode::A) {
+            move_vec.x -= 1.0;
+        }
+        if self.is_key_pressed(KeyCode::D) {
+            move_vec.x += 1.0;
+        }
+
+        // Nahoru/dolů (Space/C)
+        if self.is_key_pressed(KeyCode::Space) {
+            move_vec.y += 1.0;
+        }
+        if self.is_key_pressed(KeyCode::C) {
+            move_vec.y -= 1.0;
+        }
+
+        // Normalizujeme vektor, pokud má nenulovou délku
+        if move_vec.magnitude2() > 0.0 {
+            move_vec = move_vec.normalize();
+        }
+
+        move_vec
+    }
+
+    // Získá hodnotu naklonění (tilt) na základě stavu kláves
+    fn get_tilt_value(&self) -> f32 {
+        let mut tilt = 0.0;
+
+        if self.is_key_pressed(KeyCode::Left) {
+            tilt -= 1.0;
+        }
+        if self.is_key_pressed(KeyCode::Right) {
+            tilt += 1.0;
+        }
+
+        tilt
+    }
+}
 
 // ---------------- BSP Implementation -------------------------------------- //
 
@@ -254,10 +413,51 @@ impl FreeCamera {
             look_speed: 2.0,
         }
     }
+
     fn dir(&self) -> Vector3<f32> {
         Vector3::new(self.yaw.cos() * self.pitch.cos(), self.pitch.sin(), self.yaw.sin() * self.pitch.cos()).normalize()
     }
-    fn right(&self) -> Vector3<f32> { self.dir().cross(Vector3::unit_y()).normalize() }
+
+    fn right(&self) -> Vector3<f32> {
+        self.dir().cross(Vector3::unit_y()).normalize()
+    }
+
+    fn update_smooth(&mut self, input_manager: &InputManager, dt: f32) {
+        // Získání vektoru pohybu z InputManageru
+        let raw_move_vec = input_manager.get_movement_vector();
+        let tilt_value = input_manager.get_tilt_value();
+
+        // Převedení abstraktního pohybového vektoru na reálný vektor v prostoru
+        let mut v = Vector3::new(0.0, 0.0, 0.0);
+
+        // Zpracování pohybu vpřed/vzad (Z složka vstupního vektoru)
+        if raw_move_vec.z != 0.0 {
+            v += self.dir() * raw_move_vec.z;
+        }
+
+        // Zpracování pohybu vlevo/vpravo (X složka vstupního vektoru)
+        if raw_move_vec.x != 0.0 {
+            v += self.right() * raw_move_vec.x;
+        }
+
+        // Zpracování pohybu nahoru/dolů (Y složka vstupního vektoru přímo na Y osu kamery)
+        if raw_move_vec.y != 0.0 {
+            v += Vector3::unit_y() * raw_move_vec.y;
+        }
+
+        // Aplikace pohybu s rychlostí a dt (pro nezávislost na snímkové frekvenci)
+        if v.magnitude2() > 0.0 {
+            self.pos += v * self.speed * dt;
+        }
+
+        // Zpracování naklonění hlavy (hodnota tilt_value)
+        // Naklonění ovlivňuje yaw (otočení doleva/doprava)
+        if tilt_value != 0.0 {
+            self.yaw += tilt_value * self.look_speed * dt;
+        }
+
+        // PageUp/PageDown pro změnu rychlosti - tyto jsou zpracovány ve staré metodě update
+    }
 
     fn update(&mut self, events: &[Event], dt: f32, _viewport: Viewport) {
         // rychlost PageUp/PageDown
@@ -296,6 +496,7 @@ impl FreeCamera {
             self.pos += v.normalize() * self.speed * dt; 
         }
     }
+
     fn cam(&self, vp: Viewport) -> Camera {
         Camera::new_perspective(vp, self.pos, self.pos + self.dir(), Vector3::unit_y(), Deg(60.0), 0.1, 1000.0)
     }
@@ -558,9 +759,15 @@ fn main() -> Result<()> {
         third_person_pos.x, third_person_pos.y, third_person_pos.z
     )) * Mat4::from_scale(0.2));
 
+    // Inicializace InputManageru pro plynulé ovládání s více klávesami
+    let mut input_manager = InputManager::new();
+
     window.render_loop(move |frame_input| {
         let dt = frame_input.elapsed_time as f32 / 1000.0;
         let events = &frame_input.events;
+
+        // Aktualizuj stav kláves v InputManageru
+        input_manager.update_key_states(events);
 
         // BSP traversal pro aktuální pozici kamery
         let mut current_stats = BspStats {
@@ -691,7 +898,7 @@ fn main() -> Result<()> {
 
         // --- ovládání ---
         // --- ovládání přepnutí režimu ---
-        if events.iter().any(|e| matches!(e, Event::KeyPress { kind: Key::F, .. })) {
+        if input_manager.is_key_pressed(KeyCode::F) {
             // ulož aktuální pozici do příslušné proměnné
             if mode == CamMode::Spectator {
                 spectator_pos = cam.pos;
@@ -715,29 +922,41 @@ fn main() -> Result<()> {
                 third_person_pos
             };
         }
-        cam.update(events, dt, frame_input.viewport);
+
+        // Zpracování změny rychlosti pomocí PageUp/PageDown přes InputManager
+        if input_manager.is_key_pressed(KeyCode::PageUp) {
+            cam.speed *= 1.2;
+            println!("Rychlost zvýšena na: {:.1}", cam.speed);
+        }
+        if input_manager.is_key_pressed(KeyCode::PageDown) {
+            cam.speed /= 1.2;
+            println!("Rychlost snížena na: {:.1}", cam.speed);
+        }
+        
+        // Aktualizace kamery pomocí nové metody pro hladký pohyb
+        cam.update_smooth(&input_manager, dt);
 
         // --- vykreslení ---
         let screen = frame_input.screen();
         screen.clear(ClearState::color_and_depth(0.1, 0.1, 0.1, 1.0, 1.0)); // Tmavě šedé pozladí místo černého
-        
+
         // Vykresli hlavní model a glow efekty
         let mut objects_to_render: Vec<&dyn Object> = vec![&model];
-        
+
         // Přidej glow koule pouze pokud nejsou na stejné pozici jako aktuální kamera
         let current_distance_to_spectator = (cam.pos - spectator_pos).magnitude();
         let current_distance_to_third_person = (cam.pos - third_person_pos).magnitude();
-        
+
         // Zobraz spectator glow pouze pokud nejsme v spectator režimu nebo jsme daleko
         if mode != CamMode::Spectator || current_distance_to_spectator > 1.0 {
             objects_to_render.push(&spectator_glow);
         }
-        
+
         // Zobraz third person glow pouze pokud nejsme v third person režimu nebo jsme daleko
         if mode != CamMode::ThirdPerson || current_distance_to_third_person > 1.0 {
             objects_to_render.push(&third_person_glow);
         }
-        
+
         screen.render(&cam.cam(frame_input.viewport), &objects_to_render, &[&light]);
         let _ = gui.render();
         FrameOutput::default()

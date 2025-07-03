@@ -11,7 +11,10 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: refactor FreeCamera controls to use look speed and remove mouse capture" />
+    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: add glow effects for spectator and third-person camera modes">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -21,6 +24,18 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;Robert7126313&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/Robert7126313/BSP-Strom-Mapa&quot;,
+    &quot;accountId&quot;: &quot;0dc4e0bf-28cf-468a-a67b-a6686b35f938&quot;
+  }
+}</component>
   <component name="MacroExpansionManager">
     <option name="directoryName" value="ufT5bW7h" />
   </component>
@@ -91,7 +106,8 @@
       <workItem from="1751378773671" duration="9234000" />
       <workItem from="1751405527609" duration="1334000" />
       <workItem from="1751475843871" duration="1426000" />
-      <workItem from="1751491451670" duration="2396000" />
+      <workItem from="1751491451670" duration="2732000" />
+      <workItem from="1751522846594" duration="688000" />
     </task>
     <task id="LOCAL-00001" summary="initialize new Rust project with basic structure and configuration files">
       <option name="closed" value="true" />
@@ -189,7 +205,15 @@
       <option name="project" value="LOCAL" />
       <updated>1751493890487</updated>
     </task>
-    <option name="localTasksCounter" value="13" />
+    <task id="LOCAL-00013" summary="feat: add glow effects for spectator and third-person camera modes">
+      <option name="closed" value="true" />
+      <created>1751494116053</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1751494116053</updated>
+    </task>
+    <option name="localTasksCounter" value="14" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -208,6 +232,7 @@
     <MESSAGE value="feat: add gltf crate for improved GLTF model loading and processing" />
     <MESSAGE value="feat: enhance FreeCamera with mouse capture and sensitivity settings" />
     <MESSAGE value="feat: refactor FreeCamera controls to use look speed and remove mouse capture" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: refactor FreeCamera controls to use look speed and remove mouse capture" />
+    <MESSAGE value="feat: add glow effects for spectator and third-person camera modes" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: add glow effects for spectator and third-person camera modes" />
   </component>
 </project>
