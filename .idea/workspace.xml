@@ -11,8 +11,7 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: add pitch control for head tilt using Up/Down keys">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: enhance camera mode switching with state tracking and cooldown">
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -107,7 +106,7 @@
       <workItem from="1751405527609" duration="1334000" />
       <workItem from="1751475843871" duration="1426000" />
       <workItem from="1751491451670" duration="2732000" />
-      <workItem from="1751522846594" duration="3883000" />
+      <workItem from="1751522846594" duration="4256000" />
     </task>
     <task id="LOCAL-00001" summary="initialize new Rust project with basic structure and configuration files">
       <option name="closed" value="true" />
@@ -229,7 +228,15 @@
       <option name="project" value="LOCAL" />
       <updated>1751523883254</updated>
     </task>
-    <option name="localTasksCounter" value="16" />
+    <task id="LOCAL-00016" summary="feat: enhance camera mode switching with state tracking and cooldown">
+      <option name="closed" value="true" />
+      <created>1751527786814</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1751527786814</updated>
+    </task>
+    <option name="localTasksCounter" value="17" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -251,6 +258,7 @@
     <MESSAGE value="feat: add glow effects for spectator and third-person camera modes" />
     <MESSAGE value="feat: implement InputManager for enhanced key state tracking and movement control" />
     <MESSAGE value="feat: add pitch control for head tilt using Up/Down keys" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: add pitch control for head tilt using Up/Down keys" />
+    <MESSAGE value="feat: enhance camera mode switching with state tracking and cooldown" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: enhance camera mode switching with state tracking and cooldown" />
   </component>
 </project>

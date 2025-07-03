@@ -36,7 +36,6 @@ use three_d::*;
 // před funkci main přidáme enum pro sledování stavu kláves
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum KeyState {
-    JustPressed, // Nový stav pro první snímek po stisknutí
     Pressed,
     Released,
 }
@@ -84,34 +83,15 @@ impl KeyCode {
     }
 }
 
-// Struktura pro pohybové konstanty
-struct MovementSettings {
-    move_speed: f32,
-    tilt_speed: f32,
-    rotation_speed: f32,
-}
-
-impl Default for MovementSettings {
-    fn default() -> Self {
-        Self {
-            move_speed: 5.0,
-            tilt_speed: 1.0,
-            rotation_speed: 1.0,
-        }
-    }
-}
-
 // Přidáme strukturu KeyState map pro sledování stavu kláves
 struct InputManager {
     key_states: HashMap<KeyCode, KeyState>,
-    movement_settings: MovementSettings,
 }
 
 impl Default for InputManager {
     fn default() -> Self {
         Self {
             key_states: HashMap::new(),
-            movement_settings: MovementSettings::default(),
         }
     }
 }
@@ -1011,20 +991,14 @@ fn main() -> Result<()> {
 // Struktura pro sledování času přepnutí režimu kamery
 struct SwitchDelay {
     last_switch_time: f64,
-    last_release_time: f64,
-    key_released: bool,
     cooldown: f64,
-    release_time: f64,  // čas, po který musí být klávesa uvolněna
 }
 
 impl SwitchDelay {
     fn new(cooldown: f64) -> Self {
         Self {
             last_switch_time: 0.0,
-            last_release_time: 0.0,
-            key_released: true,  // Počáteční stav je "uvolněno"
             cooldown,
-            release_time: 1.0,  // 1 sekunda doba uvolnění, jak bylo požadováno
         }
     }
 
@@ -1034,17 +1008,6 @@ impl SwitchDelay {
 
     fn record_switch(&mut self, current_time: f64) {
         self.last_switch_time = current_time;
-    }
-
-    fn update_release(&mut self, key_released: bool, current_time: f64) {
-        self.key_released = key_released;
-        if key_released {
-            self.last_release_time = current_time;
-        }
-    }
-
-    fn can_process_release(&self, current_time: f64) -> bool {
-        self.key_released && (current_time - self.last_release_time >= self.release_time)
     }
 }
 
