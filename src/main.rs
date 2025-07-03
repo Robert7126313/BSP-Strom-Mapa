@@ -456,7 +456,13 @@ impl FreeCamera {
             self.yaw += tilt_value * self.look_speed * dt;
         }
 
-        // PageUp/PageDown pro změnu rychlosti - tyto jsou zpracovány ve staré metodě update
+        // Zpracování naklonění hlavy nahoru/dolů (pitch)
+        if input_manager.is_key_pressed(KeyCode::Up) {
+            self.pitch = (self.pitch + self.look_speed * dt).clamp(-1.5, 1.5);
+        }
+        if input_manager.is_key_pressed(KeyCode::Down) {
+            self.pitch = (self.pitch - self.look_speed * dt).clamp(-1.5, 1.5);
+        }
     }
 
     fn update(&mut self, events: &[Event], dt: f32, _viewport: Viewport) {
