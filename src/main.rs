@@ -36,6 +36,7 @@ use three_d::*;
 // před funkci main přidáme enum pro sledování stavu kláves
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum KeyState {
+    JustPressed, // Nový stav pro první snímek po stisknutí
     Pressed,
     Released,
 }
@@ -138,6 +139,10 @@ impl InputManager {
 
     fn is_key_pressed(&self, key_code: KeyCode) -> bool {
         self.key_states.get(&key_code).map_or(false, |state| *state == KeyState::Pressed)
+    }
+    
+    fn is_key_released(&self, key_code: KeyCode) -> bool {
+        self.key_states.get(&key_code).map_or(true, |state| *state == KeyState::Released)
     }
 
     // Získá vektor pohybu na základě aktuálního stavu kláves
@@ -750,23 +755,26 @@ fn main() -> Result<()> {
     
     let light = AmbientLight::new(&context, 1.0, Srgba::WHITE); // Zvýšit intenzitu světla
 
-    // před inicializací kamery přidáme mutable proměnné pro pozice obou režimů
-    let mut spectator_pos    = Vector3::new(0.0, 2.0, 8.0);
-    let mut third_person_pos = Vector3::new(5.0, 2.0, 8.0); // Jiná pozice pro lepší vizualizaci
-    let mut cam = FreeCamera::new(spectator_pos);
+    // před inicializací kamery přidáme mutable proměnné pro stavy kamer obou režimů
+    let mut cam = FreeCamera::new(Vector3::new(0.0, 2.0, 8.0));
+    let mut spectator_state = CameraState::from_camera(&cam);
+    let mut third_person_state = CameraState::new(Vector3::new(5.0, 2.0, 8.0)); // Jiná pozice pro lepší vizualizaci
     let mut mode = CamMode::Spectator;
 
-    // Nastavení pozic glow efektů
+    // Nastavení pozic glow efektů podle stavů kamer
     spectator_glow.set_transformation(Mat4::from_translation(vec3(
-        spectator_pos.x, spectator_pos.y, spectator_pos.z
+        spectator_state.pos.x, spectator_state.pos.y, spectator_state.pos.z
     )) * Mat4::from_scale(0.2)); // Malé koule
     
     third_person_glow.set_transformation(Mat4::from_translation(vec3(
-        third_person_pos.x, third_person_pos.y, third_person_pos.z
+        third_person_state.pos.x, third_person_state.pos.y, third_person_state.pos.z
     )) * Mat4::from_scale(0.2));
 
     // Inicializace InputManageru pro plynulé ovládání s více klávesami
     let mut input_manager = InputManager::new();
+
+    // Přidání struktury pro sledování času přepnutí režimu
+    let mut switch_delay = SwitchDelay::new(2.0); // 0.5 sekundy cooldown
 
     window.render_loop(move |frame_input| {
         let dt = frame_input.elapsed_time as f32 / 1000.0;
@@ -796,7 +804,7 @@ fn main() -> Result<()> {
                 ui.label(format!("Celkem trojúhelníků: {}", current_stats.total_triangles));
                 ui.label(format!("Navštíveno uzlů: {}", current_stats.nodes_visited));
                 ui.label(format!("Vykresleno trojúhelníků: {}", current_stats.triangles_rendered));
-                ui.label(format!("Procházka efektivita: {:.1}%", 
+                ui.label(format!("Procházka efektivita: {:.1}%",
                     if current_stats.total_nodes > 0 {
                         (current_stats.nodes_visited as f32 / current_stats.total_nodes as f32) * 100.0
                     } else { 0.0 }));
@@ -905,28 +913,38 @@ fn main() -> Result<()> {
         // --- ovládání ---
         // --- ovládání přepnutí režimu ---
         if input_manager.is_key_pressed(KeyCode::F) {
-            // ulož aktuální pozici do příslušné proměnné
-            if mode == CamMode::Spectator {
-                spectator_pos = cam.pos;
-                // Aktualizuj pozici spectator glow
+            let current_time = frame_input.accumulated_time;
+            
+            // Pokud uplynul dostatečný čas od posledního přepnutí
+            if switch_delay.can_switch(current_time) {
+                // ulož aktuální pozici do příslušné proměnné
+                if mode == CamMode::Spectator {
+                    spectator_state = CameraState::from_camera(&cam);
+                } else {
+                    third_person_state = CameraState::from_camera(&cam);
+                }
+                // přepni režim
+                mode = if mode == CamMode::Spectator { CamMode::ThirdPerson } else { CamMode::Spectator };
+                // obnov pozici a orientaci nové kamery
+                if mode == CamMode::Spectator {
+                    spectator_state.apply_to_camera(&mut cam);
+                } else {
+                    third_person_state.apply_to_camera(&mut cam);
+                }
+
+                // Zaznamenej čas posledního přepnutí
+                switch_delay.record_switch(current_time);
+                println!("Režim přepnut na: {:?}", mode);
+                
+                // Aktualizuj pozice glow značek pro nové pozice kamer
                 spectator_glow.set_transformation(Mat4::from_translation(vec3(
-                    spectator_pos.x, spectator_pos.y, spectator_pos.z
+                    spectator_state.pos.x, spectator_state.pos.y, spectator_state.pos.z
                 )) * Mat4::from_scale(0.2));
-            } else {
-                third_person_pos = cam.pos;
-                // Aktualizuj pozici third person glow
+                
                 third_person_glow.set_transformation(Mat4::from_translation(vec3(
-                    third_person_pos.x, third_person_pos.y, third_person_pos.z
+                    third_person_state.pos.x, third_person_state.pos.y, third_person_state.pos.z
                 )) * Mat4::from_scale(0.2));
             }
-            // přepni režim
-            mode = if mode == CamMode::Spectator { CamMode::ThirdPerson } else { CamMode::Spectator };
-            // obnov pozici nové kamery
-            cam.pos = if mode == CamMode::Spectator {
-                spectator_pos
-            } else {
-                third_person_pos
-            };
         }
 
         // Zpracování změny rychlosti pomocí PageUp/PageDown přes InputManager
@@ -941,6 +959,25 @@ fn main() -> Result<()> {
         
         // Aktualizace kamery pomocí nové metody pro hladký pohyb
         cam.update_smooth(&input_manager, dt);
+        
+        // Aktualizace stavů kamer a značek podle aktuálního režimu
+        if mode == CamMode::Spectator {
+            // Aktualizuj stav aktuální kamery (Spectator)
+            spectator_state = CameraState::from_camera(&cam);
+            
+            // Aktualizuj pozici značky aktuální kamery (Spectator)
+            spectator_glow.set_transformation(Mat4::from_translation(vec3(
+                spectator_state.pos.x, spectator_state.pos.y, spectator_state.pos.z
+            )) * Mat4::from_scale(0.2));
+        } else {
+            // Aktualizuj stav aktuální kamery (ThirdPerson)
+            third_person_state = CameraState::from_camera(&cam);
+            
+            // Aktualizuj pozici značky aktuální kamery (ThirdPerson)
+            third_person_glow.set_transformation(Mat4::from_translation(vec3(
+                third_person_state.pos.x, third_person_state.pos.y, third_person_state.pos.z
+            )) * Mat4::from_scale(0.2));
+        }
 
         // --- vykreslení ---
         let screen = frame_input.screen();
@@ -950,8 +987,8 @@ fn main() -> Result<()> {
         let mut objects_to_render: Vec<&dyn Object> = vec![&model];
 
         // Přidej glow koule pouze pokud nejsou na stejné pozici jako aktuální kamera
-        let current_distance_to_spectator = (cam.pos - spectator_pos).magnitude();
-        let current_distance_to_third_person = (cam.pos - third_person_pos).magnitude();
+        let current_distance_to_spectator = (cam.pos - spectator_state.pos).magnitude();
+        let current_distance_to_third_person = (cam.pos - third_person_state.pos).magnitude();
 
         // Zobraz spectator glow pouze pokud nejsme v spectator režimu nebo jsme daleko
         if mode != CamMode::Spectator || current_distance_to_spectator > 1.0 {
@@ -969,4 +1006,80 @@ fn main() -> Result<()> {
     });
 
     Ok(())
+}
+
+// Struktura pro sledování času přepnutí režimu kamery
+struct SwitchDelay {
+    last_switch_time: f64,
+    last_release_time: f64,
+    key_released: bool,
+    cooldown: f64,
+    release_time: f64,  // čas, po který musí být klávesa uvolněna
+}
+
+impl SwitchDelay {
+    fn new(cooldown: f64) -> Self {
+        Self {
+            last_switch_time: 0.0,
+            last_release_time: 0.0,
+            key_released: true,  // Počáteční stav je "uvolněno"
+            cooldown,
+            release_time: 1.0,  // 1 sekunda doba uvolnění, jak bylo požadováno
+        }
+    }
+
+    fn can_switch(&self, current_time: f64) -> bool {
+        current_time - self.last_switch_time >= self.cooldown
+    }
+
+    fn record_switch(&mut self, current_time: f64) {
+        self.last_switch_time = current_time;
+    }
+
+    fn update_release(&mut self, key_released: bool, current_time: f64) {
+        self.key_released = key_released;
+        if key_released {
+            self.last_release_time = current_time;
+        }
+    }
+
+    fn can_process_release(&self, current_time: f64) -> bool {
+        self.key_released && (current_time - self.last_release_time >= self.release_time)
+    }
+}
+
+// Přidání nové struktury CameraState pro ukládání stavu kamery
+#[derive(Clone)]
+struct CameraState {
+    pos: Vector3<f32>,
+    yaw: f32,
+    pitch: f32,
+    speed: f32,
+}
+
+impl CameraState {
+    fn new(pos: Vector3<f32>) -> Self {
+        Self {
+            pos,
+            yaw: -FRAC_PI_2, // výchozí směr
+            pitch: 0.0,
+            speed: 4.0,
+        }
+    }
+
+    fn from_camera(camera: &FreeCamera) -> Self {
+        Self {
+            pos: camera.pos,
+            yaw: camera.yaw,
+            pitch: camera.pitch,
+            speed: camera.speed,
+        }
+    }
+
+    fn apply_to_camera(&self, camera: &mut FreeCamera) {
+        camera.pos = self.pos;
+        camera.yaw = self.yaw;
+        camera.pitch = self.pitch;
+        camera.speed = self.speed;
+    }
 }

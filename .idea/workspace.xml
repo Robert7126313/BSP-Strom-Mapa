@@ -11,7 +11,7 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: add glow effects for spectator and third-person camera modes">
+    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: add pitch control for head tilt using Up/Down keys">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
@@ -107,7 +107,7 @@
       <workItem from="1751405527609" duration="1334000" />
       <workItem from="1751475843871" duration="1426000" />
       <workItem from="1751491451670" duration="2732000" />
-      <workItem from="1751522846594" duration="688000" />
+      <workItem from="1751522846594" duration="3883000" />
     </task>
     <task id="LOCAL-00001" summary="initialize new Rust project with basic structure and configuration files">
       <option name="closed" value="true" />
@@ -213,7 +213,23 @@
       <option name="project" value="LOCAL" />
       <updated>1751494116053</updated>
     </task>
-    <option name="localTasksCounter" value="14" />
+    <task id="LOCAL-00014" summary="feat: implement InputManager for enhanced key state tracking and movement control">
+      <option name="closed" value="true" />
+      <created>1751523631439</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1751523631439</updated>
+    </task>
+    <task id="LOCAL-00015" summary="feat: add pitch control for head tilt using Up/Down keys">
+      <option name="closed" value="true" />
+      <created>1751523883254</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1751523883254</updated>
+    </task>
+    <option name="localTasksCounter" value="16" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -233,6 +249,8 @@
     <MESSAGE value="feat: enhance FreeCamera with mouse capture and sensitivity settings" />
     <MESSAGE value="feat: refactor FreeCamera controls to use look speed and remove mouse capture" />
     <MESSAGE value="feat: add glow effects for spectator and third-person camera modes" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: add glow effects for spectator and third-person camera modes" />
+    <MESSAGE value="feat: implement InputManager for enhanced key state tracking and movement control" />
+    <MESSAGE value="feat: add pitch control for head tilt using Up/Down keys" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: add pitch control for head tilt using Up/Down keys" />
   </component>
 </project>
