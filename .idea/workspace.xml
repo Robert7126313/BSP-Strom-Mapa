@@ -11,10 +11,8 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: implement frustum culling and bounding box calculations for improved rendering performance + BSP finally works">
+    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: add Rayon for parallel processing in BSP tree construction and triangle visibility determination">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -110,7 +108,7 @@
       <workItem from="1751475843871" duration="1426000" />
       <workItem from="1751491451670" duration="2732000" />
       <workItem from="1751522846594" duration="8495000" />
-      <workItem from="1751572594432" duration="4123000" />
+      <workItem from="1751572594432" duration="5517000" />
     </task>
     <task id="LOCAL-00001" summary="initialize new Rust project with basic structure and configuration files">
       <option name="closed" value="true" />
@@ -272,7 +270,15 @@
       <option name="project" value="LOCAL" />
       <updated>1751576194629</updated>
     </task>
-    <option name="localTasksCounter" value="21" />
+    <task id="LOCAL-00021" summary="feat: add Rayon for parallel processing in BSP tree construction and triangle visibility determination">
+      <option name="closed" value="true" />
+      <created>1751577192390</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1751577192390</updated>
+    </task>
+    <option name="localTasksCounter" value="22" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -299,6 +305,7 @@
     <MESSAGE value="feat: add key bindings for switching camera modes and resetting to default positions" />
     <MESSAGE value="feat: refactor camera mode switching logic for improved readability and maintainability" />
     <MESSAGE value="feat: implement frustum culling and bounding box calculations for improved rendering performance + BSP finally works" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: implement frustum culling and bounding box calculations for improved rendering performance + BSP finally works" />
+    <MESSAGE value="feat: add Rayon for parallel processing in BSP tree construction and triangle visibility determination" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: add Rayon for parallel processing in BSP tree construction and triangle visibility determination" />
   </component>
 </project>

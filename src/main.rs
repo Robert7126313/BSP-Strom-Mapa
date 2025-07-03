@@ -23,7 +23,6 @@
 
 use anyhow::Result;
 use cgmath::{Deg, InnerSpace, Vector3};
-use rfd::FileDialog;
 use std::collections::HashMap;
 use std::f32::consts::FRAC_PI_2;
 use std::path::{Path, PathBuf};
@@ -122,9 +121,9 @@ impl InputManager {
         self.key_states.get(&key_code).map_or(false, |state| *state == KeyState::Pressed)
     }
     
-    fn is_key_released(&self, key_code: KeyCode) -> bool {
-        self.key_states.get(&key_code).map_or(true, |state| *state == KeyState::Released)
-    }
+    // fn is_key_released(&self, key_code: KeyCode) -> bool {
+    //     self.key_states.get(&key_code).map_or(true, |state| *state == KeyState::Released)
+    // }
 
     // Získá vektor pohybu na základě aktuálního stavu kláves
     fn get_movement_vector(&self) -> Vector3<f32> {
@@ -292,18 +291,13 @@ fn build_bsp(triangles: Vec<Triangle>, depth: u32) -> BspNode {
     // Výběr dělicí roviny - použijeme rovinu prvního trojúhelníku
     let splitting_plane = plane_from_triangle(&triangles[0]);
 
-    let mut front_triangles = Vec::new();
-    let mut back_triangles = Vec::new();
-
     // Paralelní klasifikace trojúhelníků pomocí Rayon
-    let (front, back): (Vec<Triangle>, Vec<Triangle>) = triangles.into_par_iter()
+    let (front_triangles, back_triangles): (Vec<Triangle>, Vec<Triangle>) = triangles.into_par_iter()
         .partition(|triangle| {
             let center = triangle_center(triangle);
             splitting_plane.classify(center) >= 0
         });
 
-    front_triangles = front;
-    back_triangles = back;
 
     // Rekurzivní stavba podstromů - můžeme paralelizovat, pokud jsme v horních úrovních stromu
     if depth < 5 {
@@ -321,6 +315,7 @@ fn build_bsp(triangles: Vec<Triangle>, depth: u32) -> BspNode {
     }
 }
 
+#[allow(dead_code)]
 fn traverse_bsp(
     node: &BspNode, 
     camera_pos: Vector3<f32>, 
@@ -542,43 +537,44 @@ impl FreeCamera {
         }
     }
 
-    fn update(&mut self, events: &[Event], dt: f32, _viewport: Viewport) {
-        // rychlost PageUp/PageDown
-        if events.iter().any(|e| matches!(e, Event::KeyPress { kind: Key::PageUp, .. })) { 
-            self.speed *= 1.2; 
-        }
-        if events.iter().any(|e| matches!(e, Event::KeyPress { kind: Key::PageDown, .. })) { 
-            self.speed /= 1.2; 
-        }
+    // Starší verze update metody, která byla nahrazena update_smooth
+    // fn update(&mut self, events: &[Event], dt: f32, _viewport: Viewport) {
+    //     // rychlost PageUp/PageDown
+    //     if events.iter().any(|e| matches!(e, Event::KeyPress { kind: Key::PageUp, .. })) { 
+    //         self.speed *= 1.2; 
+    //     }
+    //     if events.iter().any(|e| matches!(e, Event::KeyPress { kind: Key::PageDown, .. })) { 
+    //         self.speed /= 1.2; 
+    //     }
 
-        // Šipky pro rozhlížení kamery (look around)
-        let held = |k: Key| events.iter().any(|e| matches!(e, Event::KeyPress { kind, .. } if *kind == k));
+    //     // Šipky pro rozhlížení kamery (look around)
+    //     let held = |k: Key| events.iter().any(|e| matches!(e, Event::KeyPress { kind, .. } if *kind == k));
         
-        let look_speed = self.look_speed * dt; // rychlost rotace šipkami
+    //     let look_speed = self.look_speed * dt; // rychlost rotace šipkami
         
-        // Arrow keys pro rozhlížení
-        if held(Key::ArrowLeft) { self.yaw += look_speed; }
-        if held(Key::ArrowRight) { self.yaw -= look_speed; }
-        if held(Key::ArrowUp) { self.pitch = (self.pitch + look_speed).clamp(-1.5, 1.5); }
-        if held(Key::ArrowDown) { self.pitch = (self.pitch - look_speed).clamp(-1.5, 1.5); }
+    //     // Arrow keys pro rozhlížení
+    //     if held(Key::ArrowLeft) { self.yaw += look_speed; }
+    //     if held(Key::ArrowRight) { self.yaw -= look_speed; }
+    //     if held(Key::ArrowUp) { self.pitch = (self.pitch + look_speed).clamp(-1.5, 1.5); }
+    //     if held(Key::ArrowDown) { self.pitch = (self.pitch - look_speed).clamp(-1.5, 1.5); }
 
-        // pohyb klávesnicí - pouze WASD
-        let mut v = Vector3::new(0.0, 0.0, 0.0);
+    //     // pohyb klávesnicí - pouze WASD
+    //     let mut v = Vector3::new(0.0, 0.0, 0.0);
         
-        // WASD pro pohyb
-        if held(Key::W) { v += self.dir(); }
-        if held(Key::S) { v -= self.dir(); }
-        if held(Key::A) { v -= self.right(); }
-        if held(Key::D) { v += self.right(); }
+    //     // WASD pro pohyb
+    //     if held(Key::W) { v += self.dir(); }
+    //     if held(Key::S) { v -= self.dir(); }
+    //     if held(Key::A) { v -= self.right(); }
+    //     if held(Key::D) { v += self.right(); }
         
-        // Nahoru/dolů
-        if held(Key::Space) { v += Vector3::unit_y(); }
-        if held(Key::C) { v -= Vector3::unit_y(); } // "C" = dolů
+    //     // Nahoru/dolů
+    //     if held(Key::Space) { v += Vector3::unit_y(); }
+    //     if held(Key::C) { v -= Vector3::unit_y(); } // "C" = dolů
         
-        if v.magnitude2() > 0.0 { 
-            self.pos += v.normalize() * self.speed * dt; 
-        }
-    }
+    //     if v.magnitude2() > 0.0 { 
+    //         self.pos += v.normalize() * self.speed * dt; 
+    //     }
+    // }
 
     fn cam(&self, vp: Viewport) -> Camera {
         Camera::new_perspective(vp, self.pos, self.pos + self.dir(), Vector3::unit_y(), Deg(60.0), 0.1, 1000.0)
@@ -775,12 +771,8 @@ fn create_visible_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, Co
     // Paralelní zpracování pozic a indexů
     let triangles_count = triangles.len();
     
-    // Předalokujeme vektory pro lepší výkon
-    let mut positions = Vec::with_capacity(triangles_count * 3);
-    let mut indices = Vec::with_capacity(triangles_count * 3);
-    
     // Paralelně vytvoříme pozice vrcholů
-    let positions_vec: Vec<Vec3> = triangles.par_iter().flat_map(|tri| {
+    let positions: Vec<Vec3> = triangles.par_iter().flat_map(|tri| {
         vec![
             vec3(tri.a.x, tri.a.y, tri.a.z),
             vec3(tri.b.x, tri.b.y, tri.b.z),
@@ -789,14 +781,10 @@ fn create_visible_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, Co
     }).collect();
     
     // Paralelně vygenerujeme indexy
-    let indices_vec: Vec<u32> = (0..triangles_count as u32).into_par_iter().flat_map(|i| {
+    let indices: Vec<u32> = (0..triangles_count as u32).into_par_iter().flat_map(|i| {
         let base_idx = i * 3;
         vec![base_idx, base_idx + 1, base_idx + 2]
     }).collect();
-    
-    // Použijeme připravené vektory
-    positions = positions_vec;
-    indices = indices_vec;
 
     // Vytvoření nového meshe
     let visible_mesh = CpuMesh {
@@ -825,9 +813,9 @@ fn main() -> Result<()> {
     let context = window.gl();
     let mut gui = GUI::new(&context);
 
-    // stavová prom��nná: název aktuálního souboru a úspěšnost načtení
+    // stavová proměnná: název aktuálního souboru a úspěšnost načtení
     let initial_path = Path::new("assets/model.glb");
-    let (cpu_mesh, load_status) = load_cpu_mesh(initial_path);
+    let (cpu_mesh, _load_status) = load_cpu_mesh(initial_path);
 
     let _loaded_file_name = if initial_path.exists() {
         initial_path.file_name().unwrap().to_string_lossy().into_owned()
@@ -850,7 +838,7 @@ fn main() -> Result<()> {
         albedo: Srgba::new(100, 150, 255, 255), // Modrá barva aby byl model viditelný
         ..Default::default()
     });
-    let model = Gm::new(Mesh::new(&context, &cpu_mesh), material.clone());
+    let _model = Gm::new(Mesh::new(&context, &cpu_mesh), material.clone());
     
     // Glow efekty pro pozice kamer
     let glow_mesh = CpuMesh::sphere(16);
@@ -1011,13 +999,39 @@ fn main() -> Result<()> {
 
                 ui.separator();
                 ui.label("OSTATNÍ:");
-                ui.label("• F - Přepnout režim");
+                ui.label("• F - Přepnout na režim Spectator");
+                ui.label("• G - Přepnout na režim ThirdPerson");
                 ui.label("• Home - Návrat na výchozí pozici");
                 ui.label("• PageUp/PageDown - Upravit rychlost");
 
                 ui.separator();
                 ui.heading("Informace o kameře");
-                ui.label(format!("Pozice: ({:.1}, {:.1}, {:.1})", cam.pos.x, cam.pos.y, cam.pos.z));
+                ui.label(format!("Aktivní režim: {:?}", mode));
+                
+                // Informace o Spectator kameře
+                ui.collapsing("Spectator kamera", |ui| {
+                    ui.label(format!("Pozice: ({:.1}, {:.1}, {:.1})",
+                        spectator_state.pos.x, spectator_state.pos.y, spectator_state.pos.z));
+                    ui.label(format!("Směr (yaw): {:.1}°", spectator_state.yaw * 180.0 / std::f32::consts::PI));
+                    ui.label(format!("Náklon (pitch): {:.1}°", spectator_state.pitch * 180.0 / std::f32::consts::PI));
+                    ui.label(format!("Rychlost: {:.1}", spectator_state.speed));
+                });
+                
+                // Informace o ThirdPerson kameře
+                ui.collapsing("ThirdPerson kamera", |ui| {
+                    ui.label(format!("Pozice: ({:.1}, {:.1}, {:.1})",
+                        third_person_state.pos.x, third_person_state.pos.y, third_person_state.pos.z));
+                    ui.label(format!("Směr (yaw): {:.1}°", third_person_state.yaw * 180.0 / std::f32::consts::PI));
+                    ui.label(format!("Náklon (pitch): {:.1}°", third_person_state.pitch * 180.0 / std::f32::consts::PI));
+                    ui.label(format!("Rychlost: {:.1}", third_person_state.speed));
+                });
+                
+                // Informace o aktuální kameře
+                ui.label(format!("Aktuální pozice kamery: ({:.1}, {:.1}, {:.1})", 
+                    cam.pos.x, cam.pos.y, cam.pos.z));
+                ui.label(format!("Vzdálenost mezi kamerami: {:.1}", 
+                    (spectator_state.pos - third_person_state.pos).magnitude()));
+                
                 ui.checkbox(&mut show_camera_direction, "Zobrazit směr pohledu kamery");
             });
         });
