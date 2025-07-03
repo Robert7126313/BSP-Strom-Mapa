@@ -729,9 +729,19 @@ fn main() -> Result<()> {
         albedo: Srgba::new(255, 100, 0, 200), // Oranžová pro third person
         ..Default::default()
     });
+    
+    // Materiál pro směrový paprsek kamery
+    let direction_material = ColorMaterial::new_opaque(&context, &CpuMaterial {
+        albedo: Srgba::new(255, 255, 0, 200), // Žlutá barva pro směrový paprsek
+        ..Default::default()
+    });
 
     let mut spectator_glow = Gm::new(Mesh::new(&context, &glow_mesh), spectator_glow_material);
     let mut third_person_glow = Gm::new(Mesh::new(&context, &glow_mesh), third_person_glow_material);
+    
+    // Vytvoření kuželu (cone) pro směrový indikátor kamery místo cylindru
+    let direction_mesh = CpuMesh::cone(16);
+    let mut camera_direction_ray = Gm::new(Mesh::new(&context, &direction_mesh), direction_material);
     
     let light = AmbientLight::new(&context, 1.0, Srgba::WHITE); // Zvýšit intenzitu světla
 
@@ -740,6 +750,9 @@ fn main() -> Result<()> {
     let mut spectator_state = CameraState::from_camera(&cam);
     let mut third_person_state = CameraState::new(Vector3::new(5.0, 2.0, 8.0)); // Jiná pozice pro lepší vizualizaci
     let mut mode = CamMode::Spectator;
+    
+    // Proměnná pro sledování, zda zobrazit směr pohledu kamery
+    let mut show_camera_direction = false;
 
     // Nastavení pozic glow efektů podle stavů kamer
     spectator_glow.set_transformation(Mat4::from_translation(vec3(
@@ -834,6 +847,11 @@ fn main() -> Result<()> {
                     .text("Rychlost šipek"));
 
                 ui.label(format!("Pozice: ({:.1}, {:.1}, {:.1})", cam.pos.x, cam.pos.y, cam.pos.z));
+
+                // Přidáme checkbox pro zobrazení směru pohledu kamery
+                ui.separator();
+                ui.heading("Nastavení zobrazení");
+                ui.checkbox(&mut show_camera_direction, "Zobrazit směr pohledu kamery");
 
                 // Detailní info o meshu
                 ui.separator();
@@ -949,6 +967,57 @@ fn main() -> Result<()> {
             spectator_glow.set_transformation(Mat4::from_translation(vec3(
                 spectator_state.pos.x, spectator_state.pos.y, spectator_state.pos.z
             )) * Mat4::from_scale(0.2));
+            
+            // Aktualizuj směrový paprsek pro spectator kameru
+            if show_camera_direction {
+                // Získáme směrový vektor kamery a nastavíme transformaci paprsku
+                let dir = cam.dir();
+                
+                // Vytvoříme rotační matici, která natočí válec (který je standardně podél osy Y)
+                // ve směru pohledu kamery
+                
+                // 1. Vypočítáme úhel mezi osou Y a směrovým vektorem kamery
+                let y_axis = Vector3::unit_y();
+                let angle = y_axis.dot(dir).acos();
+                
+                // 2. Vypočítáme osu rotace (kolmou na rovinu obsahující osu Y a směrový vektor)
+                let rotation_axis = y_axis.cross(dir).normalize();
+                
+                // Vytvoření transformační matice pro válec
+                let scale = 0.05; // tenký válec
+                let length = 3.0; // délka paprsku
+                
+                // Vytvoření matice transformace
+                let translation = Mat4::from_translation(vec3(
+                    spectator_state.pos.x, 
+                    spectator_state.pos.y, 
+                    spectator_state.pos.z
+                ));
+                
+                // Pokud je směrový vektor téměř rovnoběžný s osou Y, použijeme speciální zacházení
+                let rotation = if angle.abs() < 0.01 || (std::f32::consts::PI - angle).abs() < 0.01 {
+                    // Pro případ kdy je vektor téměř rovnoběžný s osou Y
+                    if dir.y > 0.0 {
+                        Mat4::identity() // směr už je podél osy Y
+                    } else {
+                        // Rotace o 180° kolem osy X
+                        Mat4::from_angle_x(Rad(std::f32::consts::PI))
+                    }
+                } else {
+                    // Normální případ - rotace kolem vypočtené osy
+                    Mat4::from_axis_angle(
+                        vec3(rotation_axis.x, rotation_axis.y, rotation_axis.z),
+                        Rad(angle)
+                    )
+                };
+                
+                // Měřítko - válec je standardně výšky 2.0, chceme jej natáhnout na délku `length`
+                // a zúžit na šířku `scale`
+                let scaling = Mat4::from_nonuniform_scale(scale, length / 2.0, scale);
+                
+                // Aplikujeme transformace v pořadí: měřítko, rotace, posun
+                camera_direction_ray.set_transformation(translation * rotation * scaling);
+            }
         } else {
             // Aktualizuj stav aktuální kamery (ThirdPerson)
             third_person_state = CameraState::from_camera(&cam);
@@ -957,6 +1026,59 @@ fn main() -> Result<()> {
             third_person_glow.set_transformation(Mat4::from_translation(vec3(
                 third_person_state.pos.x, third_person_state.pos.y, third_person_state.pos.z
             )) * Mat4::from_scale(0.2));
+            
+            // Když jsme v third person mode, zobrazíme směrový paprsek pro spectator kameru
+            if show_camera_direction {
+                // Získáme směrový vektor kamery a nastavíme transformaci paprsku
+                // Tentokrát použijeme směr spectator kamery
+                let dir = Vector3::new(
+                    spectator_state.yaw.cos() * spectator_state.pitch.cos(),
+                    spectator_state.pitch.sin(),
+                    spectator_state.yaw.sin() * spectator_state.pitch.cos()
+                ).normalize();
+                
+                // 1. Vypočítáme úhel mezi osou Y a směrovým vektorem kamery
+                let y_axis = Vector3::unit_y();
+                let angle = y_axis.dot(dir).acos();
+                
+                // 2. Vypočítáme osu rotace (kolmou na rovinu obsahující osu Y a směrový vektor)
+                let rotation_axis = y_axis.cross(dir).normalize();
+                
+                // Vytvoření transformační matice pro válec
+                let scale = 0.05; // tenký válec
+                let length = 3.0; // délka paprsku
+                
+                // Vytvoření matice transformace
+                let translation = Mat4::from_translation(vec3(
+                    spectator_state.pos.x, 
+                    spectator_state.pos.y, 
+                    spectator_state.pos.z
+                ));
+                
+                // Pokud je směrový vektor téměř rovnoběžný s osou Y, použijeme speciální zacházení
+                let rotation = if angle.abs() < 0.01 || (std::f32::consts::PI - angle).abs() < 0.01 {
+                    // Pro případ kdy je vektor téměř rovnoběžný s osou Y
+                    if dir.y > 0.0 {
+                        Mat4::identity() // směr už je podél osy Y
+                    } else {
+                        // Rotace o 180° kolem osy X
+                        Mat4::from_angle_x(Rad(std::f32::consts::PI))
+                    }
+                } else {
+                    // Normální případ - rotace kolem vypočtené osy
+                    Mat4::from_axis_angle(
+                        vec3(rotation_axis.x, rotation_axis.y, rotation_axis.z),
+                        Rad(angle)
+                    )
+                };
+                
+                // Měřítko - válec je standardně výšky 2.0, chceme jej natáhnout na délku `length`
+                // a zúžit na šířku `scale`
+                let scaling = Mat4::from_nonuniform_scale(scale, length / 2.0, scale);
+                
+                // Aplikujeme transformace v pořadí: měřítko, rotace, posun
+                camera_direction_ray.set_transformation(translation * rotation * scaling);
+            }
         }
 
         // --- vykreslení ---
@@ -978,6 +1100,11 @@ fn main() -> Result<()> {
         // Zobraz third person glow pouze pokud nejsme v third person režimu nebo jsme daleko
         if mode != CamMode::ThirdPerson || current_distance_to_third_person > 1.0 {
             objects_to_render.push(&third_person_glow);
+        }
+
+        // Přidej směrový paprsek kamery
+        if show_camera_direction {
+            objects_to_render.push(&camera_direction_ray);
         }
 
         screen.render(&cam.cam(frame_input.viewport), &objects_to_render, &[&light]);
