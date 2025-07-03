@@ -11,8 +11,7 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: simplify InputManager and remove unused SwitchDelay fields">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: add key bindings for switching camera modes and resetting to default positions">
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -108,7 +107,7 @@
       <workItem from="1751475843871" duration="1426000" />
       <workItem from="1751491451670" duration="2732000" />
       <workItem from="1751522846594" duration="8495000" />
-      <workItem from="1751572594432" duration="737000" />
+      <workItem from="1751572594432" duration="1087000" />
     </task>
     <task id="LOCAL-00001" summary="initialize new Rust project with basic structure and configuration files">
       <option name="closed" value="true" />
@@ -246,7 +245,15 @@
       <option name="project" value="LOCAL" />
       <updated>1751528412468</updated>
     </task>
-    <option name="localTasksCounter" value="18" />
+    <task id="LOCAL-00018" summary="feat: add key bindings for switching camera modes and resetting to default positions">
+      <option name="closed" value="true" />
+      <created>1751573600608</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1751573600608</updated>
+    </task>
+    <option name="localTasksCounter" value="19" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -270,6 +277,7 @@
     <MESSAGE value="feat: add pitch control for head tilt using Up/Down keys" />
     <MESSAGE value="feat: enhance camera mode switching with state tracking and cooldown" />
     <MESSAGE value="feat: simplify InputManager and remove unused SwitchDelay fields" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: simplify InputManager and remove unused SwitchDelay fields" />
+    <MESSAGE value="feat: add key bindings for switching camera modes and resetting to default positions" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: add key bindings for switching camera modes and resetting to default positions" />
   </component>
 </project>

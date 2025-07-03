@@ -856,22 +856,36 @@ fn main() -> Result<()> {
 
         // --- ovládání ---
         // --- ovládání přepnutí režimu pomocí kláves F a G ---
-        // Klávesa F - přímo na Spectator režim
-        if input_manager.is_key_pressed(KeyCode::F) {
-            let current_time = frame_input.accumulated_time;
-            
-            // Pokud uplynul dostatečný čas od posledního přepnutí a nejsme už v Spectator režimu
-            if switch_delay.can_switch(current_time) && mode != CamMode::Spectator {
-                // Ulož aktuální pozici do ThirdPerson stavu
-                third_person_state = CameraState::from_camera(&cam);
+        let current_time = frame_input.accumulated_time;
+        
+        // Pomocná funkce pro přepínání režimů
+        let mut switch_camera_mode = |target_mode: CamMode| {
+            if switch_delay.can_switch(current_time) && mode != target_mode {
+                match target_mode {
+                    CamMode::Spectator => {
+                        // Ulož aktuální pozici do ThirdPerson stavu
+                        third_person_state = CameraState::from_camera(&cam);
+                        
+                        // Přepni na Spectator režim a použij jeho stav
+                        mode = CamMode::Spectator;
+                        spectator_state.apply_to_camera(&mut cam);
+                        
+                        println!("Přepnuto na režim: Spectator");
+                    },
+                    CamMode::ThirdPerson => {
+                        // Ulož aktuální pozici do Spectator stavu
+                        spectator_state = CameraState::from_camera(&cam);
+                        
+                        // Přepni na ThirdPerson režim a použij jeho stav
+                        mode = CamMode::ThirdPerson;
+                        third_person_state.apply_to_camera(&mut cam);
+                        
+                        println!("Přepnuto na režim: ThirdPerson");
+                    }
+                }
                 
-                // Přepni na Spectator režim a použij jeho stav
-                mode = CamMode::Spectator;
-                spectator_state.apply_to_camera(&mut cam);
-
                 // Zaznamenej čas posledního přepnutí
                 switch_delay.record_switch(current_time);
-                println!("Přepnuto na režim: Spectator");
                 
                 // Aktualizuj pozice glow značek
                 spectator_glow.set_transformation(Mat4::from_translation(vec3(
@@ -882,34 +896,16 @@ fn main() -> Result<()> {
                     third_person_state.pos.x, third_person_state.pos.y, third_person_state.pos.z
                 )) * Mat4::from_scale(0.2));
             }
+        };
+        
+        // Klávesa F - přepnutí na Spectator režim
+        if input_manager.is_key_pressed(KeyCode::F) {
+            switch_camera_mode(CamMode::Spectator);
         }
         
-        // Klávesa G - přímo na ThirdPerson režim
+        // Klávesa G - přepnutí na ThirdPerson režim
         if input_manager.is_key_pressed(KeyCode::G) {
-            let current_time = frame_input.accumulated_time;
-            
-            // Pokud uplynul dostatečný čas od posledního přepnutí a nejsme už v ThirdPerson režimu
-            if switch_delay.can_switch(current_time) && mode != CamMode::ThirdPerson {
-                // Ulož aktuální pozici do Spectator stavu
-                spectator_state = CameraState::from_camera(&cam);
-                
-                // Přepni na ThirdPerson režim a použij jeho stav
-                mode = CamMode::ThirdPerson;
-                third_person_state.apply_to_camera(&mut cam);
-
-                // Zaznamenej čas posledního přepnutí
-                switch_delay.record_switch(current_time);
-                println!("Přepnuto na režim: ThirdPerson");
-                
-                // Aktualizuj pozice glow značek
-                spectator_glow.set_transformation(Mat4::from_translation(vec3(
-                    spectator_state.pos.x, spectator_state.pos.y, spectator_state.pos.z
-                )) * Mat4::from_scale(0.2));
-                
-                third_person_glow.set_transformation(Mat4::from_translation(vec3(
-                    third_person_state.pos.x, third_person_state.pos.y, third_person_state.pos.z
-                )) * Mat4::from_scale(0.2));
-            }
+            switch_camera_mode(CamMode::ThirdPerson);
         }
         
         // Zpracování změny rychlosti pomocí PageUp/PageDown přes InputManager
