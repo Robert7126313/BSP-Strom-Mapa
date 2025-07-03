@@ -28,6 +28,10 @@ use std::f32::consts::FRAC_PI_2;
 use std::path::{Path, PathBuf};
 use three_d::*;
 use rayon::prelude::*; // Add Rayon prelude for parallelization
+use wgpu::{self};
+use bytemuck::{Pod, Zeroable};
+use std::sync::atomic::{AtomicBool, Ordering};
+use futures::executor::block_on;
 
 // před funkci main přidáme enum pro sledování stavu kláves
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -178,6 +182,128 @@ impl InputManager {
 
 // ---------------- BSP Implementation -------------------------------------- //
 
+// Upravíme struktury tak, aby byly kompatibilní s GPU (přidáme derive, zajistíme zarovnání)
+#[repr(C)]
+#[derive(Clone, Debug, Copy, Pod, Zeroable)]
+struct GpuTriangle {
+    a: [f32; 3],
+    _pad1: f32,
+    b: [f32; 3],
+    _pad2: f32,
+    c: [f32; 3],
+    _pad3: f32,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy, Pod, Zeroable)]
+struct GpuPlane {
+    n: [f32; 3],
+    d: f32,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy, Pod, Zeroable)]
+struct GpuAABB {
+    min: [f32; 3],
+    _pad1: f32,
+    max: [f32; 3],
+    _pad2: f32,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy, Pod, Zeroable)]
+struct GpuBspNode {
+    plane: GpuPlane,
+    is_leaf: u32,
+    front_child: u32,
+    back_child: u32,
+    first_triangle: u32,
+    triangle_count: u32,
+    bounds: GpuAABB,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy, Pod, Zeroable)]
+struct GpuCamera {
+    position: [f32; 3],
+    _pad1: f32,
+    view_proj: [[f32; 4]; 4],
+}
+
+// Obalová třída pro správu GPU akcelerace BSP stromu
+struct GpuBspCulling {
+    // WGPU resources
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    compute_pipeline: wgpu::ComputePipeline,
+    bind_group: wgpu::BindGroup,
+
+    // Buffery pro data
+    node_buffer: wgpu::Buffer,
+    triangle_buffer: wgpu::Buffer,
+    visibility_buffer: wgpu::Buffer,
+    camera_buffer: wgpu::Buffer,
+
+    // Metadata
+    node_count: u32,
+    triangle_count: u32,
+
+    // Výsledky
+    visibility_data: Vec<u32>,
+
+    // Staging buffer pro čtení výsledků
+    staging_buffer: wgpu::Buffer,
+}
+
+impl GpuBspCulling {
+    fn new(context: &Context) -> Option<Self> {
+        // V three-d 0.18 není přímý přístup k WGPU zařízení, musíme použít alternativní přístup
+        // Toto je zjednodušená implementace, která bude fungovat pro ukázku, ale ne pro produkční kód
+
+        // Inicializace základních WGPU komponent
+        let instance = wgpu::Instance::default();
+
+        // Vytvoříme nové zařízení a frontu
+        let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        })).unwrap();
+
+        // Oprava DeviceDescriptor pro wgpu 0.20.1 - odstranění memory_hints
+        let (device, queue) = block_on(adapter.request_device(
+            &wgpu::DeviceDescriptor {
+                label: Some("BSP GPU Device"),
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::default(),
+            },
+            None,
+        )).unwrap();
+
+        // Zjednodušená implementace - vraťme None pro nyní, protože nemůžeme přímo přistupovat k WGPU v three-d
+        // V reálné implementaci bychom museli najít způsob, jak získat přístup k WGPU zařízení z three-d
+        println!("GPU akcelerace není plně podporována v této verzi, používáme CPU fallback");
+
+        None
+    }
+
+    fn update_camera(&mut self, _camera: &Camera) {
+        // Implementace zůstává stejná, ale není použita v této verzi
+    }
+
+    fn run_culling(&mut self) -> Vec<u32> {
+        // Zjednodušená implementace - vracíme prázdný vektor
+        Vec::new()
+    }
+
+    fn get_visible_triangles(&self, _visibility: &[u32], _original_triangles: &[Triangle]) -> Vec<Triangle> {
+        // Zjednodušená implementace - vracíme prázdný vektor
+        Vec::new()
+    }
+}
+
+// ---------------- BSP Implementation -------------------------------------- //
+
 #[derive(Clone, Debug)]
 struct Triangle {
     a: Vector3<f32>,
@@ -276,12 +402,12 @@ fn triangle_center(tri: &Triangle) -> Vector3<f32> {
     (tri.a + tri.b + tri.c) / 3.0
 }
 
-fn build_bsp(triangles: Vec<Triangle>, depth: u32) -> BspNode {
+fn build_bsp(triangles: &[Triangle], depth: u32) -> BspNode {
     const MAX_DEPTH: u32 = 20;
     const MIN_TRIANGLES: usize = 50;
 
     if depth >= MAX_DEPTH || triangles.len() <= MIN_TRIANGLES {
-        return BspNode::new_leaf(triangles);
+        return BspNode::new_leaf(triangles.to_vec());
     }
 
     if triangles.is_empty() {
@@ -292,7 +418,8 @@ fn build_bsp(triangles: Vec<Triangle>, depth: u32) -> BspNode {
     let splitting_plane = plane_from_triangle(&triangles[0]);
 
     // Paralelní klasifikace trojúhelníků pomocí Rayon
-    let (front_triangles, back_triangles): (Vec<Triangle>, Vec<Triangle>) = triangles.into_par_iter()
+    let (front_triangles, back_triangles): (Vec<Triangle>, Vec<Triangle>) = triangles.par_iter()
+        .cloned()
         .partition(|triangle| {
             let center = triangle_center(triangle);
             splitting_plane.classify(center) >= 0
@@ -303,14 +430,14 @@ fn build_bsp(triangles: Vec<Triangle>, depth: u32) -> BspNode {
     if depth < 5 {
         // Pro horní úrovně použijeme paralelní zpracování
         let (front_node, back_node) = rayon::join(
-            || build_bsp(front_triangles, depth + 1),
-            || build_bsp(back_triangles, depth + 1)
+            || build_bsp(&front_triangles, depth + 1),
+            || build_bsp(&back_triangles, depth + 1)
         );
         BspNode::new_node(splitting_plane, front_node, back_node)
     } else {
         // Pro hlubší úrovně zůstaneme u sekvenčního zpracování, abychom neměli příliš mnoho vláken
-        let front_node = build_bsp(front_triangles, depth + 1);
-        let back_node = build_bsp(back_triangles, depth + 1);
+        let front_node = build_bsp(&front_triangles, depth + 1);
+        let back_node = build_bsp(&back_triangles, depth + 1);
         BspNode::new_node(splitting_plane, front_node, back_node)
     }
 }
@@ -825,11 +952,19 @@ fn main() -> Result<()> {
 
     // Vytvoření BSP stromu
     let triangles = cpu_mesh_to_triangles(&cpu_mesh);
-    let bsp_root = build_bsp(triangles, 0);
+    let bsp_root = build_bsp(&triangles, 0);
     let total_stats = BspStats {
         total_nodes: bsp_root.count_nodes(),
         total_triangles: bsp_root.count_triangles(),
         ..Default::default()
+    };
+
+    // Pokus o inicializaci GPU akcelerace pro BSP strom
+    let gpu_acceleration_available = false; // Dočasně vypnuto, dokud nevyřešíme problém s přístupem k WGPU v three-d
+    let mut gpu_bsp_culling = if gpu_acceleration_available {
+        GpuBspCulling::new(&context)
+    } else {
+        None
     };
 
     // stav pro vykreslovaný mesh
@@ -907,6 +1042,11 @@ fn main() -> Result<()> {
         // Vytvoření frustumu kamery pro view-culling
         let camera_obj = cam.cam(frame_input.viewport);
         
+        // Pokud je GPU akcelerace dostupná, aktualizujeme kameru
+        if let Some(ref mut gpu_culling) = gpu_bsp_culling {
+            gpu_culling.update_camera(&camera_obj);
+        }
+
         // Použij správnou pozici pozorovatele pro traverzování BSP stromu
         let observer_position = match mode {
             CamMode::Spectator => cam.pos,  // V režimu Spectator používáme pozici kamery
@@ -936,15 +1076,30 @@ fn main() -> Result<()> {
             Frustum::from_camera(&camera_obj)
         };
 
-        // BSP traversal pro aktuální pozici kamery s využitím frustum cullingu
+        // Volba způsobu cullingu - CPU nebo GPU - použití přejmenované funkce
         let mut current_stats = BspStats {
             total_nodes: total_stats.total_nodes,
             total_triangles: total_stats.total_triangles,
             ..Default::default()
         };
-        let mut visible_triangles = Vec::new();
-        
-        traverse_bsp_with_frustum(&bsp_root, observer_position, &frustum, &mut current_stats, &mut visible_triangles);
+
+        let visible_triangles = if is_gpu_culling_enabled() && gpu_bsp_culling.is_some() {
+            // GPU culling - použijeme výsledky z GPU
+            let gpu_culling = gpu_bsp_culling.as_mut().unwrap();
+            let visibility_results = gpu_culling.run_culling();
+
+            current_stats.nodes_visited = visibility_results.iter().sum::<u32>();
+
+            // Získáme viditelné trojúhelníky z GPU
+            let visible_tris = gpu_culling.get_visible_triangles(&visibility_results, &triangles);
+            current_stats.triangles_rendered = visible_tris.len() as u32;
+            visible_tris
+        } else {
+            // CPU culling - použijeme původní CPU implementaci
+            let mut cpu_visible_triangles = Vec::new();
+            traverse_bsp_with_frustum(&bsp_root, observer_position, &frustum, &mut current_stats, &mut cpu_visible_triangles);
+            cpu_visible_triangles
+        };
 
         // Vytvoř mesh z viditelných trojúhelníků pro vykreslení
         let visible_model = create_visible_mesh(&visible_triangles, &context);
@@ -954,6 +1109,16 @@ fn main() -> Result<()> {
             egui::SidePanel::left("tree").show(ctx, |ui| {
                 ui.heading("BSP Strom");
                 ui.label(format!("Režim: {:?}", mode));
+
+                ui.separator();
+                let mut use_gpu = is_gpu_culling_enabled();
+                if ui.checkbox(&mut use_gpu, "Použít GPU akceleraci").changed() {
+                    USE_GPU_CULLING.store(use_gpu, Ordering::Relaxed);
+                }
+
+                if !gpu_acceleration_available && use_gpu {
+                    ui.label("GPU akcelerace není k dispozici v této verzi");
+                }
 
                 ui.separator();
                 ui.heading("BSP Statistiky");
@@ -1488,4 +1653,11 @@ impl Frustum {
             planes: [left, right, bottom, top, near, far],
         }
     }
+}
+
+// Globální flag pro přepínání mezi CPU a GPU cullingem
+static USE_GPU_CULLING: AtomicBool = AtomicBool::new(true);
+
+fn is_gpu_culling_enabled() -> bool {
+    USE_GPU_CULLING.load(Ordering::Relaxed)
 }
