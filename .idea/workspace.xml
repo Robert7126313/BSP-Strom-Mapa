@@ -11,8 +11,10 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: refactor camera mode switching logic for improved readability and maintainability">
+    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: implement frustum culling and bounding box calculations for improved rendering performance + BSP finally works">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -108,7 +110,7 @@
       <workItem from="1751475843871" duration="1426000" />
       <workItem from="1751491451670" duration="2732000" />
       <workItem from="1751522846594" duration="8495000" />
-      <workItem from="1751572594432" duration="3470000" />
+      <workItem from="1751572594432" duration="4123000" />
     </task>
     <task id="LOCAL-00001" summary="initialize new Rust project with basic structure and configuration files">
       <option name="closed" value="true" />
@@ -262,7 +264,15 @@
       <option name="project" value="LOCAL" />
       <updated>1751573845789</updated>
     </task>
-    <option name="localTasksCounter" value="20" />
+    <task id="LOCAL-00020" summary="feat: implement frustum culling and bounding box calculations for improved rendering performance + BSP finally works">
+      <option name="closed" value="true" />
+      <created>1751576194629</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1751576194629</updated>
+    </task>
+    <option name="localTasksCounter" value="21" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -288,6 +298,7 @@
     <MESSAGE value="feat: simplify InputManager and remove unused SwitchDelay fields" />
     <MESSAGE value="feat: add key bindings for switching camera modes and resetting to default positions" />
     <MESSAGE value="feat: refactor camera mode switching logic for improved readability and maintainability" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: refactor camera mode switching logic for improved readability and maintainability" />
+    <MESSAGE value="feat: implement frustum culling and bounding box calculations for improved rendering performance + BSP finally works" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: implement frustum culling and bounding box calculations for improved rendering performance + BSP finally works" />
   </component>
 </project>

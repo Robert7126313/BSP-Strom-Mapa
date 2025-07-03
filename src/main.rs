@@ -17,12 +17,8 @@
 // three-d       = { version = "0.18", features = ["window", "egui-gui"] }
 // three-d-asset = "0.9"
 // gltf           = "0.14"
-// -----------------------------------------------------------------------------
-// build:  $ cargo run --release
-// -----------------------------------------------------------------------------
-// DEMO FUNKCE: Neřeší načítání .glb (pro jednoduchost používá vestavěnou kouli).
-// Pokud chceš importovat model.glb, přidej kód přes three-d‑asset::io::load
-// a vytvoř Mesh::new(&context, &cpu_mesh).
+// rayon          = "1.8"
+
 // -----------------------------------------------------------------------------
 
 use anyhow::Result;
@@ -32,6 +28,7 @@ use std::collections::HashMap;
 use std::f32::consts::FRAC_PI_2;
 use std::path::{Path, PathBuf};
 use three_d::*;
+use rayon::prelude::*; // Add Rayon prelude for parallelization
 
 // před funkci main přidáme enum pro sledování stavu kláves
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -298,23 +295,30 @@ fn build_bsp(triangles: Vec<Triangle>, depth: u32) -> BspNode {
     let mut front_triangles = Vec::new();
     let mut back_triangles = Vec::new();
 
-    // Klasifikace trojúhelníků podle střední pozice
-    for triangle in triangles {
-        let center = triangle_center(&triangle);
-        let side = splitting_plane.classify(center);
-        
-        if side >= 0 {
-            front_triangles.push(triangle);
-        } else {
-            back_triangles.push(triangle);
-        }
+    // Paralelní klasifikace trojúhelníků pomocí Rayon
+    let (front, back): (Vec<Triangle>, Vec<Triangle>) = triangles.into_par_iter()
+        .partition(|triangle| {
+            let center = triangle_center(triangle);
+            splitting_plane.classify(center) >= 0
+        });
+
+    front_triangles = front;
+    back_triangles = back;
+
+    // Rekurzivní stavba podstromů - můžeme paralelizovat, pokud jsme v horních úrovních stromu
+    if depth < 5 {
+        // Pro horní úrovně použijeme paralelní zpracování
+        let (front_node, back_node) = rayon::join(
+            || build_bsp(front_triangles, depth + 1),
+            || build_bsp(back_triangles, depth + 1)
+        );
+        BspNode::new_node(splitting_plane, front_node, back_node)
+    } else {
+        // Pro hlubší úrovně zůstaneme u sekvenčního zpracování, abychom neměli příliš mnoho vláken
+        let front_node = build_bsp(front_triangles, depth + 1);
+        let back_node = build_bsp(back_triangles, depth + 1);
+        BspNode::new_node(splitting_plane, front_node, back_node)
     }
-
-    // Rekurzivní stavba podstromů
-    let front_node = build_bsp(front_triangles, depth + 1);
-    let back_node = build_bsp(back_triangles, depth + 1);
-
-    BspNode::new_node(splitting_plane, front_node, back_node)
 }
 
 fn traverse_bsp(
@@ -371,8 +375,8 @@ fn traverse_bsp_with_frustum(
 
     match &node.plane {
         None => {
-            // List - přidej všechny trojúhelníky, které jsou viditelné z pozice kamery
-            for triangle in &node.triangles {
+            // List - paralelně zpracujeme viditelné trojúhelníky
+            let visible: Vec<Triangle> = node.triangles.par_iter().filter_map(|triangle| {
                 // Pro každý trojúhelník ověříme, zda je viditelný z pozice kamery
                 let center = triangle_center(triangle);
                 
@@ -397,11 +401,15 @@ fn traverse_bsp_with_frustum(
                     }
                     
                     if is_inside {
-                        visible_triangles.push(triangle.clone());
-                        stats.triangles_rendered += 1;
+                        return Some(triangle.clone());
                     }
                 }
-            }
+                None
+            }).collect();
+            
+            // Aktualizujeme statistiky a přidáme viditelné trojúlníky
+            stats.triangles_rendered += visible.len() as u32;
+            visible_triangles.extend(visible);
         },
         Some(plane) => {
             // Vnitřní uzel - rozhodni o pořadí traversalu
@@ -764,22 +772,31 @@ fn process_primitive(
 
 // Funkce pro vytvoření meshe z viditelných trojúhelníků
 fn create_visible_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, ColorMaterial> {
-    let mut positions = Vec::new();
-    let mut indices = Vec::new();
-
-    for (i, tri) in triangles.iter().enumerate() {
-        let base_idx = (i * 3) as u32;
-        
-        // Přidáme vrcholy trojúhelníku
-        positions.push(vec3(tri.a.x, tri.a.y, tri.a.z));
-        positions.push(vec3(tri.b.x, tri.b.y, tri.b.z));
-        positions.push(vec3(tri.c.x, tri.c.y, tri.c.z));
-        
-        // Přidáme indexy trojúhelníku
-        indices.push(base_idx);
-        indices.push(base_idx + 1);
-        indices.push(base_idx + 2);
-    }
+    // Paralelní zpracování pozic a indexů
+    let triangles_count = triangles.len();
+    
+    // Předalokujeme vektory pro lepší výkon
+    let mut positions = Vec::with_capacity(triangles_count * 3);
+    let mut indices = Vec::with_capacity(triangles_count * 3);
+    
+    // Paralelně vytvoříme pozice vrcholů
+    let positions_vec: Vec<Vec3> = triangles.par_iter().flat_map(|tri| {
+        vec![
+            vec3(tri.a.x, tri.a.y, tri.a.z),
+            vec3(tri.b.x, tri.b.y, tri.b.z),
+            vec3(tri.c.x, tri.c.y, tri.c.z)
+        ]
+    }).collect();
+    
+    // Paralelně vygenerujeme indexy
+    let indices_vec: Vec<u32> = (0..triangles_count as u32).into_par_iter().flat_map(|i| {
+        let base_idx = i * 3;
+        vec![base_idx, base_idx + 1, base_idx + 2]
+    }).collect();
+    
+    // Použijeme připravené vektory
+    positions = positions_vec;
+    indices = indices_vec;
 
     // Vytvoření nového meshe
     let visible_mesh = CpuMesh {
