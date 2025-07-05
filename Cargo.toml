@@ -12,6 +12,3 @@ three-d-asset   = "0.9"
 rfd             = "0.9"
 gltf            = { version = "1.4", features = ["extras", "names"] }
 rayon           = "1.10.0"
-wgpu            = "0.20.1"
-bytemuck        = { version = "1.14", features = ["derive"] }
-futures         = "0.3.30"
