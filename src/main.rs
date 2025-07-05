@@ -214,6 +214,7 @@ impl Plane {
 }
 
 struct BspNode {
+    id: usize,
     plane: Option<Plane>,
     front: Option<Box<BspNode>>,
     back: Option<Box<BspNode>>,
@@ -230,8 +231,9 @@ struct BspStats {
 }
 
 impl BspNode {
-    fn new_leaf(triangles: Vec<Triangle>) -> Self {
+    fn new_leaf(triangles: Vec<Triangle>, id: usize) -> Self {
         Self {
+            id,
             plane: None,
             front: None,
             back: None,
@@ -240,11 +242,12 @@ impl BspNode {
         }
     }
 
-    fn new_node(plane: Plane, front: BspNode, back: BspNode) -> Self {
+    fn new_node(plane: Plane, front: BspNode, back: BspNode, id: usize) -> Self {
         // Nejprve vytvoříme společný obalový objem, než přesuneme hodnoty do boxů
         let bounds = BoundingBox::encompass(&front.bounds, &back.bounds);
 
         Self {
+            id,
             plane: Some(plane),
             front: Some(Box::new(front)),
             back: Some(Box::new(back)),
@@ -276,16 +279,20 @@ fn triangle_center(tri: &Triangle) -> Vector3<f32> {
     (tri.a + tri.b + tri.c) / 3.0
 }
 
-fn build_bsp(triangles: &[Triangle], depth: u32) -> BspNode {
+// Upravená funkce build_bsp, která přiřazuje ID uzlům
+fn build_bsp(triangles: &[Triangle], depth: u32, next_id: &mut usize) -> BspNode {
     const MAX_DEPTH: u32 = 20;
     const MIN_TRIANGLES: usize = 50;
 
+    let my_id = *next_id;
+    *next_id += 1;
+
     if depth >= MAX_DEPTH || triangles.len() <= MIN_TRIANGLES {
-        return BspNode::new_leaf(triangles.to_vec());
+        return BspNode::new_leaf(triangles.to_vec(), my_id);
     }
 
     if triangles.is_empty() {
-        return BspNode::new_leaf(Vec::new());
+        return BspNode::new_leaf(Vec::new(), my_id);
     }
 
     // Výběr dělicí roviny - použijeme rovinu prvního trojúhelníku
@@ -299,169 +306,191 @@ fn build_bsp(triangles: &[Triangle], depth: u32) -> BspNode {
             splitting_plane.classify(center) >= 0
         });
 
-
     // Rekurzivní stavba podstromů - můžeme paralelizovat, pokud jsme v horních úrovních stromu
     if depth < 5 {
-        // Pro horní úrovně použijeme paralelní zpracování
+        // Pro horní úrovně použijeme paralelní zpracování s předáním next_id
+        let mut front_id = *next_id;
+        *next_id += 1;
+        let mut back_id = *next_id;
+        *next_id += 1;
+        
         let (front_node, back_node) = rayon::join(
-            || build_bsp(&front_triangles, depth + 1),
-            || build_bsp(&back_triangles, depth + 1)
+            || build_bsp(&front_triangles, depth + 1, &mut front_id),
+            || build_bsp(&back_triangles, depth + 1, &mut back_id)
         );
-        BspNode::new_node(splitting_plane, front_node, back_node)
+        
+        // Aktualizujeme next_id na nejvyšší hodnotu z obou větví
+        *next_id = front_id.max(back_id);
+        
+        BspNode::new_node(splitting_plane, front_node, back_node, my_id)
     } else {
-        // Pro hlubší úrovně zůstaneme u sekvenčního zpracování, abychom neměli příliš mnoho vláken
-        let front_node = build_bsp(&front_triangles, depth + 1);
-        let back_node = build_bsp(&back_triangles, depth + 1);
-        BspNode::new_node(splitting_plane, front_node, back_node)
+        // Pro hlubší úrovně zůstaneme u sekvenčního zpracování
+        let front_node = build_bsp(&front_triangles, depth + 1, next_id);
+        let back_node = build_bsp(&back_triangles, depth + 1, next_id);
+        BspNode::new_node(splitting_plane, front_node, back_node, my_id)
     }
 }
 
-#[allow(dead_code)]
-fn traverse_bsp(
-    node: &BspNode, 
-    camera_pos: Vector3<f32>, 
-    stats: &mut BspStats,
-    visible_triangles: &mut Vec<Triangle>
-) {
-    stats.nodes_visited += 1;
-
-    match &node.plane {
-        None => {
-            // List - přidej všechny trojúhelníky
-            visible_triangles.extend(node.triangles.iter().cloned());
-            stats.triangles_rendered += node.triangles.len() as u32;
-        },
-        Some(plane) => {
-            // Vnitřní uzel - rozhodni o pořadí traversalu
-            let camera_side = plane.side(camera_pos);
-            
-            let (near_node, far_node) = if camera_side > 0.0 {
-                (&node.front, &node.back)
-            } else {
-                (&node.back, &node.front)
-            };
-
-            // Projdi nejdřív blízký uzel, pak vzdálený
-            if let Some(near) = near_node {
-                traverse_bsp(near, camera_pos, stats, visible_triangles);
-            }
-            if let Some(far) = far_node {
-                traverse_bsp(far, camera_pos, stats, visible_triangles);
-            }
-        }
+// Funkce pro rekurzivní hledání uzlu podle ID
+fn find_node(node: &BspNode, id: usize) -> Option<&BspNode> {
+    if node.id == id {
+        return Some(node);
     }
+    if let Some(found) = node.front.as_deref().and_then(|f| find_node(f, id)) {
+        return Some(found);
+    }
+    node.back.as_deref().and_then(|b| find_node(b, id))
 }
 
-fn traverse_bsp_with_frustum(
-    node: &BspNode,
-    camera_pos: Vector3<f32>,
-    frustum: &Frustum,
-    stats: &mut BspStats,
-    visible_triangles: &mut Vec<Triangle>
-) {
-    stats.nodes_visited += 1;
+// Funkce pro rekurzivní vykreslení stromu v UI a zpracování výběru uzlu
+fn render_bsp_tree(ui: &mut egui::Ui, node: &BspNode, selected: &mut Option<usize>) {
+    // build the label
+    let is_leaf = node.plane.is_none();
+    let triangle_count = node.triangles.len();
+    let child_count = node.front.as_ref().map_or(0, |n| n.count_nodes())
+                   + node.back.as_ref().map_or(0, |n| n.count_nodes());
 
-    // 1) Culling test - pokud je celý uzel mimo frustum, přeskočíme jej
-    for plane in &frustum.planes {
-        if !node.bounds.intersects_plane(plane) {
-            // Tento uzel (a všechny jeho potomky) je zcela za rovinou frustumu - přeskočíme
-            return;
+    let is_selected = selected == &Some(node.id);
+    let label = if is_leaf {
+        if is_selected {
+            format!("🔸 List {} ({} tris)", node.id, triangle_count)
+        } else {
+            format!("List {} ({} tris)", node.id, triangle_count)
         }
-    }
-
-    match &node.plane {
-        None => {
-            // List - paralelně zpracujeme viditelné trojúhelníky
-            let visible: Vec<Triangle> = node.triangles.par_iter().filter_map(|triangle| {
-                // Pro každý trojúhelník ověříme, zda je viditelný z pozice kamery
-                let center = triangle_center(triangle);
-                
-                // Získáme normálu trojúhelníku pro backface culling
-                let edge1 = triangle.b - triangle.a;
-                let edge2 = triangle.c - triangle.a;
-                let normal = edge1.cross(edge2).normalize();
-                
-                // Vypočítáme vektor od kamery k trojúhelníku
-                let to_triangle = center - camera_pos;
-                
-                // Pokud je úhel mezi normálou a vektorem ke kameře menší než 90°, 
-                // trojúhelník je otočen směrem ke kameře
-                if normal.dot(to_triangle) < 0.0 {
-                    // Ověříme, zda střed trojúhelníku je uvnitř frustumu
-                    let mut is_inside = true;
-                    for plane in &frustum.planes {
-                        if plane.side(center) < 0.0 {
-                            is_inside = false;
-                            break;
-                        }
-                    }
-                    
-                    if is_inside {
-                        return Some(triangle.clone());
-                    }
-                }
-                None
-            }).collect();
-            
-            // Aktualizujeme statistiky a přidáme viditelné trojúlníky
-            stats.triangles_rendered += visible.len() as u32;
-            visible_triangles.extend(visible);
-        },
-        Some(plane) => {
-            // Vnitřní uzel - rozhodni o pořadí traversalu
-            let camera_side = plane.side(camera_pos);
-
-            let (near_node, far_node) = if camera_side > 0.0 {
-                (&node.front, &node.back)
-            } else {
-                (&node.back, &node.front)
-            };
-
-            // Projdi nejdřív blízký uzel, pak vzdálený
-            if let Some(near) = near_node {
-                traverse_bsp_with_frustum(near, camera_pos, frustum, stats, visible_triangles);
-            }
-            if let Some(far) = far_node {
-                traverse_bsp_with_frustum(far, camera_pos, frustum, stats, visible_triangles);
-            }
-        }
-    }
-}
-
-fn cpu_mesh_to_triangles(cpu_mesh: &CpuMesh) -> Vec<Triangle> {
-    let mut triangles = Vec::new();
-
-    // Konverze z three-d Vec3 na cgmath Vector3
-    let positions: Vec<Vector3<f32>> = cpu_mesh.positions.to_f32()
-        .iter()
-        .map(|pos| Vector3::new(pos.x, pos.y, pos.z))
-        .collect();
-
-    // Pomocná funkce pro zpracování indexů
-    let mut process_indices = |indices: &[u32]| {
-        for chunk in indices.chunks(3) {
-            if chunk.len() == 3 {
-                let a = positions[chunk[0] as usize];
-                let b = positions[chunk[1] as usize];
-                let c = positions[chunk[2] as usize];
-                triangles.push(Triangle { a, b, c });
-            }
+    } else {
+        if is_selected {
+            format!("🔸 Node {} ({} tris, {} children)", node.id, triangle_count, child_count)
+        } else {
+            format!("Node {} ({} tris, {} children)", node.id, triangle_count, child_count)
         }
     };
 
-    match &cpu_mesh.indices {
-        Indices::U32(indices) => {
-            process_indices(indices);
-        },
-        Indices::U16(indices) => {
-            // Konvertujeme U16 indexy na U32 a pak použijeme stejnou funkci
-            let indices_u32: Vec<u32> = indices.iter().map(|&idx| idx as u32).collect();
-            process_indices(&indices_u32);
-        },
-        _ => {}
-    }
+    // collapsible header
+    let header = egui::CollapsingHeader::new(label)
+        .id_source(node.id)
+        .default_open(node.id == selected.unwrap_or(0)); // auto-open the selected node
 
-    triangles
+    // draw the header
+    let response = header.show(ui, |ui| {
+        // small "select" button inside the collapsible content
+        if ui.add(egui::SelectableLabel::new(selected == &Some(node.id), "▶ Select")).clicked() {
+            *selected = Some(node.id);
+        }
+
+        // and recurse below *only if* this header is open
+        if let Some(ref front) = node.front {
+            ui.label("Front:");
+            ui.indent("front", |ui| {
+                render_bsp_tree(ui, front, selected);
+            });
+        }
+        if let Some(ref back) = node.back {
+            ui.label("Back:");
+            ui.indent("back", |ui| {
+                render_bsp_tree(ui, back, selected);
+            });
+        }
+    });
+
+    // if you want clicking the header itself to select:
+    if response.header_response.clicked() {
+        *selected = Some(node.id);
+    }
+}
+
+// Funkce pro sběr všech trojúhelníků v podstromu
+fn collect_triangles_in_subtree(node: &BspNode, triangles: &mut Vec<Triangle>) {
+    triangles.extend(node.triangles.iter().cloned());
+    if let Some(ref front) = node.front {
+        collect_triangles_in_subtree(front, triangles);
+    }
+    if let Some(ref back) = node.back {
+        collect_triangles_in_subtree(back, triangles);
+    }
+}
+
+// Funkce pro vytvoření zvýrazněného meshe
+fn create_highlight_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, ColorMaterial> {
+    let positions: Vec<Vec3> = triangles.iter().flat_map(|tri| {
+        vec![
+            vec3(tri.a.x, tri.a.y, tri.a.z),
+            vec3(tri.b.x, tri.b.y, tri.b.z),
+            vec3(tri.c.x, tri.c.y, tri.c.z),
+        ]
+    }).collect();
+    
+    let indices: Vec<u32> = (0..triangles.len() as u32).flat_map(|i| {
+        let base = i * 3;
+        vec![base, base + 1, base + 2]
+    }).collect();
+    
+    let cpu_mesh = CpuMesh {
+        positions: Positions::F32(positions),
+        indices: Indices::U32(indices),
+        ..Default::default()
+    };
+    
+    let material = ColorMaterial::new_transparent(context, &CpuMaterial {
+        albedo: Srgba::new(255, 50, 50, 150), // Červená s průhledností
+        ..Default::default()
+    });
+    
+    Gm::new(Mesh::new(context, &cpu_mesh), material)
+}
+
+// Funkce pro vytvoření meshe dělící roviny
+fn create_plane_mesh(plane: &Plane, bounds: &BoundingBox, context: &Context) -> Gm<Mesh, ColorMaterial> {
+    // Vypočítáme střed obalového objemu
+    let center = (bounds.min + bounds.max) * 0.5;
+    
+    // Potřebujeme najít dva vektory kolmé na normálu roviny
+    // Nejprve najdeme libovolný vektor kolmý na normálu
+    let n = plane.n;
+    let u = if n.x.abs() < n.y.abs() && n.x.abs() < n.z.abs() {
+        Vector3::new(0.0, -n.z, n.y).normalize()
+    } else if n.y.abs() < n.z.abs() {
+        Vector3::new(-n.z, 0.0, n.x).normalize()
+    } else {
+        Vector3::new(-n.y, n.x, 0.0).normalize()
+    };
+    
+    // Druhý vektor kolmý na normálu a první vektor
+    let v = n.cross(u).normalize();
+    
+    // Velikost roviny - vycházíme z velikosti obalového objemu
+    let extent = (bounds.max - bounds.min).magnitude() * 0.6;
+    
+    // Vytvoříme čtyři rohy roviny
+    let corners = [
+        center + (u + v) * extent,
+        center + (u - v) * extent,
+        center + (-u - v) * extent,
+        center + (-u + v) * extent,
+    ];
+    
+    // Vytvoříme pozice a indexy pro mesh
+    let positions = vec![
+        vec3(corners[0].x, corners[0].y, corners[0].z),
+        vec3(corners[1].x, corners[1].y, corners[1].z),
+        vec3(corners[2].x, corners[2].y, corners[2].z),
+        vec3(corners[3].x, corners[3].y, corners[3].z),
+    ];
+    
+    // Dva trojúhelníky pro čtyřúhelník
+    let indices = vec![0, 1, 2, 2, 3, 0];
+    
+    let cpu_mesh = CpuMesh {
+        positions: Positions::F32(positions),
+        indices: Indices::U32(indices),
+        ..Default::default()
+    };
+    
+    let material = ColorMaterial::new_transparent(context, &CpuMaterial {
+        albedo: Srgba::new(200, 200, 50, 128), // Žlutá s průhledností
+        ..Default::default()
+    });
+    
+    Gm::new(Mesh::new(context, &cpu_mesh), material)
 }
 
 // ---------------- Free‑fly kamera ---------------------------------------- //
@@ -824,9 +853,13 @@ fn main() -> Result<()> {
         "embedded sphere".to_string()
     };
 
-    // Vytvoření BSP stromu
+    // Vytvoření triangles z CPU meshe
     let triangles = cpu_mesh_to_triangles(&cpu_mesh);
-    let bsp_root = build_bsp(&triangles, 0);
+    
+    // Inicializujeme počítadlo ID a vytvoříme BSP strom s unikátními ID
+    let mut next_id = 0;
+    let bsp_root = build_bsp(&triangles, 0, &mut next_id);
+    
     let total_stats = BspStats {
         total_nodes: bsp_root.count_nodes(),
         total_triangles: bsp_root.count_triangles(),
@@ -898,6 +931,12 @@ fn main() -> Result<()> {
     // Přidání struktury pro sledování času přepnutí režimu
     let mut switch_delay = SwitchDelay::new(2.0); // 0.5 sekundy cooldown
 
+    // ----------------------------------------------------------------------------
+    // Stav pro interaktivní výběr BSP:
+    // ----------------------------------------------------------------------------
+    let mut selected_node: Option<usize> = None;
+    let mut show_splitting_plane: bool = true;
+
     window.render_loop(move |frame_input| {
         let dt = frame_input.elapsed_time as f32 / 1000.0;
         let events = &frame_input.events;
@@ -958,6 +997,40 @@ fn main() -> Result<()> {
                 ui.heading("BSP Strom");
                 ui.label(format!("Režim: {:?}", mode));
 
+                // Přidáme sekci pro výběr uzlu BSP stromu
+                ui.separator();
+                ui.heading("Struktura BSP stromu");
+                ui.checkbox(&mut show_splitting_plane, "Zobrazit dělící rovinu");
+                
+                // Použijeme scrollovatelné okno pro zobrazení stromu, aby nepřetekl
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    render_bsp_tree(ui, &bsp_root, &mut selected_node);
+                });
+                
+                // Zobrazíme informace o vybraném uzlu
+                if let Some(node_id) = selected_node {
+                    if let Some(node) = find_node(&bsp_root, node_id) {
+                        ui.separator();
+                        ui.heading("Vybraný uzel");
+                        ui.label(format!("ID: {}", node.id));
+                        ui.label(format!("Trojúhelníků: {}", node.triangles.len()));
+                        
+                        if let Some(ref plane) = node.plane {
+                            ui.label("Dělící rovina:");
+                            ui.label(format!("Normála: ({:.2}, {:.2}, {:.2})", 
+                                plane.n.x, plane.n.y, plane.n.z));
+                            ui.label(format!("Vzdálenost: {:.2}", plane.d));
+                        } else {
+                            ui.label("List (bez dělící roviny)");
+                        }
+                        
+                        ui.label("Obalový objem:");
+                        ui.label(format!("Min: ({:.2}, {:.2}, {:.2})", 
+                            node.bounds.min.x, node.bounds.min.y, node.bounds.min.z));
+                        ui.label(format!("Max: ({:.2}, {:.2}, {:.2})", 
+                            node.bounds.max.x, node.bounds.max.y, node.bounds.max.z));
+                    }
+                }
 
                 ui.separator();
                 ui.heading("BSP Statistiky");
@@ -1251,7 +1324,7 @@ fn main() -> Result<()> {
         let screen = frame_input.screen();
         screen.clear(ClearState::color_and_depth(0.1, 0.1, 0.1, 1.0, 1.0)); // Tmavě šedé pozladí místo černého
 
-        // Vykresli viditelný model místo celého modelu
+        // Vytvoříme kolekci objektů k vykreslení
         let mut objects_to_render: Vec<&dyn Object> = vec![&visible_model];
 
         // Přidej glow koule pouze pokud nejsou na stejné pozici jako aktuální kamera
@@ -1273,12 +1346,250 @@ fn main() -> Result<()> {
             objects_to_render.push(&camera_direction_ray);
         }
 
+        // Pokud je vybrán uzel, vytvoříme zvýrazněný mesh a případně mesh dělící roviny
+        let mut maybe_highlight: Option<Gm<Mesh, ColorMaterial>> = None;
+        let mut maybe_plane: Option<Gm<Mesh, ColorMaterial>> = None;
+
+        if let Some(node_id) = selected_node {
+            if let Some(node) = find_node(&bsp_root, node_id) {
+                // Sbíráme všechny trojúhelníky v podstromu
+                let mut highlight_triangles = Vec::new();
+                collect_triangles_in_subtree(node, &mut highlight_triangles);
+                
+                // Vytvoříme zvýrazněný mesh
+                if !highlight_triangles.is_empty() {
+                    maybe_highlight = Some(create_highlight_mesh(&highlight_triangles, &context));
+                }
+                
+                // Pokud má uzel dělící rovinu a je povoleno její zobrazení, vytvoříme její mesh
+                if let Some(ref plane) = node.plane {
+                    if show_splitting_plane {
+                        maybe_plane = Some(create_plane_mesh(plane, &node.bounds, &context));
+                    }
+                }
+            }
+        }
+
+        // Přidáme meshe do kolekce pro vykreslení
+        if let Some(ref highlight) = maybe_highlight {
+            objects_to_render.push(highlight);
+        }
+        if let Some(ref plane) = maybe_plane {
+            objects_to_render.push(plane);
+        }
+
         screen.render(&cam.cam(frame_input.viewport), &objects_to_render, &[&light]);
         let _ = gui.render();
         FrameOutput::default()
     });
 
     Ok(())
+}
+
+// Funkce pro převod CpuMesh na Triangle struktury
+fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
+    let mut triangles = Vec::new();
+
+    // Získáme pozice vrcholů z meshe
+    let positions = match &mesh.positions {
+        Positions::F32(pos) => pos,
+        _ => return Vec::new(), // Pokud nemáme F32 pozice, vrátíme prázdný vektor
+    };
+
+    // Zpracujeme indexy, pokud existují
+    match &mesh.indices {
+        Indices::U32(indices) => {
+            // Pro každou trojici indexů vytvoříme trojúhelník
+            for i in (0..indices.len()).step_by(3) {
+                if i + 2 < indices.len() {
+                    let a_idx = indices[i] as usize;
+                    let b_idx = indices[i + 1] as usize;
+                    let c_idx = indices[i + 2] as usize;
+
+                    // Kontrola, zda indexy jsou v rozsahu
+                    if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len() {
+                        let a = Vector3::new(positions[a_idx].x, positions[a_idx].y, positions[a_idx].z);
+                        let b = Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z);
+                        let c = Vector3::new(positions[c_idx].x, positions[c_idx].y, positions[c_idx].z);
+
+                        triangles.push(Triangle { a, b, c });
+                    }
+                }
+            }
+        },
+        Indices::U16(indices) => {
+            // Pro každou trojici indexů vytvoříme trojúhelník
+            for i in (0..indices.len()).step_by(3) {
+                if i + 2 < indices.len() {
+                    let a_idx = indices[i] as usize;
+                    let b_idx = indices[i + 1] as usize;
+                    let c_idx = indices[i + 2] as usize;
+
+                    // Kontrola, zda indexy jsou v rozsahu
+                    if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len() {
+                        let a = Vector3::new(positions[a_idx].x, positions[a_idx].y, positions[a_idx].z);
+                        let b = Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z);
+                        let c = Vector3::new(positions[c_idx].x, positions[c_idx].y, positions[c_idx].z);
+
+                        triangles.push(Triangle { a, b, c });
+                    }
+                }
+            }
+        },
+        Indices::None => {
+            // Pokud nemáme indexy, předpokládáme, že pozice jsou přímo vrcholy trojúhelníků
+            for i in (0..positions.len()).step_by(3) {
+                if i + 2 < positions.len() {
+                    let a = Vector3::new(positions[i].x, positions[i].y, positions[i].z);
+                    let b = Vector3::new(positions[i + 1].x, positions[i + 1].y, positions[i + 1].z);
+                    let c = Vector3::new(positions[i + 2].x, positions[i + 2].y, positions[i + 2].z);
+
+                    triangles.push(Triangle { a, b, c });
+                }
+            }
+        }
+        _ => {
+            // Přidáno pro pokrytí všech případů
+            return Vec::new();
+        }
+    }
+
+    triangles
+}
+
+// Funkce pro traverzování BSP stromu s frustum cullingem
+fn traverse_bsp_with_frustum(
+    node: &BspNode,
+    observer_position: Vector3<f32>,
+    frustum: &Frustum,
+    stats: &mut BspStats,
+    visible_triangles: &mut Vec<Triangle>
+) {
+    // Inkrementujeme počítadlo navštívených uzlů
+    stats.nodes_visited += 1;
+
+    // Nejprve zkontrolujeme, zda obalový objem uzlu protíná frustum
+    let mut is_visible = true;
+
+    // Testujeme proti všem rovinám frustumu
+    for plane in &frustum.planes {
+        if !node.bounds.intersects_plane(plane) {
+            is_visible = false;
+            break;
+        }
+    }
+
+    if !is_visible {
+        return; // Uzel je mimo frustum, končíme
+    }
+
+    // Přidáme trojúhelníky z tohoto uzlu do viditelných
+    if !node.triangles.is_empty() {
+        visible_triangles.extend(node.triangles.iter().cloned());
+        stats.triangles_rendered += node.triangles.len() as u32;
+    }
+
+    // Pokud uzel není list, traverzujeme podstromy v závislosti na pozici pozorovatele
+    if let Some(ref plane) = node.plane {
+        let side = plane.classify(observer_position);
+
+        if side >= 0 {
+            // Pozorovatel je před rovinou, nejprve front, pak back
+            if let Some(ref front) = node.front {
+                traverse_bsp_with_frustum(front, observer_position, frustum, stats, visible_triangles);
+            }
+            if let Some(ref back) = node.back {
+                traverse_bsp_with_frustum(back, observer_position, frustum, stats, visible_triangles);
+            }
+        } else {
+            // Pozorovatel je za rovinou, nejprve back, pak front
+            if let Some(ref back) = node.back {
+                traverse_bsp_with_frustum(back, observer_position, frustum, stats, visible_triangles);
+            }
+            if let Some(ref front) = node.front {
+                traverse_bsp_with_frustum(front, observer_position, frustum, stats, visible_triangles);
+            }
+        }
+    }
+}
+
+// Funkce pro vytvoření materiálu a modelu z CPU meshe
+fn create_material_and_model(context: &Context, cpu_mesh: &CpuMesh) -> (ColorMaterial, Gm<Mesh, ColorMaterial>) {
+    let material = ColorMaterial::new_opaque(context, &CpuMaterial {
+        albedo: Srgba::new(100, 150, 255, 255), // Modrá barva aby byl model viditelný
+        ..Default::default()
+    });
+    let model = Gm::new(Mesh::new(context, cpu_mesh), material.clone());
+
+    (material, model)
+}
+
+// Funkce pro vytvoření glow materiálu
+fn create_glow_material(context: &Context, color: Srgba, opacity: u8) -> ColorMaterial {
+    ColorMaterial::new_transparent(context, &CpuMaterial {
+        albedo: Srgba::new(color.r, color.g, color.b, opacity),
+        ..Default::default()
+    })
+}
+
+// Funkce pro vytvoření směrového materiálu
+fn create_direction_material(context: &Context, color: Srgba, opacity: u8) -> ColorMaterial {
+    ColorMaterial::new_transparent(context, &CpuMaterial {
+        albedo: Srgba::new(color.r, color.g, color.b, opacity),
+        ..Default::default()
+    })
+}
+
+// Funkce pro vytvoření směrového paprsku
+fn create_direction_ray(context: &Context, position: Vector3<f32>, direction: Vector3<f32>, color: Srgba, opacity: u8, length: f32) -> Gm<Mesh, ColorMaterial> {
+    let direction_material = create_direction_material(context, color, opacity);
+    let direction_mesh = CpuMesh::cone(16);
+    let mut direction_ray = Gm::new(Mesh::new(context, &direction_mesh), direction_material);
+
+    // Vypočítáme úhel mezi osou Y a směrovým vektorem
+    let y_axis = Vector3::unit_y();
+    let angle = y_axis.dot(direction).acos();
+
+    // Vypočítáme osu rotace (kolmou na rovinu obsahující osu Y a směrový vektor)
+    let rotation_axis = y_axis.cross(direction).normalize();
+
+    // Vytvoření transformační matice pro válec
+    let scale = 0.05; // tenký válec
+    let translation = Mat4::from_translation(position);
+
+    // Pokud je směrový vektor téměř rovnoběžný s osou Y, použijeme speciální zacházení
+    let rotation = if angle.abs() < 0.01 || (std::f32::consts::PI - angle).abs() < 0.01 {
+        // Pro případ kdy je vektor téměř rovnoběžný s osou Y
+        if direction.y > 0.0 {
+            Mat4::identity() // směr už je podél osy Y
+        } else {
+            // Rotace o 180° kolem osy X
+            Mat4::from_angle_x(Rad(std::f32::consts::PI))
+        }
+    } else {
+        // Normální případ - rotace kolem vypočtené osy
+        Mat4::from_axis_angle(
+            vec3(rotation_axis.x, rotation_axis.y, rotation_axis.z),
+            Rad(angle)
+        )
+    };
+
+    // Měřítko - válec je standardně výšky 2.0, chceme jej natáhnout na délku `length`
+    // a zúžit na šířku `scale`
+    let scaling = Mat4::from_nonuniform_scale(scale, length / 2.0, scale);
+
+    // Aplikujeme transformace v pořadí: měřítko, rotace, posun
+    direction_ray.set_transformation(translation * rotation * scaling);
+
+    direction_ray
+}
+
+// Funkce pro resetování kamery na výchozí pozici
+fn reset_camera_to_default(camera: &mut FreeCamera, default_position: Vector3<f32>, speed: f32) {
+    // Vytvoření nového stavu kamery s výchozí pozicí, ale aktuální rychlostí kamery
+    let mut reset_state = CameraState::new(default_position);
+    reset_state.speed = speed; // Zachová aktuální rychlost
+    reset_state.apply_to_camera(camera);
 }
 
 // Struktura pro sledování času přepnutí režimu kamery
