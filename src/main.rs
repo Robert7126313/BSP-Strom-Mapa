@@ -220,6 +220,7 @@ struct BspNode {
     back: Option<Box<BspNode>>,
     triangles: Vec<Triangle>,
     bounds: BoundingBox,
+    node_count: u32, // Cache the total number of nodes in this subtree
 }
 
 #[derive(Default)]
@@ -239,10 +240,14 @@ impl BspNode {
             back: None,
             triangles: triangles.clone(),
             bounds: BoundingBox::from_triangles(&triangles),
+            node_count: 1, // Leaf nodes count as 1
         }
     }
 
     fn new_node(plane: Plane, front: BspNode, back: BspNode, id: usize) -> Self {
+        // Calculate the node count before moving the nodes into boxes
+        let total_count = 1 + front.node_count + back.node_count;
+        
         // Nejprve vytvoříme společný obalový objem, než přesuneme hodnoty do boxů
         let bounds = BoundingBox::encompass(&front.bounds, &back.bounds);
 
@@ -253,6 +258,7 @@ impl BspNode {
             back: Some(Box::new(back)),
             triangles: Vec::new(),
             bounds,
+            node_count: total_count, // Use the cached count
         }
     }
 
@@ -347,8 +353,9 @@ fn render_bsp_tree(ui: &mut egui::Ui, node: &BspNode, selected: &mut Option<usiz
     // build the label
     let is_leaf = node.plane.is_none();
     let triangle_count = node.triangles.len();
-    let child_count = node.front.as_ref().map_or(0, |n| n.count_nodes())
-                   + node.back.as_ref().map_or(0, |n| n.count_nodes());
+    // Use the cached node_count instead of expensive recursive calculation
+    let child_count = node.front.as_ref().map_or(0, |n| n.node_count - 1)
+                   + node.back.as_ref().map_or(0, |n| n.node_count - 1);
 
     let is_selected = selected == &Some(node.id);
     let label = if is_leaf {
@@ -1577,7 +1584,7 @@ fn create_direction_ray(context: &Context, position: Vector3<f32>, direction: Ve
     // Měřítko - válec je standardně výšky 2.0, chceme jej natáhnout na délku `length`
     // a zúžit na šířku `scale`
     let scaling = Mat4::from_nonuniform_scale(scale, length / 2.0, scale);
-
+    
     // Aplikujeme transformace v pořadí: měřítko, rotace, posun
     direction_ray.set_transformation(translation * rotation * scaling);
 
