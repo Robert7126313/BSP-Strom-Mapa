@@ -285,32 +285,157 @@ fn plane_from_triangle(tri: &Triangle) -> Plane {
     Plane::new(normal, tri.a)
 }
 
+// před funkci triangle_center přidáme trait extension pro Vector3
+trait Vector3Ext<S> {
+    fn map2<F>(self, other: Self, f: F) -> Self
+    where
+        F: Fn(S, S) -> S;
+}
+
+impl Vector3Ext<f32> for Vector3<f32> {
+    fn map2<F>(self, other: Self, f: F) -> Self
+    where
+        F: Fn(f32, f32) -> f32,
+    {
+        Vector3::new(
+            f(self.x, other.x),
+            f(self.y, other.y),
+            f(self.z, other.z),
+        )
+    }
+}
+
 fn triangle_center(tri: &Triangle) -> Vector3<f32> {
     (tri.a + tri.b + tri.c) / 3.0
 }
 
-// Helper function for median-of-centroids split
-fn median_split_plane(tris: &[Triangle]) -> Plane {
-    // compute centroids
-    let mut cents: Vec<_> = tris.iter().map(triangle_center).collect();
-    // find longest axis of the overall bbox
-    let bb = BoundingBox::from_triangles(tris);
-    let ext = bb.max - bb.min;
-    let axis = if ext.x > ext.y && ext.x > ext.z { 0 }
-               else if ext.y > ext.z            { 1 }
-               else                            { 2 };
-    // sort & pick median
-    cents.sort_by(|a,b| a[axis].partial_cmp(&b[axis]).unwrap());
-    let median = cents[cents.len()/2][axis];
-    // build axis‐aligned plane
+/// Bucketovaná SAH pro O(n + K) split - mnohem rychlejší než původní O(n²) SAH
+fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
+    // 1) Parent BB a SA
+    let parent_bb = BoundingBox::from_triangles(tris);
+    let parent_sa = parent_bb.surface_area();
+
+    // 2) Spočti centroidy a rozsah
+    let mut mins = Vector3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
+    let mut maxs = Vector3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
+    let cents: Vec<_> = tris.iter().map(|t| {
+        let c = triangle_center(t);
+        mins = mins.map2(c, |a, b| a.min(b));
+        maxs = maxs.map2(c, |a, b| a.max(b));
+        c
+    }).collect();
+
+    let extent = maxs - mins;
+
+    // Ošetření degenerovaného případu - všechny centroidy na stejném místě
+    if extent.x < 1e-6 && extent.y < 1e-6 && extent.z < 1e-6 {
+        // Fallback na střed parent BB
+        let center = (parent_bb.min + parent_bb.max) * 0.5;
+        return Plane::new(Vector3::unit_x(), center);
+    }
+
+    // 3) Výběr osy podle největší extent
+    let axis = if extent.x >= extent.y && extent.x >= extent.z { 0 }
+               else if extent.y >= extent.z { 1 }
+               else { 2 };
+
+    // Pokud je extent na vybrané ose téměř nulový, použij fallback
+    if extent[axis] < 1e-6 {
+        let center = (parent_bb.min + parent_bb.max) * 0.5;
+        let normal = match axis {
+            0 => Vector3::unit_x(),
+            1 => Vector3::unit_y(),
+            _ => Vector3::unit_z(),
+        };
+        return Plane::new(normal, center);
+    }
+
+    // 4) Příprava bucketů
+    #[derive(Clone)]
+    struct Bucket {
+        count: usize,
+        bb: BoundingBox
+    }
+
+    let mut buckets_data = vec![
+        Bucket {
+            count: 0,
+            bb: BoundingBox::new_empty()
+        };
+        buckets
+    ];
+
+    // 5) Jediný průchod: přiřaď každý trojúhelník do bucketu
+    for (tri, &c) in tris.iter().zip(cents.iter()) {
+        let t = ((c[axis] - mins[axis]) / extent[axis] * (buckets as f32))
+                    .floor().clamp(0.0, (buckets - 1) as f32) as usize;
+        let b = &mut buckets_data[t];
+        b.count += 1;
+        b.bb = BoundingBox::encompass(&b.bb, &BoundingBox::from_triangle(tri));
+    }
+
+    // 6) Prefix/suffix výpočty
+    let mut left_counts = vec![0; buckets];
+    let mut left_bbs = vec![BoundingBox::new_empty(); buckets];
+    let mut acc_bb = BoundingBox::new_empty();
+    let mut acc_cnt = 0;
+
+    for i in 0..buckets {
+        acc_cnt += buckets_data[i].count;
+        acc_bb = BoundingBox::encompass(&acc_bb, &buckets_data[i].bb);
+        left_counts[i] = acc_cnt;
+        left_bbs[i] = acc_bb.clone();
+    }
+
+    let mut right_counts = vec![0; buckets];
+    let mut right_bbs = vec![BoundingBox::new_empty(); buckets];
+    let mut acc_bb2 = BoundingBox::new_empty();
+    let mut acc_cnt2 = 0;
+
+    for j in (0..buckets).rev() {
+        acc_cnt2 += buckets_data[j].count;
+        acc_bb2 = BoundingBox::encompass(&acc_bb2, &buckets_data[j].bb);
+        right_counts[j] = acc_cnt2;
+        right_bbs[j] = acc_bb2.clone();
+    }
+
+    // 7) Najdi nejlepší rozdělení mezi buckety i a i+1
+    let mut best_cost = f32::INFINITY;
+    let mut best_i = 0;
+
+    for i in 0..buckets - 1 {
+        let nl = left_counts[i] as f32;
+        let nr = right_counts[i + 1] as f32;
+        if nl == 0.0 || nr == 0.0 {
+            continue;
+        }
+
+        let cost = if parent_sa > 0.0 {
+            (left_bbs[i].surface_area() / parent_sa) * nl
+                + (right_bbs[i + 1].surface_area() / parent_sa) * nr
+        } else {
+            nl + nr
+        };
+
+        if cost < best_cost {
+            best_cost = cost;
+            best_i = i;
+        }
+    }
+
+    // 8) Vypočti pozici split-point mezi buckety best_i a best_i+1
+    let split_norm = (best_i as f32 + 1.0) / buckets as f32;
+    let mut split_point = mins;
+    split_point[axis] = mins[axis] + split_norm * extent[axis];
+
+    // 9) Vrať rovinu
     let normal = match axis {
         0 => Vector3::unit_x(),
         1 => Vector3::unit_y(),
         _ => Vector3::unit_z(),
     };
-    let mut pt = bb.min;
-    pt[axis] = median;
-    Plane::new(normal, pt)
+
+    Plane::new(normal, split_point)
 }
 
 // Upravená funkce build_bsp, která přiřazuje ID uzlům
@@ -329,8 +454,8 @@ fn build_bsp(triangles: &[Triangle], depth: u32, next_id: &mut usize) -> BspNode
         return BspNode::new_leaf(Vec::new(), my_id);
     }
 
-    // Use median split plane instead of first triangle's plane
-    let splitting_plane = median_split_plane(triangles);
+    // Použij bucketed SAH algoritmus místo původního SAH - O(n + K) složitost
+    let splitting_plane = bucketed_sah_plane(triangles, 16);
 
     // Paralelní klasifikace trojúhelníků pomocí Rayon
     let (front_triangles, back_triangles): (Vec<Triangle>, Vec<Triangle>) = triangles.par_iter()
@@ -877,17 +1002,24 @@ fn create_visible_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, Co
 // ---------------- Main --------------------------------------------------- //
 
 fn main() -> Result<()> {
+    println!("🚀 Spouštím BSP Viewer...");
+
     // okno + GL
     let window = Window::new(WindowSettings { 
         title: "BSP Viewer (three‑d 0.18)".into(), 
         ..Default::default() 
     })?;
+    println!("✓ Okno vytvořeno");
+
     let context = window.gl();
     let mut gui = GUI::new(&context);
+    println!("✓ GUI inicializováno");
 
     // stavová proměnná: název aktuálního souboru a úspěšnost načtení
     let initial_path = Path::new("assets/model.glb");
+    println!("📁 Načítám model z: {}", initial_path.display());
     let (cpu_mesh, _load_status) = load_cpu_mesh(initial_path);
+    println!("✓ Model načten");
 
     let _loaded_file_name = if initial_path.exists() {
         initial_path.file_name().unwrap().to_string_lossy().into_owned()
@@ -896,12 +1028,16 @@ fn main() -> Result<()> {
     };
 
     // Vytvoření triangles z CPU meshe
+    println!("🔺 Převádím mesh na trojúhelníky...");
     let triangles = cpu_mesh_to_triangles(&cpu_mesh);
-    
+    println!("✓ Převedeno {} trojúhelníků", triangles.len());
+
     // Inicializujeme počítadlo ID a vytvoříme BSP strom s unikátními ID
+    println!("🌳 Stavím BSP strom...");
     let mut next_id = 0;
     let bsp_root = build_bsp(&triangles, 0, &mut next_id);
-    
+    println!("✓ BSP strom sestaven s {} uzly", bsp_root.count_nodes());
+
     let total_stats = BspStats {
         total_nodes: bsp_root.count_nodes(),
         total_triangles: bsp_root.count_triangles(),
@@ -1503,7 +1639,7 @@ fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
                     // Kontrola, zda indexy jsou v rozsahu
                     if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len() {
                         let a = Vector3::new(positions[a_idx].x, positions[a_idx].y, positions[a_idx].z);
-                        let b = Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z);
+                            let b = Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z);
                         let c = Vector3::new(positions[c_idx].x, positions[c_idx].y, positions[c_idx].z);
 
                         triangles.push(Triangle { a, b, c });
@@ -1792,6 +1928,15 @@ impl BoundingBox {
         );
         // if this farthest point is in front, the box may intersect or be in front
         plane.side(p) >= 0.0
+    }
+
+    /// Výpočet povrchové plochy bounding boxu pro SAH
+    fn surface_area(&self) -> f32 {
+        let d = self.max - self.min;
+        if d.x < 0.0 || d.y < 0.0 || d.z < 0.0 {
+            return 0.0; // prázdný nebo neplatný box
+        }
+        2.0 * (d.x * d.y + d.y * d.z + d.z * d.x)
     }
 }
 
