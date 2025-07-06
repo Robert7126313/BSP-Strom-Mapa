@@ -11,7 +11,7 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: implement median split plane for BSP tree and improve ID assignment logic">
+    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: add triangle count caching in BSP tree nodes and improve rendering of node selection">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
@@ -110,7 +110,8 @@
       <workItem from="1751522846594" duration="8495000" />
       <workItem from="1751572594432" duration="5517000" />
       <workItem from="1751732375326" duration="1019000" />
-      <workItem from="1751789732483" duration="3072000" />
+      <workItem from="1751789732483" duration="3173000" />
+      <workItem from="1751808131983" duration="1394000" />
     </task>
     <task id="LOCAL-00001" summary="initialize new Rust project with basic structure and configuration files">
       <option name="closed" value="true" />
@@ -304,7 +305,15 @@
       <option name="project" value="LOCAL" />
       <updated>1751790533180</updated>
     </task>
-    <option name="localTasksCounter" value="25" />
+    <task id="LOCAL-00025" summary="feat: add triangle count caching in BSP tree nodes and improve rendering of node selection">
+      <option name="closed" value="true" />
+      <created>1751794305028</created>
+      <option name="number" value="00025" />
+      <option name="presentableId" value="LOCAL-00025" />
+      <option name="project" value="LOCAL" />
+      <updated>1751794305028</updated>
+    </task>
+    <option name="localTasksCounter" value="26" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -335,6 +344,7 @@
     <MESSAGE value="feat: integrate wgpu and futures for GPU acceleration in BSP tree processing - GPU acceleration feature non-existent as of now" />
     <MESSAGE value="feat: add unique ID assignment to BSP tree nodes and enhance rendering UI for node selection" />
     <MESSAGE value="feat: implement median split plane for BSP tree and improve ID assignment logic" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: implement median split plane for BSP tree and improve ID assignment logic" />
+    <MESSAGE value="feat: add triangle count caching in BSP tree nodes and improve rendering of node selection" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: add triangle count caching in BSP tree nodes and improve rendering of node selection" />
   </component>
 </project>

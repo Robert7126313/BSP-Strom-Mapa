@@ -388,7 +388,7 @@ fn render_bsp_tree(ui: &mut egui::Ui, node: &BspNode, selected: &mut Option<usiz
     let subtree_tris = node.subtree_tris as usize;
     // number of children nodes
     let child_count = node.front.as_ref().map_or(0, |n| n.node_count - 1)
-                   + node.back.as_ref().map_or(0, |n| n.node_count - 1);
+                + node.back.as_ref().map_or(0, |n| n.node_count - 1);
 
     let is_selected = selected == &Some(node.id);
     let label = if is_leaf {
@@ -409,7 +409,7 @@ fn render_bsp_tree(ui: &mut egui::Ui, node: &BspNode, selected: &mut Option<usiz
 
     // collapsible header
     let header = egui::CollapsingHeader::new(label)
-        .id_source(node.id)
+        .id_salt(node.id)  // Aktualizace zastaralé metody id_source na id_salt
         .default_open(node.id == selected.unwrap_or(0)); // auto-open the selected node
 
     // draw the header
@@ -908,6 +908,9 @@ fn main() -> Result<()> {
         ..Default::default()
     };
 
+    // Přidáme novou proměnnou pro vypnutí cullingu
+    let mut disable_culling = false;
+
     // stav pro vykreslovaný mesh
     let _glb_path: Option<PathBuf> = None;
     let material = ColorMaterial::new_opaque(&context, &CpuMaterial {
@@ -1025,9 +1028,17 @@ fn main() -> Result<()> {
             ..Default::default()
         };
 
-        // CPU culling - použijeme původní CPU implementaci
+        // CPU culling - použijeme původní CPU implementaci nebo zobrazíme vše
         let mut cpu_visible_triangles = Vec::new();
-        traverse_bsp_with_frustum(&bsp_root, observer_position, &frustum, &mut current_stats, &mut cpu_visible_triangles);
+        if disable_culling && mode == CamMode::Spectator {
+            // Když je culling vypnutý a jsme v režimu Spectator, sbíráme všechny trojúhelníky
+            collect_triangles_in_subtree(&bsp_root, &mut cpu_visible_triangles);
+            current_stats.nodes_visited = current_stats.total_nodes;
+            current_stats.triangles_rendered = current_stats.total_triangles;
+        } else {
+            // Běžné culling chování
+            traverse_bsp_with_frustum(&bsp_root, observer_position, &frustum, &mut current_stats, &mut cpu_visible_triangles);
+        }
         let visible_triangles = cpu_visible_triangles;
 
         // Vytvoř mesh z viditelných trojúhelníků pro vykreslení
@@ -1043,6 +1054,17 @@ fn main() -> Result<()> {
                 ui.separator();
                 ui.heading("Struktura BSP stromu");
                 ui.checkbox(&mut show_splitting_plane, "Zobrazit dělící rovinu");
+                
+                // Přidáme nastavení pro vypnutí cullingu
+                ui.separator();
+                ui.heading("Nastavení zobrazení");
+                ui.checkbox(&mut disable_culling, "Zobrazit celý BSP strom (bez cullingu)");
+                if disable_culling {
+                    ui.label("Varování: Zobrazení celého stromu může zpomalit vykreslování.");
+                }
+                if disable_culling && mode != CamMode::Spectator {
+                    ui.label("Poznámka: Tato funkce je aktivní pouze v režimu Spectator.");
+                }
                 
                 // Použijeme scrollovatelné okno pro zobrazení stromu, aby nepřetekl
                 egui::ScrollArea::vertical().show(ui, |ui| {
@@ -1627,7 +1649,7 @@ fn create_direction_ray(context: &Context, position: Vector3<f32>, direction: Ve
         )
     };
 
-    // Měřítko - válec je standardně výšky 2.0, chceme jej natáhnout na délku `length`
+    // Měřítko - válec - válec je standardně výšky 2.0, chceme jej natáhnout na délku `length`
     // a zúžit na šířku `scale`
     let scaling = Mat4::from_nonuniform_scale(scale, length / 2.0, scale);
     
