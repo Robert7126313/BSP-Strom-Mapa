@@ -1235,8 +1235,42 @@ fn main() -> Result<()> {
         }
         let visible_triangles = cpu_visible_triangles;
 
-        // Vytvoř mesh z viditelných trojúhelníků pro vykreslení
-        let visible_model = create_visible_mesh(&visible_triangles, &context);
+        // 1) Shromáždění trojúhelníků z vybraného podstromu
+        let mut picked_tris = Vec::new();
+        if let Some(sel_id) = selected_node {
+            if let Some(ref root) = bsp_root {
+                if let Some(node) = find_node(root, sel_id) {
+                    collect_triangles_in_subtree(node, &mut picked_tris);
+                }
+            }
+        }
+
+        // Pomocná funkce pro kvantizaci středu trojúhelníku
+        fn quantized_center(tri: &Triangle) -> (i32, i32, i32) {
+            let c = triangle_center(tri);
+            ((c.x * 1000.0) as i32, (c.y * 1000.0) as i32, (c.z * 1000.0) as i32)
+        }
+
+        use std::collections::HashSet;
+        let picked_centers: HashSet<_> = picked_tris.iter().map(|t| quantized_center(t)).collect();
+
+        let mut normal_tris = Vec::with_capacity(visible_triangles.len());
+        let mut highlight_tris = Vec::with_capacity(picked_tris.len());
+        for tri in visible_triangles.into_iter() {
+            let c = quantized_center(&tri);
+            if picked_centers.contains(&c) {
+                highlight_tris.push(tri);
+            } else {
+                normal_tris.push(tri);
+            }
+        }
+
+        let base_model = create_visible_mesh(&normal_tris, &context);
+        let highlight_model = if !highlight_tris.is_empty() {
+            Some(create_highlight_mesh(&highlight_tris, &context))
+        } else {
+            None
+        };
 
         // --- GUI ---
         gui.update(&mut frame_input.events.clone(), frame_input.accumulated_time, frame_input.viewport, frame_input.device_pixel_ratio, |ctx| {
@@ -1675,7 +1709,6 @@ fn main() -> Result<()> {
                 // Vytvoření transformační matice pro válec
                 let scale = 0.05; // tenký válec
                 let length = 3.0; // délka paprsku
-                
                 // Vytvoření matice transformace
                 let translation = Mat4::from_translation(vec3(
                     spectator_state.pos.x, 
@@ -1711,77 +1744,14 @@ fn main() -> Result<()> {
 
         // --- vykreslení ---
         let screen = frame_input.screen();
-        screen.clear(ClearState::color_and_depth(0.1, 0.1, 0.1, 1.0, 1.0)); // Tmavě šedé pozladí místo černého
-
-        // Vytvoříme kolekci objektů k vykreslení
-        let mut objects_to_render: Vec<&dyn Object> = vec![&visible_model];
-
-        // Přidej glow koule pouze pokud nejsou na stejné pozici jako aktuální kamera
-        let current_distance_to_spectator = (cam.pos - spectator_state.pos).magnitude();
-        let current_distance_to_third_person = (cam.pos - third_person_state.pos).magnitude();
-
-        // Zobraz spectator glow pouze pokud nejsme v spectator režimu nebo jsme daleko
-        if mode != CamMode::Spectator || current_distance_to_spectator > 1.0 {
-            objects_to_render.push(&spectator_glow);
+        screen.clear(ClearState::color_and_depth(0.1, 0.1, 0.1, 1.0, 1.0));
+        let mut objects_to_render: Vec<&dyn Object> = Vec::new();
+        objects_to_render.push(&base_model);
+        // ... další objekty ...
+        if let Some(ref h) = highlight_model {
+            objects_to_render.push(h);
         }
-
-        // Zobraz third person glow pouze pokud nejsme v third person režimu nebo jsme daleko
-        if mode != CamMode::ThirdPerson || current_distance_to_third_person > 1.0 {
-            objects_to_render.push(&third_person_glow);
-        }
-
-        // Přidej směrový paprsek kamery
-        if show_camera_direction {
-            objects_to_render.push(&camera_direction_ray);
-        }
-
-        // Pokud je vybrán uzel, vytvoříme zvýrazněný mesh a případně mesh dělící roviny
-        let mut maybe_highlight: Option<Gm<Mesh, ColorMaterial>> = None;
-
-        if let Some(node_id) = selected_node {
-            if let Some(ref root) = bsp_root {
-                if let Some(node) = find_node(root, node_id) {
-                    // Sbíráme všechny trojúhelníky v podstromu
-                    let mut highlight_triangles = Vec::new();
-                    collect_triangles_in_subtree(node, &mut highlight_triangles);
-
-                    // Vytvoříme zvýrazněný mesh
-                    if !highlight_triangles.is_empty() {
-                        maybe_highlight = Some(create_highlight_mesh(&highlight_triangles, &context));
-                    }
-                }
-            }
-        }
-
-        // Přidáme meshe do kolekce pro vykreslení
-        if let Some(ref highlight) = maybe_highlight {
-            objects_to_render.push(highlight);
-        }
-        
-        // Zobrazíme všechny dělící roviny na cestě od kořene k vybranému uzlu
-        let mut plane_meshes = Vec::new();
-        if let Some(sel_id) = selected_node {
-            if show_splitting_plane {
-                let mut path = Vec::new();
-                if let Some(ref root) = bsp_root {
-                    if find_node_path(root, sel_id, &mut path) {
-                        // path now has [selected, parent, grandparent, …, root]
-                        for node in path {
-                            if let Some(ref plane) = node.plane {
-                                let mesh = create_plane_mesh(plane, &node.bounds, &context);
-                                plane_meshes.push(mesh);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Přidáme všechny plane meshe do kolekce pro vykreslení
-        for plane_mesh in &plane_meshes {
-            objects_to_render.push(plane_mesh);
-        }
-
+        // ... další objekty ...
         screen.render(&cam.cam(frame_input.viewport), &objects_to_render, &[&ambient_light]);
         let _ = gui.render();
         FrameOutput::default()
