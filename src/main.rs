@@ -221,6 +221,7 @@ struct BspNode {
     triangles: Vec<Triangle>,
     bounds: BoundingBox,
     node_count: u32, // Cache the total number of nodes in this subtree
+    subtree_tris: u32, // Cache the total number of triangles in this subtree
 }
 
 #[derive(Default)]
@@ -241,12 +242,14 @@ impl BspNode {
             triangles: triangles.clone(),
             bounds: BoundingBox::from_triangles(&triangles),
             node_count: 1, // Leaf nodes count as 1
+            subtree_tris: triangles.len() as u32, // Cache the triangle count
         }
     }
 
     fn new_node(plane: Plane, front: BspNode, back: BspNode, id: usize) -> Self {
-        // Calculate the node count before moving the nodes into boxes
+        // Calculate the node count and triangle count before moving the nodes into boxes
         let total_count = 1 + front.node_count + back.node_count;
+        let total_tris = front.subtree_tris + back.subtree_tris;
         
         // Nejprve vytvoříme společný obalový objem, než přesuneme hodnoty do boxů
         let bounds = BoundingBox::encompass(&front.bounds, &back.bounds);
@@ -259,6 +262,7 @@ impl BspNode {
             triangles: Vec::new(),
             bounds,
             node_count: total_count, // Use the cached count
+            subtree_tris: total_tris, // Cache the total triangle count in subtree
         }
     }
 
@@ -359,27 +363,47 @@ fn find_node(node: &BspNode, id: usize) -> Option<&BspNode> {
     node.back.as_deref().and_then(|b| find_node(b, id))
 }
 
+/// Fills `path` with pointers from the root down *to* the node with `target_id`.
+/// Returns true if found.
+fn find_node_path<'a>(node: &'a BspNode, target_id: usize, path: &mut Vec<&'a BspNode>) -> bool {
+    if node.id == target_id {
+        path.push(node);
+        return true;
+    }
+    for child in node.front.as_deref().into_iter().chain(node.back.as_deref()) {
+        if find_node_path(child, target_id, path) {
+            path.push(node);
+            return true;
+        }
+    }
+    false
+}
+
 // Funkce pro rekurzivní vykreslení stromu v UI a zpracování výběru uzlu
 fn render_bsp_tree(ui: &mut egui::Ui, node: &BspNode, selected: &mut Option<usize>) {
     // build the label
-    let is_leaf = node.plane.is_none();
-    let triangle_count = node.triangles.len();
-    // Use the cached node_count instead of expensive recursive calculation
+    let is_leaf     = node.plane.is_none();
+    let local_tris  = node.triangles.len();
+    // total tris in this subtree (using cached value)
+    let subtree_tris = node.subtree_tris as usize;
+    // number of children nodes
     let child_count = node.front.as_ref().map_or(0, |n| n.node_count - 1)
                    + node.back.as_ref().map_or(0, |n| n.node_count - 1);
 
     let is_selected = selected == &Some(node.id);
     let label = if is_leaf {
+        // leaf: show only local triangles
         if is_selected {
-            format!("🔸 List {} ({} tris)", node.id, triangle_count)
+            format!("🔸 Leaf {} ({} tris)", node.id, local_tris)
         } else {
-            format!("List {} ({} tris)", node.id, triangle_count)
+            format!("Leaf {} ({} tris)", node.id, local_tris)
         }
     } else {
+        // interior: show total subtree triangles
         if is_selected {
-            format!("🔸 Node {} ({} tris, {} children)", node.id, triangle_count, child_count)
+            format!("🔸 Node {} ({} tris subtree, {} children)", node.id, subtree_tris, child_count)
         } else {
-            format!("Node {} ({} tris, {} children)", node.id, triangle_count, child_count)
+            format!("Node {} ({} tris subtree, {} children)", node.id, subtree_tris, child_count)
         }
     };
 
@@ -494,7 +518,7 @@ fn create_plane_mesh(plane: &Plane, bounds: &BoundingBox, context: &Context) -> 
         vec3(corners[3].x, corners[3].y, corners[3].z),
     ];
     
-    // Dva trojúhelníky pro čtyřúhelník
+    // Dva trojúlníky pro čtyřúhelník
     let indices = vec![0, 1, 2, 2, 3, 0];
     
     let cpu_mesh = CpuMesh {
@@ -1366,7 +1390,6 @@ fn main() -> Result<()> {
 
         // Pokud je vybrán uzel, vytvoříme zvýrazněný mesh a případně mesh dělící roviny
         let mut maybe_highlight: Option<Gm<Mesh, ColorMaterial>> = None;
-        let mut maybe_plane: Option<Gm<Mesh, ColorMaterial>> = None;
 
         if let Some(node_id) = selected_node {
             if let Some(node) = find_node(&bsp_root, node_id) {
@@ -1378,13 +1401,6 @@ fn main() -> Result<()> {
                 if !highlight_triangles.is_empty() {
                     maybe_highlight = Some(create_highlight_mesh(&highlight_triangles, &context));
                 }
-                
-                // Pokud má uzel dělící rovinu a je povoleno její zobrazení, vytvoříme její mesh
-                if let Some(ref plane) = node.plane {
-                    if show_splitting_plane {
-                        maybe_plane = Some(create_plane_mesh(plane, &node.bounds, &context));
-                    }
-                }
             }
         }
 
@@ -1392,8 +1408,27 @@ fn main() -> Result<()> {
         if let Some(ref highlight) = maybe_highlight {
             objects_to_render.push(highlight);
         }
-        if let Some(ref plane) = maybe_plane {
-            objects_to_render.push(plane);
+        
+        // Zobrazíme všechny dělící roviny na cestě od kořene k vybranému uzlu
+        let mut plane_meshes = Vec::new();
+        if let Some(sel_id) = selected_node {
+            if show_splitting_plane {
+                let mut path = Vec::new();
+                if find_node_path(&bsp_root, sel_id, &mut path) {
+                    // path now has [selected, parent, grandparent, …, root]
+                    for node in path {
+                        if let Some(ref plane) = node.plane {
+                            let mesh = create_plane_mesh(plane, &node.bounds, &context);
+                            plane_meshes.push(mesh);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Přidáme všechny plane meshe do kolekce pro vykreslení
+        for plane_mesh in &plane_meshes {
+            objects_to_render.push(plane_mesh);
         }
 
         screen.render(&cam.cam(frame_input.viewport), &objects_to_render, &[&light]);
