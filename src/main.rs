@@ -26,6 +26,8 @@ use cgmath::{Deg, InnerSpace, Vector3};
 use std::collections::HashMap;
 use std::f32::consts::FRAC_PI_2;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::thread;
 use three_d::*;
 use rayon::prelude::*; // Add Rayon prelude for parallelization
 
@@ -973,7 +975,7 @@ fn create_visible_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, Co
         vec![
             vec3(tri.a.x, tri.a.y, tri.a.z),
             vec3(tri.b.x, tri.b.y, tri.b.z),
-            vec3(tri.c.x, tri.c.y, tri.c.z)
+            vec3(tri.c.x, tri.c.y, tri.c.z),
         ]
     }).collect();
     
@@ -1032,15 +1034,24 @@ fn main() -> Result<()> {
     let triangles = cpu_mesh_to_triangles(&cpu_mesh);
     println!("✓ Převedeno {} trojúhelníků", triangles.len());
 
-    // Inicializujeme počítadlo ID a vytvoříme BSP strom s unikátními ID
-    println!("🌳 Stavím BSP strom...");
-    let mut next_id = 0;
-    let bsp_root = build_bsp(&triangles, 0, &mut next_id);
-    println!("✓ BSP strom sestaven s {} uzly", bsp_root.count_nodes());
+    // Asynchronní stavba BSP stromu na pozadí
+    println!("🌳 Spouštím stavbu BSP stromu na pozadí...");
+    let mut bsp_root: Option<BspNode> = None;
+    let triangles_clone = triangles.clone();
+    let (tx, rx) = mpsc::channel();
 
-    let total_stats = BspStats {
-        total_nodes: bsp_root.count_nodes(),
-        total_triangles: bsp_root.count_triangles(),
+    // Spuštění stavby BSP stromu v jiném vlákně
+    thread::spawn(move || {
+        let mut next_id = 0;
+        let tree = build_bsp(&triangles_clone, 0, &mut next_id);
+        println!("✓ BSP strom sestaven s {} uzly", tree.count_nodes());
+        tx.send(tree).unwrap();
+    });
+
+    // Inicializujeme výchozí statistiky
+    let mut total_stats = BspStats {
+        total_nodes: 0,
+        total_triangles: triangles.len() as u32,
         ..Default::default()
     };
 
@@ -1082,7 +1093,7 @@ fn main() -> Result<()> {
     let direction_mesh = CpuMesh::cone(16);
     let mut camera_direction_ray = Gm::new(Mesh::new(&context, &direction_mesh), direction_material);
     
-    let light = AmbientLight::new(&context, 1.0, Srgba::WHITE); // Zvýšit intenzitu světla
+    let ambient_light = AmbientLight::new(&context, 1.0, Srgba::WHITE); // Zvýšit intenzitu světla
 
     // Nastavení výchozích pozic pro kamery (spawnpoint)
     let default_spectator_pos = Vector3::new(0.0, 2.0, 8.0);
@@ -1121,6 +1132,13 @@ fn main() -> Result<()> {
     window.render_loop(move |frame_input| {
         let dt = frame_input.elapsed_time as f32 / 1000.0;
         let events = &frame_input.events;
+
+        // Zkontroluj, zda background thread dokončil stavbu BSP stromu
+        if let Ok(tree) = rx.try_recv() {
+            total_stats.total_nodes = tree.count_nodes();
+            bsp_root = Some(tree);
+            println!("✅ BSP strom úspěšně načten do GUI!");
+        }
 
         // Aktualizuj stav kláves v InputManageru
         input_manager.update_key_states(events);
@@ -1168,12 +1186,16 @@ fn main() -> Result<()> {
         let mut cpu_visible_triangles = Vec::new();
         if disable_culling && mode == CamMode::Spectator {
             // Když je culling vypnutý a jsme v režimu Spectator, sbíráme všechny trojúhelníky
-            collect_triangles_in_subtree(&bsp_root, &mut cpu_visible_triangles);
-            current_stats.nodes_visited = current_stats.total_nodes;
-            current_stats.triangles_rendered = current_stats.total_triangles;
+            if let Some(ref root) = bsp_root {
+                collect_triangles_in_subtree(root, &mut cpu_visible_triangles);
+                current_stats.nodes_visited = current_stats.total_nodes;
+                current_stats.triangles_rendered = current_stats.total_triangles;
+            }
         } else {
             // Běžné culling chování
-            traverse_bsp_with_frustum(&bsp_root, observer_position, &frustum, &mut current_stats, &mut cpu_visible_triangles);
+            if let Some(ref root) = bsp_root {
+                traverse_bsp_with_frustum(root, observer_position, &frustum, &mut current_stats, &mut cpu_visible_triangles);
+            }
         }
         let visible_triangles = cpu_visible_triangles;
 
@@ -1186,6 +1208,20 @@ fn main() -> Result<()> {
                 ui.heading("BSP Strom");
                 ui.label(format!("Režim: {:?}", mode));
 
+                // Pokud se strom ještě nestihl zkonstruovat:
+                if bsp_root.is_none() {
+                    ui.separator();
+                    ui.label("Strom se staví…");
+                    // indeterminovaný progress bar
+                    ui.add(
+                        egui::ProgressBar::new(0.0)
+                            .desired_width(ui.available_width())
+                            .animate(true)
+                    );
+                    return; // nic dalšího netaháme, dokud strom neexistuje
+                }
+
+                // tady už víme, že bsp_root.is_some(), takže kreslíme zbytek UI…
                 // Přidáme sekci pro výběr uzlu BSP stromu
                 ui.separator();
                 ui.heading("Struktura BSP stromu");
@@ -1204,31 +1240,34 @@ fn main() -> Result<()> {
                 
                 // Použijeme scrollovatelné okno pro zobrazení stromu, aby nepřetekl
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    render_bsp_tree(ui, &bsp_root, &mut selected_node);
+                    let root = bsp_root.as_ref().unwrap();
+                    render_bsp_tree(ui, root, &mut selected_node);
                 });
                 
                 // Zobrazíme informace o vybraném uzlu
                 if let Some(node_id) = selected_node {
-                    if let Some(node) = find_node(&bsp_root, node_id) {
-                        ui.separator();
-                        ui.heading("Vybraný uzel");
-                        ui.label(format!("ID: {}", node.id));
-                        ui.label(format!("Trojúhelníků: {}", node.triangles.len()));
-                        
-                        if let Some(ref plane) = node.plane {
-                            ui.label("Dělící rovina:");
-                            ui.label(format!("Normála: ({:.2}, {:.2}, {:.2})", 
-                                plane.n.x, plane.n.y, plane.n.z));
-                            ui.label(format!("Vzdálenost: {:.2}", plane.d));
-                        } else {
-                            ui.label("List (bez dělící roviny)");
+                    if let Some(ref root) = bsp_root {
+                        if let Some(node) = find_node(root, node_id) {
+                            ui.separator();
+                            ui.heading("Vybraný uzel");
+                            ui.label(format!("ID: {}", node.id));
+                            ui.label(format!("Trojúhelníků: {}", node.triangles.len()));
+
+                            if let Some(ref plane) = node.plane {
+                                ui.label("Dělící rovina:");
+                                ui.label(format!("Normála: ({:.2}, {:.2}, {:.2})",
+                                    plane.n.x, plane.n.y, plane.n.z));
+                                ui.label(format!("Vzdálenost: {:.2}", plane.d));
+                            } else {
+                                ui.label("List (bez dělící roviny)");
+                            }
+
+                            ui.label("Obalový objem:");
+                            ui.label(format!("Min: ({:.2}, {:.2}, {:.2})",
+                                node.bounds.min.x, node.bounds.min.y, node.bounds.min.z));
+                            ui.label(format!("Max: ({:.2}, {:.2}, {:.2})",
+                                node.bounds.max.x, node.bounds.max.y, node.bounds.max.z));
                         }
-                        
-                        ui.label("Obalový objem:");
-                        ui.label(format!("Min: ({:.2}, {:.2}, {:.2})", 
-                            node.bounds.min.x, node.bounds.min.y, node.bounds.min.z));
-                        ui.label(format!("Max: ({:.2}, {:.2}, {:.2})", 
-                            node.bounds.max.x, node.bounds.max.y, node.bounds.max.z));
                     }
                 }
 
@@ -1550,14 +1589,16 @@ fn main() -> Result<()> {
         let mut maybe_highlight: Option<Gm<Mesh, ColorMaterial>> = None;
 
         if let Some(node_id) = selected_node {
-            if let Some(node) = find_node(&bsp_root, node_id) {
-                // Sbíráme všechny trojúhelníky v podstromu
-                let mut highlight_triangles = Vec::new();
-                collect_triangles_in_subtree(node, &mut highlight_triangles);
-                
-                // Vytvoříme zvýrazněný mesh
-                if !highlight_triangles.is_empty() {
-                    maybe_highlight = Some(create_highlight_mesh(&highlight_triangles, &context));
+            if let Some(ref root) = bsp_root {
+                if let Some(node) = find_node(root, node_id) {
+                    // Sbíráme všechny trojúhelníky v podstromu
+                    let mut highlight_triangles = Vec::new();
+                    collect_triangles_in_subtree(node, &mut highlight_triangles);
+
+                    // Vytvoříme zvýrazněný mesh
+                    if !highlight_triangles.is_empty() {
+                        maybe_highlight = Some(create_highlight_mesh(&highlight_triangles, &context));
+                    }
                 }
             }
         }
@@ -1572,12 +1613,14 @@ fn main() -> Result<()> {
         if let Some(sel_id) = selected_node {
             if show_splitting_plane {
                 let mut path = Vec::new();
-                if find_node_path(&bsp_root, sel_id, &mut path) {
-                    // path now has [selected, parent, grandparent, …, root]
-                    for node in path {
-                        if let Some(ref plane) = node.plane {
-                            let mesh = create_plane_mesh(plane, &node.bounds, &context);
-                            plane_meshes.push(mesh);
+                if let Some(ref root) = bsp_root {
+                    if find_node_path(root, sel_id, &mut path) {
+                        // path now has [selected, parent, grandparent, …, root]
+                        for node in path {
+                            if let Some(ref plane) = node.plane {
+                                let mesh = create_plane_mesh(plane, &node.bounds, &context);
+                                plane_meshes.push(mesh);
+                            }
                         }
                     }
                 }
@@ -1589,7 +1632,7 @@ fn main() -> Result<()> {
             objects_to_render.push(plane_mesh);
         }
 
-        screen.render(&cam.cam(frame_input.viewport), &objects_to_render, &[&light]);
+        screen.render(&cam.cam(frame_input.viewport), &objects_to_render, &[&ambient_light]);
         let _ = gui.render();
         FrameOutput::default()
     });
@@ -1639,7 +1682,7 @@ fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
                     // Kontrola, zda indexy jsou v rozsahu
                     if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len() {
                         let a = Vector3::new(positions[a_idx].x, positions[a_idx].y, positions[a_idx].z);
-                            let b = Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z);
+                        let b = Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z);
                         let c = Vector3::new(positions[c_idx].x, positions[c_idx].y, positions[c_idx].z);
 
                         triangles.push(Triangle { a, b, c });
