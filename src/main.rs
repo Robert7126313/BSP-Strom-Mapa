@@ -285,10 +285,34 @@ fn triangle_center(tri: &Triangle) -> Vector3<f32> {
     (tri.a + tri.b + tri.c) / 3.0
 }
 
+// Helper function for median-of-centroids split
+fn median_split_plane(tris: &[Triangle]) -> Plane {
+    // compute centroids
+    let mut cents: Vec<_> = tris.iter().map(triangle_center).collect();
+    // find longest axis of the overall bbox
+    let bb = BoundingBox::from_triangles(tris);
+    let ext = bb.max - bb.min;
+    let axis = if ext.x > ext.y && ext.x > ext.z { 0 }
+               else if ext.y > ext.z            { 1 }
+               else                            { 2 };
+    // sort & pick median
+    cents.sort_by(|a,b| a[axis].partial_cmp(&b[axis]).unwrap());
+    let median = cents[cents.len()/2][axis];
+    // build axis‐aligned plane
+    let normal = match axis {
+        0 => Vector3::unit_x(),
+        1 => Vector3::unit_y(),
+        _ => Vector3::unit_z(),
+    };
+    let mut pt = bb.min;
+    pt[axis] = median;
+    Plane::new(normal, pt)
+}
+
 // Upravená funkce build_bsp, která přiřazuje ID uzlům
 fn build_bsp(triangles: &[Triangle], depth: u32, next_id: &mut usize) -> BspNode {
-    const MAX_DEPTH: u32 = 20;
-    const MIN_TRIANGLES: usize = 50;
+    const MAX_DEPTH: u32 = 16;
+    const MIN_TRIANGLES: usize = 20;
 
     let my_id = *next_id;
     *next_id += 1;
@@ -301,8 +325,8 @@ fn build_bsp(triangles: &[Triangle], depth: u32, next_id: &mut usize) -> BspNode
         return BspNode::new_leaf(Vec::new(), my_id);
     }
 
-    // Výběr dělicí roviny - použijeme rovinu prvního trojúhelníku
-    let splitting_plane = plane_from_triangle(&triangles[0]);
+    // Use median split plane instead of first triangle's plane
+    let splitting_plane = median_split_plane(triangles);
 
     // Paralelní klasifikace trojúhelníků pomocí Rayon
     let (front_triangles, back_triangles): (Vec<Triangle>, Vec<Triangle>) = triangles.par_iter()
@@ -312,29 +336,16 @@ fn build_bsp(triangles: &[Triangle], depth: u32, next_id: &mut usize) -> BspNode
             splitting_plane.classify(center) >= 0
         });
 
-    // Rekurzivní stavba podstromů - můžeme paralelizovat, pokud jsme v horních úrovních stromu
-    if depth < 5 {
-        // Pro horní úrovně použijeme paralelní zpracování s předáním next_id
-        let mut front_id = *next_id;
-        *next_id += 1;
-        let mut back_id = *next_id;
-        *next_id += 1;
-        
-        let (front_node, back_node) = rayon::join(
-            || build_bsp(&front_triangles, depth + 1, &mut front_id),
-            || build_bsp(&back_triangles, depth + 1, &mut back_id)
-        );
-        
-        // Aktualizujeme next_id na nejvyšší hodnotu z obou větví
-        *next_id = front_id.max(back_id);
-        
-        BspNode::new_node(splitting_plane, front_node, back_node, my_id)
-    } else {
-        // Pro hlubší úrovně zůstaneme u sekvenčního zpracování
-        let front_node = build_bsp(&front_triangles, depth + 1, next_id);
-        let back_node = build_bsp(&back_triangles, depth + 1, next_id);
-        BspNode::new_node(splitting_plane, front_node, back_node, my_id)
+    // ✂️ degenerate split → leaf
+    if front_triangles.is_empty() || back_triangles.is_empty() {
+        return BspNode::new_leaf(triangles.to_vec(), my_id);
     }
+
+    // Rekurzivní stavba podstromů - use sequential processing to fix ID assignment
+    let front_node = build_bsp(&front_triangles, depth + 1, next_id);
+    let back_node = build_bsp(&back_triangles, depth + 1, next_id);
+    
+    BspNode::new_node(splitting_plane, front_node, back_node, my_id)
 }
 
 // Funkce pro rekurzivní hledání uzlu podle ID
