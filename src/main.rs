@@ -31,6 +31,19 @@ use std::thread;
 use three_d::*;
 use rayon::prelude::*; // Add Rayon prelude for parallelization
 
+// Message types for the channel
+#[derive(Debug)]
+enum Message {
+    InitialTree(BspNode),
+    NewFile { 
+        cpu_mesh: CpuMesh, 
+        triangles: Vec<Triangle>, 
+        file_name: String, 
+        load_status: String, 
+        bsp_tree: BspNode 
+    },
+}
+
 // před funkci main přidáme enum pro sledování stavu kláves
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum KeyState {
@@ -215,6 +228,7 @@ impl Plane {
     }
 }
 
+#[derive(Debug)]
 struct BspNode {
     id: usize,
     plane: Option<Plane>,
@@ -1023,11 +1037,16 @@ fn main() -> Result<()> {
     let (cpu_mesh, _load_status) = load_cpu_mesh(initial_path);
     println!("✓ Model načten");
 
-    let _loaded_file_name = if initial_path.exists() {
+    let mut loaded_file_name = if initial_path.exists() {
         initial_path.file_name().unwrap().to_string_lossy().into_owned()
     } else {
         "embedded sphere".to_string()
     };
+
+    // Add state for file loading
+    let mut current_cpu_mesh = cpu_mesh.clone();
+    let mut current_triangles = cpu_mesh_to_triangles(&cpu_mesh);
+    let mut file_loading = false;
 
     // Vytvoření triangles z CPU meshe
     println!("🔺 Převádím mesh na trojúhelníky...");
@@ -1040,12 +1059,15 @@ fn main() -> Result<()> {
     let triangles_clone = triangles.clone();
     let (tx, rx) = mpsc::channel();
 
+    // Vytvoření klonu tx pro GUI
+    let tx_gui = tx.clone();
+
     // Spuštění stavby BSP stromu v jiném vlákně
     thread::spawn(move || {
         let mut next_id = 0;
         let tree = build_bsp(&triangles_clone, 0, &mut next_id);
         println!("✓ BSP strom sestaven s {} uzly", tree.count_nodes());
-        tx.send(tree).unwrap();
+        tx.send(Message::InitialTree(tree)).unwrap();
     });
 
     // Inicializujeme výchozí statistiky
@@ -1134,10 +1156,24 @@ fn main() -> Result<()> {
         let events = &frame_input.events;
 
         // Zkontroluj, zda background thread dokončil stavbu BSP stromu
-        if let Ok(tree) = rx.try_recv() {
-            total_stats.total_nodes = tree.count_nodes();
-            bsp_root = Some(tree);
-            println!("✅ BSP strom úspěšně načten do GUI!");
+        if let Ok(message) = rx.try_recv() {
+            match message {
+                Message::InitialTree(tree) => {
+                    total_stats.total_nodes = tree.count_nodes();
+                    bsp_root = Some(tree);
+                    println!("✅ BSP strom úspěšně načten do GUI!");
+                }
+                Message::NewFile { cpu_mesh: new_cpu_mesh, triangles: new_triangles, file_name, load_status: _, bsp_tree } => {
+                    current_cpu_mesh = new_cpu_mesh;
+                    current_triangles = new_triangles;
+                    loaded_file_name = file_name;
+                    file_loading = false;
+                    bsp_root = Some(bsp_tree);
+                    total_stats.total_nodes = bsp_root.as_ref().unwrap().count_nodes();
+                    total_stats.total_triangles = current_triangles.len() as u32;
+                    println!("✅ Nový model a BSP strom načteny!");
+                }
+            }
         }
 
         // Aktualizuj stav kláves v InputManageru
@@ -1207,6 +1243,50 @@ fn main() -> Result<()> {
             egui::SidePanel::left("tree").show(ctx, |ui| {
                 ui.heading("BSP Strom");
                 ui.label(format!("Režim: {:?}", mode));
+
+                // Nová sekce pro načtení souboru - přesunuto na začátek
+                ui.separator();
+                ui.heading("Načtení modelu");
+                ui.label("Aktuální model:");
+                ui.label(format!("{}", loaded_file_name));
+
+                // Tlačítko pro načtení souboru
+                if ui.button("📁 Načíst nový model").clicked() {
+                    // Otevření dialogu pro výběr souboru
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("GLTF/GLB files", &["gltf", "glb"])
+                        .pick_file() {
+                            // Načítání nového souboru na pozadí
+                            file_loading = true;
+                            let path_clone = path.clone();
+                            let file_name_clone = path.file_name().unwrap().to_string_lossy().into_owned();
+                            let tx_gui_clone = tx_gui.clone();
+
+                            // Asynchronní načítání souboru
+                            thread::spawn(move || {
+                                let (new_cpu_mesh, load_status) = load_cpu_mesh(&path_clone);
+
+                                // Odeslání zprávy do hlavního vlákna
+                                let _ = tx_gui_clone.send(Message::NewFile {
+                                    cpu_mesh: new_cpu_mesh,
+                                    file_name: file_name_clone,
+                                    load_status,
+                                    triangles: Vec::new(),
+                                    bsp_tree: BspNode::new_leaf(Vec::new(), 0) // Prázdný uzel jako placeholder
+                                });
+                            });
+                        }
+                }
+
+                // Indikátor načítání
+                if file_loading {
+                    ui.add(
+                        egui::ProgressBar::new(0.0)
+                            .desired_width(ui.available_width())
+                            .text("Načítání modelu a stavba BSP stromu...")
+                            .animate(true)
+                    );
+                }
 
                 // Pokud se strom ještě nestihl zkonstruovat:
                 if bsp_root.is_none() {
@@ -1349,6 +1429,79 @@ fn main() -> Result<()> {
                     (spectator_state.pos - third_person_state.pos).magnitude()));
                 
                 ui.checkbox(&mut show_camera_direction, "Zobrazit směr pohledu kamery");
+
+                // Nová sekce pro načtení souboru
+                ui.separator();
+                ui.heading("Načtení modelu");
+                ui.label("Aktuální model:");
+                ui.label(format!("{}", loaded_file_name));
+
+                // Tlačítko pro načtení souboru
+                if ui.button("Načíst nový model").clicked() {
+                    // Otevření dialogu pro výběr souboru
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("GLTF/GLB files", &["gltf", "glb"])
+                        .pick_file() {
+                            // Načítání nového souboru na pozadí
+                            file_loading = true;
+                            let path_clone = path.clone();
+                            let file_name_clone = path.file_name().unwrap().to_string_lossy().into_owned();
+                            let tx_gui_clone = tx_gui.clone();
+
+                            // Asynchronní načítání souboru
+                            thread::spawn(move || {
+                                let (new_cpu_mesh, load_status) = load_cpu_mesh(&path_clone);
+
+                                // Odeslání zprávy do hlavního vlákna
+                                let _ = tx_gui_clone.send(Message::NewFile {
+                                    cpu_mesh: new_cpu_mesh,
+                                    file_name: file_name_clone,
+                                    load_status,
+                                    triangles: Vec::new(),
+                                    bsp_tree: BspNode::new_leaf(Vec::new(), 0) // Prázdný uzel jako placeholder
+                                });
+                            });
+                        }
+                }
+
+                // Indikátor načítání
+                if file_loading {
+                    ui.label("Načítání nového modelu...");
+                    // Indeterminovaný progress bar
+                    ui.add(
+                        egui::ProgressBar::new(0.0)
+                            .desired_width(ui.available_width())
+                            .animate(true)
+                    );
+                }
+
+                // Zpráva o úspěšnosti načtení souboru
+                if let Ok(msg) = rx.try_recv() {
+                    match msg {
+                        Message::NewFile { cpu_mesh, file_name, load_status, triangles, bsp_tree } => {
+                            current_cpu_mesh = cpu_mesh;
+                            loaded_file_name = file_name;
+                            file_loading = false;
+
+                            // Převod nového meshe na trojúhelníky
+                            current_triangles = cpu_mesh_to_triangles(&current_cpu_mesh);
+
+                            // Stavba nového BSP stromu
+                            let mut next_id = 0;
+                            bsp_root = Some(build_bsp(&current_triangles, 0, &mut next_id));
+                        },
+                        _ => {}
+                    }
+                }
+
+                // Debug info o načteném souboru
+                ui.label("Debug info:");
+                ui.label(format!("Vrcholy: {}", current_cpu_mesh.positions.len()));
+                match &current_cpu_mesh.indices {
+                    Indices::U32(idx) => ui.label(format!("Indexy (U32): {}", idx.len())),
+                    Indices::U16(idx) => ui.label(format!("Indexy (U16): {}", idx.len())),
+                    _ => ui.label("Indexy: žádné"),
+                };
             });
         });
 
@@ -1550,7 +1703,7 @@ fn main() -> Result<()> {
                     )
                 };
                 
-                // Měřítko - válec je standardně výšky 2.0, chceme jej natáhnout na délku `length`
+                // Měřítko - válec - válec je standardně výšky 2.0, chceme jej natáhnout na délku `length`
                 // a zúžit na šířku `scale`
                 let scaling = Mat4::from_nonuniform_scale(scale, length / 2.0, scale);
                 
@@ -1827,7 +1980,7 @@ fn create_direction_ray(context: &Context, position: Vector3<f32>, direction: Ve
             Rad(angle)
         )
     };
-
+    
     // Měřítko - válec - válec je standardně výšky 2.0, chceme jej natáhnout na délku `length`
     // a zúžit na šířku `scale`
     let scaling = Mat4::from_nonuniform_scale(scale, length / 2.0, scale);
