@@ -11,7 +11,7 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: add triangle count caching in BSP tree nodes and improve rendering of node selection">
+    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: implement asynchronous file loading and update BSP tree in GUI">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
@@ -313,14 +313,21 @@
       <option name="project" value="LOCAL" />
       <updated>1751794305028</updated>
     </task>
-    <option name="localTasksCounter" value="26" />
+    <task id="LOCAL-00026" summary="feat: implement asynchronous file loading and update BSP tree in GUI">
+      <option name="closed" value="true" />
+      <created>1751829240200</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1751829240200</updated>
+    </task>
+    <option name="localTasksCounter" value="27" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="initialize new Rust project with basic structure and configuration files" />
     <MESSAGE value="update project configuration and implement BSP tree structure in main.rs" />
     <MESSAGE value="refactor: update project configuration and rename to bsp_viewer with new dependencies" />
     <MESSAGE value="refactor: rename project to BSP-Strom-Mapa and update dependencies in Cargo files" />
@@ -345,6 +352,7 @@
     <MESSAGE value="feat: add unique ID assignment to BSP tree nodes and enhance rendering UI for node selection" />
     <MESSAGE value="feat: implement median split plane for BSP tree and improve ID assignment logic" />
     <MESSAGE value="feat: add triangle count caching in BSP tree nodes and improve rendering of node selection" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: add triangle count caching in BSP tree nodes and improve rendering of node selection" />
+    <MESSAGE value="feat: implement asynchronous file loading and update BSP tree in GUI" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: implement asynchronous file loading and update BSP tree in GUI" />
   </component>
 </project>

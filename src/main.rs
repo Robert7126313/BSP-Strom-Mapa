@@ -35,12 +35,12 @@ use rayon::prelude::*; // Add Rayon prelude for parallelization
 #[derive(Debug)]
 enum Message {
     InitialTree(BspNode),
-    NewFile { 
-        cpu_mesh: CpuMesh, 
-        triangles: Vec<Triangle>, 
-        file_name: String, 
-        load_status: String, 
-        bsp_tree: BspNode 
+    NewFile {
+        cpu_mesh: CpuMesh,
+        triangles: Vec<Triangle>,
+        file_name: String,
+        load_status: String,
+        bsp_tree: BspNode
     },
 }
 
@@ -1220,8 +1220,8 @@ fn main() -> Result<()> {
 
         // CPU culling - použijeme původní CPU implementaci nebo zobrazíme vše
         let mut cpu_visible_triangles = Vec::new();
-        if disable_culling && mode == CamMode::Spectator {
-            // Když je culling vypnutý a jsme v režimu Spectator, sbíráme všechny trojúhelníky
+        if disable_culling {
+            // Když je culling vypnutý, sbíráme všechny trojúhelníky
             if let Some(ref root) = bsp_root {
                 collect_triangles_in_subtree(root, &mut cpu_visible_triangles);
                 current_stats.nodes_visited = current_stats.total_nodes;
@@ -1313,9 +1313,6 @@ fn main() -> Result<()> {
                 ui.checkbox(&mut disable_culling, "Zobrazit celý BSP strom (bez cullingu)");
                 if disable_culling {
                     ui.label("Varování: Zobrazení celého stromu může zpomalit vykreslování.");
-                }
-                if disable_culling && mode != CamMode::Spectator {
-                    ui.label("Poznámka: Tato funkce je aktivní pouze v režimu Spectator.");
                 }
                 
                 // Použijeme scrollovatelné okno pro zobrazení stromu, aby nepřetekl
