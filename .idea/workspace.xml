@@ -11,8 +11,11 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="feat: implement asynchronous file loading and update BSP tree in GUI">
+    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="perf: switch to structure-of-arrays for triangle centroid computation in BSP split">
+      <change afterPath="$PROJECT_DIR$/src/gpu_job.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -329,14 +332,21 @@
       <option name="project" value="LOCAL" />
       <updated>1751890410724</updated>
     </task>
-    <option name="localTasksCounter" value="28" />
+    <task id="LOCAL-00028" summary="perf: switch to structure-of-arrays for triangle centroid computation in BSP split">
+      <option name="closed" value="true" />
+      <created>1751897085685</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1751897085685</updated>
+    </task>
+    <option name="localTasksCounter" value="29" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="refactor: update project configuration and rename to bsp_viewer with new dependencies" />
     <MESSAGE value="refactor: rename project to BSP-Strom-Mapa and update dependencies in Cargo files" />
     <MESSAGE value="feat: add BSP tree controls and update UI for spectator mode" />
     <MESSAGE value="feat: add rfd dependency and implement file dialog for GLB model loading" />
@@ -361,6 +371,7 @@
     <MESSAGE value="feat: add triangle count caching in BSP tree nodes and improve rendering of node selection" />
     <MESSAGE value="feat: implement asynchronous file loading and update BSP tree in GUI" />
     <MESSAGE value="feat: highlight triangles in selected BSP subtree during rendering" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: highlight triangles in selected BSP subtree during rendering" />
+    <MESSAGE value="perf: switch to structure-of-arrays for triangle centroid computation in BSP split" />
+    <option name="LAST_COMMIT_MESSAGE" value="perf: switch to structure-of-arrays for triangle centroid computation in BSP split" />
   </component>
 </project>

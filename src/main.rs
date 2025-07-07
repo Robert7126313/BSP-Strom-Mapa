@@ -31,6 +31,8 @@ use std::thread;
 use three_d::*;
 use rayon::prelude::*; // Add Rayon prelude for parallelization
 
+mod gpu_job;
+
 // Message types for the channel
 #[derive(Debug)]
 enum Message {
@@ -1378,7 +1380,7 @@ fn main() -> Result<()> {
                             ui.heading("Vybraný uzel");
                             ui.label(format!("ID: {}", node.id));
                             ui.label(format!("Trojúhelníků: {}", node.triangles.len()));
-
+                
                             if let Some(ref plane) = node.plane {
                                 ui.label("Dělící rovina:");
                                 ui.label(format!("Normála: ({:.2}, {:.2}, {:.2})",
@@ -1387,12 +1389,17 @@ fn main() -> Result<()> {
                             } else {
                                 ui.label("List (bez dělící roviny)");
                             }
-
+                
                             ui.label("Obalový objem:");
                             ui.label(format!("Min: ({:.2}, {:.2}, {:.2})",
                                 node.bounds.min.x, node.bounds.min.y, node.bounds.min.z));
                             ui.label(format!("Max: ({:.2}, {:.2}, {:.2})",
                                 node.bounds.max.x, node.bounds.max.y, node.bounds.max.z));
+                
+                            // Přidáno tlačítko pro odznačení
+                            if ui.button("Odznačit").clicked() {
+                                selected_node = None;
+                            }
                         }
                     }
                 }
