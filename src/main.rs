@@ -583,12 +583,16 @@ fn render_bsp_tree(ui: &mut egui::Ui, node: &BspNode, selected: &mut Option<usiz
 
 // Funkce pro sběr všech trojúhelníků v podstromu
 fn collect_triangles_in_subtree(node: &BspNode, triangles: &mut Vec<Triangle>) {
-    triangles.extend(node.triangles.iter().cloned());
-    if let Some(ref front) = node.front {
-        collect_triangles_in_subtree(front, triangles);
-    }
-    if let Some(ref back) = node.back {
-        collect_triangles_in_subtree(back, triangles);
+    // Iterativní varianta pro lepší výkon a menší stack usage
+    let mut stack = vec![node];
+    while let Some(n) = stack.pop() {
+        triangles.extend(n.triangles.iter().cloned());
+        if let Some(ref front) = n.front {
+            stack.push(front);
+        }
+        if let Some(ref back) = n.back {
+            stack.push(back);
+        }
     }
 }
 
@@ -1779,7 +1783,7 @@ fn main() -> Result<()> {
 
 // Funkce pro převod CpuMesh na Triangle struktury
 fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
-    let mut triangles = Vec::new();
+    let mut triangles = Vec::with_capacity(mesh.positions.len() / 3);
 
     // Získáme pozice vrcholů z meshe
     let positions = match &mesh.positions {
@@ -1856,7 +1860,6 @@ fn traverse_bsp_with_frustum(
     stats: &mut BspStats,
     visible_triangles: &mut Vec<Triangle>
 ) {
-    // Inkrementujeme počítadlo navštívených uzlů
     stats.nodes_visited += 1;
 
     // Nejprve zkontrolujeme, zda obalový objem uzlu protíná frustum
@@ -1871,7 +1874,12 @@ fn traverse_bsp_with_frustum(
     }
 
     if !is_visible {
-        return; // Uzel je mimo frustum, končíme
+        return;
+    }
+
+    // Pokud je list a nemá trojúhelníky, ukonči dříve
+    if node.triangles.is_empty() && node.plane.is_none() {
+        return;
     }
 
     // Přidáme trojúhelníky z tohoto uzlu do viditelných
@@ -2074,13 +2082,19 @@ impl BoundingBox {
         if triangles.is_empty() {
             return Self::new_empty();
         }
-
-        let mut bounds = Self::from_triangle(&triangles[0]);
-        for tri in triangles.iter().skip(1) {
-            let tri_bounds = Self::from_triangle(tri);
-            bounds = Self::encompass(&bounds, &tri_bounds);
+        let mut min = Vector3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
+        let mut max = Vector3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
+        for tri in triangles {
+            for v in [&tri.a, &tri.b, &tri.c] {
+                min.x = min.x.min(v.x);
+                min.y = min.y.min(v.y);
+                min.z = min.z.min(v.z);
+                max.x = max.x.max(v.x);
+                max.y = max.y.max(v.y);
+                max.z = max.z.max(v.z);
+            }
         }
-        bounds
+        BoundingBox { min, max }
     }
 
     fn encompass(box1: &Self, box2: &Self) -> Self {
