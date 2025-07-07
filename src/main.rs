@@ -1751,6 +1751,23 @@ fn main() -> Result<()> {
         if let Some(ref h) = highlight_model {
             objects_to_render.push(h);
         }
+        // --- ZOBRAZENÍ DĚLÍCÍ ROVINY ---
+        let mut splitting_plane_mesh = None;
+        if show_splitting_plane {
+            if let Some(sel_id) = selected_node {
+                if let Some(ref root) = bsp_root {
+                    if let Some(node) = find_node(root, sel_id) {
+                        if let Some(ref plane) = node.plane {
+                            // Vytvoř mesh dělící roviny pro vybraný uzel
+                            splitting_plane_mesh = Some(create_plane_mesh(plane, &node.bounds, &context));
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(ref plane_mesh) = splitting_plane_mesh {
+            objects_to_render.push(plane_mesh);
+        }
         // ... další objekty ...
         screen.render(&cam.cam(frame_input.viewport), &objects_to_render, &[&ambient_light]);
         let _ = gui.render();

@@ -321,14 +321,21 @@
       <option name="project" value="LOCAL" />
       <updated>1751829240200</updated>
     </task>
-    <option name="localTasksCounter" value="27" />
+    <task id="LOCAL-00027" summary="feat: highlight triangles in selected BSP subtree during rendering">
+      <option name="closed" value="true" />
+      <created>1751890410724</created>
+      <option name="number" value="00027" />
+      <option name="presentableId" value="LOCAL-00027" />
+      <option name="project" value="LOCAL" />
+      <updated>1751890410724</updated>
+    </task>
+    <option name="localTasksCounter" value="28" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="update project configuration and implement BSP tree structure in main.rs" />
     <MESSAGE value="refactor: update project configuration and rename to bsp_viewer with new dependencies" />
     <MESSAGE value="refactor: rename project to BSP-Strom-Mapa and update dependencies in Cargo files" />
     <MESSAGE value="feat: add BSP tree controls and update UI for spectator mode" />
@@ -353,6 +360,7 @@
     <MESSAGE value="feat: implement median split plane for BSP tree and improve ID assignment logic" />
     <MESSAGE value="feat: add triangle count caching in BSP tree nodes and improve rendering of node selection" />
     <MESSAGE value="feat: implement asynchronous file loading and update BSP tree in GUI" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat: implement asynchronous file loading and update BSP tree in GUI" />
+    <MESSAGE value="feat: highlight triangles in selected BSP subtree during rendering" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat: highlight triangles in selected BSP subtree during rendering" />
   </component>
 </project>
