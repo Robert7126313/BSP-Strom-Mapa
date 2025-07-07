@@ -331,15 +331,20 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
     let parent_bb = BoundingBox::from_triangles(tris);
     let parent_sa = parent_bb.surface_area();
 
-    // 2) Spočti centroidy a rozsah
+    // 2) Spočti centroidy a rozsah (SoA)
     let mut mins = Vector3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
     let mut maxs = Vector3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
-    let cents: Vec<_> = tris.iter().map(|t| {
+    let mut centroid_x = Vec::with_capacity(tris.len());
+    let mut centroid_y = Vec::with_capacity(tris.len());
+    let mut centroid_z = Vec::with_capacity(tris.len());
+    for t in tris.iter() {
         let c = triangle_center(t);
         mins = mins.map2(c, |a, b| a.min(b));
         maxs = maxs.map2(c, |a, b| a.max(b));
-        c
-    }).collect();
+        centroid_x.push(c.x);
+        centroid_y.push(c.y);
+        centroid_z.push(c.z);
+    }
 
     let extent = maxs - mins;
 
@@ -382,9 +387,15 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
     ];
 
     // 5) Jediný průchod: přiřaď každý trojúhelník do bucketu
-    for (tri, &c) in tris.iter().zip(cents.iter()) {
-        let t = ((c[axis] - mins[axis]) / extent[axis] * (buckets as f32))
-                    .floor().clamp(0.0, (buckets - 1) as f32) as usize;
+    let centroid_axis = match axis {
+        0 => &centroid_x,
+        1 => &centroid_y,
+        _ => &centroid_z,
+    };
+    for (i, tri) in tris.iter().enumerate() {
+        let c_axis = centroid_axis[i];
+        let t = ((c_axis - mins[axis]) / extent[axis] * (buckets as f32))
+            .floor().clamp(0.0, (buckets - 1) as f32) as usize;
         let b = &mut buckets_data[t];
         b.count += 1;
         b.bb = BoundingBox::encompass(&b.bb, &BoundingBox::from_triangle(tri));
