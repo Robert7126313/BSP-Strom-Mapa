@@ -2,6 +2,7 @@
 // Camera utilities
 
 use cgmath::{Vector3, Deg};
+use std::f32::consts::FRAC_PI_2;
 use three_d::*;
 use crate::input::{InputManager, KeyCode};
 
