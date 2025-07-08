@@ -874,4 +874,15 @@ impl Frustum {
             planes: [left, right, bottom, top, near, far],
         }
     }
+
+    pub fn as_vec4_array(&self) -> [[f32; 4]; 6] {
+        [
+            [self.planes[0].n.x, self.planes[0].n.y, self.planes[0].n.z, self.planes[0].d],
+            [self.planes[1].n.x, self.planes[1].n.y, self.planes[1].n.z, self.planes[1].d],
+            [self.planes[2].n.x, self.planes[2].n.y, self.planes[2].n.z, self.planes[2].d],
+            [self.planes[3].n.x, self.planes[3].n.y, self.planes[3].n.z, self.planes[3].d],
+            [self.planes[4].n.x, self.planes[4].n.y, self.planes[4].n.z, self.planes[4].d],
+            [self.planes[5].n.x, self.planes[5].n.y, self.planes[5].n.z, self.planes[5].d],
+        ]
+    }
 }
