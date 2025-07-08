@@ -13,7 +13,6 @@ pub fn draw_left_panel(
     selected_node: &mut Option<usize>,
     show_splitting_plane: &mut bool,
     disable_culling: &mut bool,
-    use_gpu_culling: &mut bool,
     show_camera_direction: &mut bool,
     spectator_state: &mut crate::camera::CameraState,
     third_person_state: &mut crate::camera::CameraState,
@@ -86,7 +85,6 @@ pub fn draw_left_panel(
             if *disable_culling {
                 ui.label("Varování: Zobrazení celého stromu může zpomalit vykreslování.");
             }
-            ui.checkbox(use_gpu_culling, "Použít GPU culling");
 
             egui::ScrollArea::vertical().show(ui, |ui| {
                 let root = bsp_root.as_ref().unwrap();
