@@ -11,9 +11,13 @@ layout(std430, binding = 1) writeonly buffer OutFlags {
 };
 
 uniform vec4 frustum[6];
+uniform uint num_tris;
 
 void main() {
     uint idx = gl_GlobalInvocationID.x;
+    if(idx >= num_tris) {
+        return;
+    }
     uint base = idx * 3u;
     vec3 a = vertices[base].xyz;
     vec3 b = vertices[base + 1u].xyz;
