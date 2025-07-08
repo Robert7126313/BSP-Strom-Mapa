@@ -179,43 +179,8 @@ pub fn draw_left_panel(
             ui.label(format!("Vzdálenost mezi kamerami: {:.1}", (spectator_state.pos - third_person_state.pos).magnitude()));
             ui.checkbox(show_camera_direction, "Zobrazit směr pohledu kamery");
 
-            ui.separator();
-            ui.heading("Načtení modelu");
-            ui.label("Aktuální model:");
-            ui.label(loaded_file_name.as_str());
-            if ui.button("Načíst nový model").clicked() {
-                if let Some(path) = rfd::FileDialog::new()
-                    .add_filter("GLTF/GLB files", &["gltf", "glb"])
-                    .pick_file()
-                {
-                    *file_loading = true;
-                    let path_clone = path.clone();
-                    let file_name_clone = path
-                        .file_name()
-                        .unwrap()
-                        .to_string_lossy()
-                        .into_owned();
-                    let tx_gui_clone = tx_gui.clone();
-                    std::thread::spawn(move || {
-                        let (new_cpu_mesh, load_status) = crate::load_cpu_mesh(&path_clone);
-                        let _ = tx_gui_clone.send(crate::Message::NewFile {
-                            cpu_mesh: new_cpu_mesh,
-                            file_name: file_name_clone,
-                            load_status,
-                            triangles: Vec::new(),
-                            bsp_tree: crate::bsp::BspNode::new_leaf(Vec::new(), 0),
-                        });
-                    });
-                }
-            }
-            if *file_loading {
-                ui.label("Načítání nového modelu...");
-                ui.add(
-                    egui::ProgressBar::new(0.0)
-                        .desired_width(ui.available_width())
-                        .animate(true),
-                );
-            }
+
+
             if let Ok(msg) = rx.try_recv() {
                 match msg {
                     crate::Message::NewFile { cpu_mesh, file_name, load_status: _, triangles: _, bsp_tree: _ } => {
@@ -229,13 +194,7 @@ pub fn draw_left_panel(
                     _ => {}
                 }
             }
-            ui.label("Debug info:");
-            ui.label(format!("Vrcholy: {}", current_cpu_mesh.positions.len()));
-            match &current_cpu_mesh.indices {
-                three_d_asset::Indices::U32(idx) => ui.label(format!("Indexy (U32): {}", idx.len())),
-                three_d_asset::Indices::U16(idx) => ui.label(format!("Indexy (U16): {}", idx.len())),
-                _ => ui.label("Indexy: žádné"),
-            };
+
         });
     });
 }
