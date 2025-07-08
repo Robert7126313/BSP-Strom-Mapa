@@ -542,13 +542,11 @@ fn main() -> Result<()> {
 
         // Výběr culling metody
         let visible_triangles = if disable_culling {
-            let mut tris = Vec::new();
-            if let Some(ref root) = bsp_root {
-                collect_triangles_in_subtree(root, &mut tris);
-                current_stats.nodes_visited = current_stats.total_nodes;
-                current_stats.triangles_rendered = current_stats.total_triangles;
-            }
-            tris
+            // If culling is disabled, render all triangles without traversing
+            // the BSP tree each frame.
+            current_stats.nodes_visited = current_stats.total_nodes;
+            current_stats.triangles_rendered = current_stats.total_triangles;
+            current_triangles.clone()
         } else if use_gpu_culling {
             if let Some(ref job) = gpu_job {
                 gpu_cull_triangles(job, &current_triangles, &frustum)
