@@ -296,8 +296,10 @@ fn gpu_cull_triangles(job: &GpuJob, tris: &[Triangle], frustum: &Frustum) -> Vec
     }
     unsafe {
         let loc = job.gl.get_uniform_location(job.prog, "frustum").unwrap();
+        let count_loc = job.gl.get_uniform_location(job.prog, "num_tris").unwrap();
         job.gl.use_program(Some(job.prog));
         job.gl.uniform_4_f32_slice(Some(&loc), &flat);
+        job.gl.uniform_1_u32(Some(&count_loc), tris.len() as u32);
         let groups = ((tris.len() as u32) + 63) / 64;
         job.dispatch(groups, 1, 1);
     }
@@ -344,6 +346,7 @@ fn main() -> Result<()> {
     let mut current_cpu_mesh = cpu_mesh.clone();
     let mut current_triangles = cpu_mesh_to_triangles(&cpu_mesh);
     let mut file_loading = false;
+    let mut gpu_job: Option<GpuJob> = None;
 
     // Vytvoření triangles z CPU meshe
     println!("🔺 Převádím mesh na trojúhelníky...");
@@ -389,7 +392,6 @@ fn main() -> Result<()> {
     let mut disable_culling = false;
     // Volba pro GPU akceleraci frustum cullingu
     let mut use_gpu_culling = false;
-    let mut gpu_job: Option<GpuJob> = None;
 
     // stav pro vykreslovaný mesh
     let _glb_path: Option<PathBuf> = None;
