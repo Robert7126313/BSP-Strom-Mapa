@@ -49,7 +49,10 @@ impl GpuJob {
             .gl
             .bind_buffer_base(glow::SHADER_STORAGE_BUFFER, 1, Some(self.out_buffer));
         self.gl.dispatch_compute(x, y, z);
-        self.gl.memory_barrier(glow::SHADER_STORAGE_BARRIER_BIT);
+        // Ensure compute writes are visible when reading the buffer on CPU
+        self.gl.memory_barrier(
+            glow::SHADER_STORAGE_BARRIER_BIT | glow::BUFFER_UPDATE_BARRIER_BIT,
+        );
     }
 
     pub unsafe fn read_ssbo_u8(&self, size: usize) -> Vec<u8> {
