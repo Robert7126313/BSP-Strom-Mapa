@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use cgmath::Vector3;
+use cgmath::InnerSpace;
 use three_d::*;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]

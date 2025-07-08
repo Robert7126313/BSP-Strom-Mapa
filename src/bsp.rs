@@ -6,11 +6,13 @@ use three_d::*;
 
 // ---------------- BSP Implementation -------------------------------------- //
 
+const MAX_DEPTH: u32 = 16;
+
 #[derive(Clone, Debug)]
 pub struct Triangle {
-    a: Vector3<f32>,
-    b: Vector3<f32>,
-    c: Vector3<f32>,
+    pub a: Vector3<f32>,
+    pub b: Vector3<f32>,
+    pub c: Vector3<f32>,
 }
 
 #[derive(Clone, Debug)]
@@ -280,7 +282,6 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
 
 // Upravená funkce build_bsp, která přiřazuje ID uzlům
 pub fn build_bsp(triangles: &[Triangle], depth: u32, next_id: &mut usize) -> BspNode {
-pub     const MAX_DEPTH: u32 = 16;
     const MIN_TRIANGLES: usize = 20;
 
     let my_id = *next_id;
