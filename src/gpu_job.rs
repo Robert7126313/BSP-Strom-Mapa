@@ -1,3 +1,4 @@
+use three_d::context as glow;
 use glow::HasContext;
 
 pub struct GpuJob {

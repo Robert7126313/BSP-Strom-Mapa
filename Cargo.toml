@@ -12,4 +12,3 @@ three-d-asset   = "0.9"
 rfd             = "0.9"
 gltf            = { version = "1.4", features = ["extras", "names"] }
 rayon           = "1.10.0"
-glow = "0.16.0"
