@@ -17,8 +17,8 @@ pub struct Triangle {
 
 #[derive(Clone, Debug)]
 pub struct Plane {
-    n: Vector3<f32>,  // normála
-    d: f32,           // vzdálenost od počátku (ax+by+cz+d=0)
+    pub n: Vector3<f32>,  // normála
+    pub d: f32,           // vzdálenost od počátku (ax+by+cz+d=0)
 }
 
 impl Plane {
@@ -45,26 +45,26 @@ impl Plane {
 
 #[derive(Debug)]
 pub struct BspNode {
-    id: usize,
-    plane: Option<Plane>,
-    front: Option<Box<BspNode>>,
-    back: Option<Box<BspNode>>,
-    triangles: Vec<Triangle>,
-    bounds: BoundingBox,
+    pub id: usize,
+    pub plane: Option<Plane>,
+    pub front: Option<Box<BspNode>>,
+    pub back: Option<Box<BspNode>>,
+    pub triangles: Vec<Triangle>,
+    pub bounds: BoundingBox,
     node_count: u32, // Cache the total number of nodes in this subtree
     subtree_tris: u32, // Cache the total number of triangles in this subtree
 }
 
 #[derive(Default)]
 pub struct BspStats {
-    nodes_visited: u32,
-    triangles_rendered: u32,
-    total_nodes: u32,
-    total_triangles: u32,
+    pub nodes_visited: u32,
+    pub triangles_rendered: u32,
+    pub total_nodes: u32,
+    pub total_triangles: u32,
 }
 
 impl BspNode {
-    fn new_leaf(triangles: Vec<Triangle>, id: usize) -> Self {
+    pub fn new_leaf(triangles: Vec<Triangle>, id: usize) -> Self {
         Self {
             id,
             plane: None,
@@ -97,7 +97,7 @@ impl BspNode {
         }
     }
 
-    fn count_nodes(&self) -> u32 {
+    pub fn count_nodes(&self) -> u32 {
         1 + self.front.as_ref().map_or(0, |n| n.count_nodes()) + 
             self.back.as_ref().map_or(0, |n| n.count_nodes())
     }
@@ -136,7 +136,7 @@ impl Vector3Ext<f32> for Vector3<f32> {
     }
 }
 
-fn triangle_center(tri: &Triangle) -> Vector3<f32> {
+pub fn triangle_center(tri: &Triangle) -> Vector3<f32> {
     (tri.a + tri.b + tri.c) / 3.0
 }
 
@@ -707,9 +707,10 @@ fn create_direction_ray(context: &Context, position: Vector3<f32>, direction: Ve
     direction_ray
 }
 
+#[derive(Clone, Debug)]
 pub struct BoundingBox {
-    min: Vector3<f32>,
-    max: Vector3<f32>,
+    pub min: Vector3<f32>,
+    pub max: Vector3<f32>,
 }
 
 impl BoundingBox {
@@ -796,7 +797,7 @@ pub struct Frustum {
 }
 
 impl Frustum {
-    fn from_camera(camera: &Camera) -> Self {
+    pub fn from_camera(camera: &Camera) -> Self {
         // Získáme view-projection matici
         let vp_matrix = camera.projection() * camera.view();
 

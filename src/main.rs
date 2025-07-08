@@ -32,7 +32,7 @@ use rayon::prelude::*; // Add Rayon prelude for parallelization
 mod gpu_job;
 use crate::input::{InputManager, KeyCode};
 use crate::camera::{FreeCamera, CamMode, CameraState, SwitchDelay};
-use crate::bsp::{BspNode, BspStats, Triangle, Frustum, build_bsp, find_node, find_node_path, collect_triangles_in_subtree, create_plane_mesh, create_highlight_mesh, cpu_mesh_to_triangles, traverse_bsp_with_frustum};
+use crate::bsp::{BspNode, BspStats, Triangle, Frustum, build_bsp, find_node, collect_triangles_in_subtree, create_plane_mesh, create_highlight_mesh, cpu_mesh_to_triangles, traverse_bsp_with_frustum, render_bsp_tree, triangle_center};
 
 mod input;
 mod camera;
