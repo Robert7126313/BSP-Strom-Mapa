@@ -356,7 +356,7 @@ fn main() -> Result<()> {
     // Inicializace GPU jobu pro frustum culling
     unsafe {
         let gl = &*context;
-        gpu_job = Some(GpuJob::new(
+        let gpu_job = Some(GpuJob::new(
             gl,
             shaders::CULL_SHADER,
             triangles.len() * 3 * 16,

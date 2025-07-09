@@ -11,8 +11,9 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="perf: switch to structure-of-arrays for triangle centroid computation in BSP split">
+    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="refactor: remove model loading and debug info UI from main panel in gui">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -115,6 +116,7 @@
       <workItem from="1751732375326" duration="1019000" />
       <workItem from="1751789732483" duration="3173000" />
       <workItem from="1751808131983" duration="1394000" />
+      <workItem from="1751990153795" duration="648000" />
     </task>
     <task id="LOCAL-00001" summary="initialize new Rust project with basic structure and configuration files">
       <option name="closed" value="true" />
@@ -340,14 +342,21 @@
       <option name="project" value="LOCAL" />
       <updated>1751897085685</updated>
     </task>
-    <option name="localTasksCounter" value="29" />
+    <task id="LOCAL-00029" summary="refactor: remove model loading and debug info UI from main panel in gui">
+      <option name="closed" value="true" />
+      <created>1751983626401</created>
+      <option name="number" value="00029" />
+      <option name="presentableId" value="LOCAL-00029" />
+      <option name="project" value="LOCAL" />
+      <updated>1751983626401</updated>
+    </task>
+    <option name="localTasksCounter" value="30" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="refactor: rename project to BSP-Strom-Mapa and update dependencies in Cargo files" />
     <MESSAGE value="feat: add BSP tree controls and update UI for spectator mode" />
     <MESSAGE value="feat: add rfd dependency and implement file dialog for GLB model loading" />
     <MESSAGE value="feat: refactor GLB model loading and update camera controls" />
@@ -372,6 +381,7 @@
     <MESSAGE value="feat: implement asynchronous file loading and update BSP tree in GUI" />
     <MESSAGE value="feat: highlight triangles in selected BSP subtree during rendering" />
     <MESSAGE value="perf: switch to structure-of-arrays for triangle centroid computation in BSP split" />
-    <option name="LAST_COMMIT_MESSAGE" value="perf: switch to structure-of-arrays for triangle centroid computation in BSP split" />
+    <MESSAGE value="refactor: remove model loading and debug info UI from main panel in gui" />
+    <option name="LAST_COMMIT_MESSAGE" value="refactor: remove model loading and debug info UI from main panel in gui" />
   </component>
 </project>
