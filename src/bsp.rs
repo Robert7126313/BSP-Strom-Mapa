@@ -345,6 +345,23 @@ pub fn find_node_path<'a>(node: &'a BspNode, target_id: usize, path: &mut Vec<&'
     false
 }
 
+pub fn find_deepest_node_containing_point<'a>(node: &'a BspNode, point: Vector3<f32>) -> Option<&'a BspNode> {
+    if !node.bounds.contains(point) {
+        return None;
+    }
+    if let Some(ref front) = node.front {
+        if let Some(n) = find_deepest_node_containing_point(front, point) {
+            return Some(n);
+        }
+    }
+    if let Some(ref back) = node.back {
+        if let Some(n) = find_deepest_node_containing_point(back, point) {
+            return Some(n);
+        }
+    }
+    Some(node)
+}
+
 // Funkce pro rekurzivní vykreslení stromu v UI a zpracování výběru uzlu
 pub fn render_bsp_tree(ui: &mut egui::Ui, node: &BspNode, selected: &mut Option<usize>) {
     // build the label
@@ -719,6 +736,12 @@ impl BoundingBox {
             min: Vector3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY),
             max: Vector3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY),
         }
+    }
+
+    pub fn contains(&self, point: Vector3<f32>) -> bool {
+        point.x >= self.min.x && point.x <= self.max.x &&
+        point.y >= self.min.y && point.y <= self.max.y &&
+        point.z >= self.min.z && point.z <= self.max.z
     }
 
     fn from_triangle(tri: &Triangle) -> Self {
