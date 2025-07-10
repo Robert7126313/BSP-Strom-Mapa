@@ -34,7 +34,7 @@ mod shaders;
 use crate::gpu_job::GpuJob;
 use crate::input::{InputManager, KeyCode};
 use crate::camera::{FreeCamera, CamMode, CameraState, SwitchDelay};
-use crate::bsp::{BspNode, BspStats, Triangle, Frustum, build_bsp, find_node, collect_triangles_in_subtree, create_plane_mesh, create_highlight_mesh, cpu_mesh_to_triangles, traverse_bsp_with_frustum, triangle_center};
+use crate::bsp::{BspNode, BspStats, Triangle, Frustum, build_bsp, find_node, find_deepest_node_containing_point, collect_triangles_in_subtree, create_plane_mesh, create_highlight_mesh, cpu_mesh_to_triangles, traverse_bsp_with_frustum, triangle_center};
 
 mod input;
 mod camera;
@@ -392,6 +392,7 @@ fn main() -> Result<()> {
     let mut disable_culling = false;
     // Volba pro GPU akceleraci frustum cullingu
     let mut use_gpu_culling = false;
+    let mut hide_selected_area = false;
 
     // stav pro vykreslovaný mesh
     let _glb_path: Option<PathBuf> = None;
@@ -503,6 +504,25 @@ fn main() -> Result<()> {
 
         // Vytvoření frustumu kamery pro view-culling
         let camera_obj = cam.cam(frame_input.viewport);
+
+        // Zpracuj kliknutí myší pro výběr uzlu
+        let mut click_position = None;
+        for event in events {
+            if let Event::MousePress { button: MouseButton::Left, position, .. } = event {
+                click_position = Some(*position);
+            }
+        }
+        if let Some(pos) = click_position {
+            if let Some(ref root) = bsp_root {
+                let pick_mesh = Mesh::new(&context, &current_cpu_mesh);
+                if let Some(hit) = three_d::pick(&context, &camera_obj, pos, [&pick_mesh]) {
+                    let p = Vector3::new(hit.position.x, hit.position.y, hit.position.z);
+                    if let Some(node) = find_deepest_node_containing_point(root, p) {
+                        selected_node = Some(node.id);
+                    }
+                }
+            }
+        }
         
         // Použij správnou pozici pozorovatele pro traverzování BSP stromu
         let observer_position = match mode {
@@ -582,17 +602,26 @@ fn main() -> Result<()> {
 
         let mut normal_tris = Vec::with_capacity(visible_triangles.len());
         let mut highlight_tris = Vec::with_capacity(picked_tris.len());
-        for tri in visible_triangles.into_iter() {
-            let c = quantized_center(&tri);
-            if picked_centers.contains(&c) {
-                highlight_tris.push(tri);
-            } else {
-                normal_tris.push(tri);
+        if hide_selected_area {
+            for tri in visible_triangles.into_iter() {
+                let c = quantized_center(&tri);
+                if !picked_centers.contains(&c) {
+                    normal_tris.push(tri);
+                }
+            }
+        } else {
+            for tri in visible_triangles.into_iter() {
+                let c = quantized_center(&tri);
+                if picked_centers.contains(&c) {
+                    highlight_tris.push(tri);
+                } else {
+                    normal_tris.push(tri);
+                }
             }
         }
 
         let base_model = create_visible_mesh(&normal_tris, &context);
-        let highlight_model = if !highlight_tris.is_empty() {
+        let highlight_model = if !highlight_tris.is_empty() && !hide_selected_area {
             Some(create_highlight_mesh(&highlight_tris, &context))
         } else {
             None
@@ -614,6 +643,7 @@ fn main() -> Result<()> {
                 &mut show_splitting_plane,
                 &mut disable_culling,
                 &mut use_gpu_culling,
+                &mut hide_selected_area,
                 &mut show_camera_direction,
                 &mut spectator_state,
                 &mut third_person_state,
