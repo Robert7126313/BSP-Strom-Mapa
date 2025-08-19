@@ -37,7 +37,7 @@ use crate::bsp::{
     triangle_center, BspNode, BspStats, Frustum, Triangle,
 };
 use crate::camera::{CamMode, CameraState, FreeCamera, SwitchDelay};
-use crate::config::BG_COLOR;
+use crate::config::{BG_COLOR, DEFAULT_BRANCH_LIMIT};
 use crate::gpu_job::GpuJob;
 use crate::input::{InputManager, KeyCode};
 
@@ -431,8 +431,7 @@ fn main() -> Result<()> {
     let tx_gui = tx.clone();
 
     // Spuštění stavby BSP stromu v jiném vlákně
-    let default_branch_limit = 7u32;
-    let branch_limit_clone = default_branch_limit;
+    let branch_limit_clone = DEFAULT_BRANCH_LIMIT;
     thread::spawn(move || {
         let mut next_id = 0;
         let tree = build_bsp(&triangles_clone, 0, branch_limit_clone, &mut next_id);
@@ -454,7 +453,8 @@ fn main() -> Result<()> {
     let mut show_loaded_model = true;
     let mut show_selected_model = true;
     let mut tree_window_open = false;
-    let mut branch_limit = default_branch_limit;
+    let mut branch_limit = DEFAULT_BRANCH_LIMIT;
+    let mut last_branch_limit = branch_limit;
 
     // stav pro vykreslovaný mesh
     let _glb_path: Option<PathBuf> = None;
@@ -768,6 +768,15 @@ fn main() -> Result<()> {
                 );
             },
         );
+
+        if branch_limit != last_branch_limit {
+            let mut next_id = 0;
+            bsp_root = Some(build_bsp(&current_triangles, 0, branch_limit, &mut next_id));
+            total_stats.total_nodes = bsp_root.as_ref().unwrap().count_nodes();
+            total_stats.total_triangles = current_triangles.len() as u32;
+            selected_node = None;
+            last_branch_limit = branch_limit;
+        }
 
         // --- ovládání ---
         // --- ovládání přepnutí režimu pomocí kláves F a G ---
