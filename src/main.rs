@@ -23,24 +23,30 @@
 
 use anyhow::Result;
 use cgmath::{Deg, InnerSpace, Vector3};
+use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::thread;
-use three_d::*;
-use rayon::prelude::*; // Add Rayon prelude for parallelization
+use three_d::*; // Add Rayon prelude for parallelization
 
 mod gpu_job;
 mod shaders;
+use crate::bsp::{
+    build_bsp, collect_triangles_in_subtree, cpu_mesh_to_triangles, create_highlight_mesh,
+    create_plane_mesh, find_deepest_node_containing_point, find_node, traverse_bsp_with_frustum,
+    triangle_center, BspNode, BspStats, Frustum, Triangle,
+};
+use crate::camera::{CamMode, CameraState, FreeCamera, SwitchDelay};
+use crate::config::BG_COLOR;
 use crate::gpu_job::GpuJob;
 use crate::input::{InputManager, KeyCode};
-use crate::camera::{FreeCamera, CamMode, CameraState, SwitchDelay};
-use crate::bsp::{BspNode, BspStats, Triangle, Frustum, build_bsp, find_node, find_deepest_node_containing_point, collect_triangles_in_subtree, create_plane_mesh, create_highlight_mesh, cpu_mesh_to_triangles, traverse_bsp_with_frustum, triangle_center};
 
-mod input;
-mod camera;
 mod bsp;
+mod camera;
+mod config; // global constants
 mod gui;
-// Message types for the channel
+mod input;
+           // Message types for the channel
 #[derive(Debug)]
 enum Message {
     InitialTree(BspNode),
@@ -49,12 +55,9 @@ enum Message {
         triangles: Vec<Triangle>,
         file_name: String,
         load_status: String,
-        bsp_tree: BspNode
+        bsp_tree: BspNode,
     },
 }
-
-
-
 
 // helper: načte CpuMesh z .glb/.gltf pomocí gltf crate
 fn load_cpu_mesh(path: &Path) -> (CpuMesh, String) {
@@ -62,7 +65,10 @@ fn load_cpu_mesh(path: &Path) -> (CpuMesh, String) {
 
     if !path.exists() {
         println!("Soubor neexistuje: {}", path.display());
-        return (CpuMesh::sphere(32), format!("Soubor neexistuje: {}", path.display()));
+        return (
+            CpuMesh::sphere(32),
+            format!("Soubor neexistuje: {}", path.display()),
+        );
     }
 
     match std::fs::metadata(path) {
@@ -71,10 +77,14 @@ fn load_cpu_mesh(path: &Path) -> (CpuMesh, String) {
             if metadata.len() == 0 {
                 return (CpuMesh::sphere(32), "Soubor je prázdný".to_string());
             }
-            if metadata.len() > 100_000_000 { // 100MB limit
-                return (CpuMesh::sphere(32), "Soubor je příliš velký (>100MB)".to_string());
+            if metadata.len() > 100_000_000 {
+                // 100MB limit
+                return (
+                    CpuMesh::sphere(32),
+                    "Soubor je příliš velký (>100MB)".to_string(),
+                );
             }
-        },
+        }
         Err(e) => {
             println!("Nelze přečíst metadata souboru: {}", e);
             return (CpuMesh::sphere(32), format!("Chyba metadata: {}", e));
@@ -86,22 +96,25 @@ fn load_cpu_mesh(path: &Path) -> (CpuMesh, String) {
         Ok(mesh) => {
             println!("✓ GLTF úspěšně načten pomocí gltf crate");
             return (mesh, "GLTF soubor úspěšně načten".to_string());
-        },
+        }
         Err(e) => {
             println!("Chyba při načítání pomocí gltf crate: {}", e);
-            return (CpuMesh::sphere(32), format!("Nepodařilo se načíst GLTF: {}", e));
+            return (
+                CpuMesh::sphere(32),
+                format!("Nepodařilo se načíst GLTF: {}", e),
+            );
         }
     }
 }
 
 fn load_gltf_with_gltf_crate(path: &Path) -> Result<CpuMesh> {
     println!("Načítám GLTF pomocí gltf crate...");
-    
+
     let (document, buffers, _images) = gltf::import(path)?;
-    
+
     println!("GLTF dokument načten:");
     println!("- Scény: {}", document.scenes().count());
-    println!("- Uzly: {}", document.nodes().count());  
+    println!("- Uzly: {}", document.nodes().count());
     println!("- Meshe: {}", document.meshes().count());
     println!("- Materiály: {}", document.materials().count());
 
@@ -112,9 +125,16 @@ fn load_gltf_with_gltf_crate(path: &Path) -> Result<CpuMesh> {
     // Projdi všechny meshe ve scéně
     for scene in document.scenes() {
         println!("Zpracovávám scénu: {:?}", scene.name());
-        
+
         for node in scene.nodes() {
-            process_node(&node, &buffers, &mut all_positions, &mut all_indices, &mut vertex_offset, cgmath::Matrix4::identity())?;
+            process_node(
+                &node,
+                &buffers,
+                &mut all_positions,
+                &mut all_indices,
+                &mut vertex_offset,
+                cgmath::Matrix4::identity(),
+            )?;
         }
     }
 
@@ -122,14 +142,18 @@ fn load_gltf_with_gltf_crate(path: &Path) -> Result<CpuMesh> {
         anyhow::bail!("Žádné pozice nenalezeny v GLTF souboru");
     }
 
-    println!("Celkem načteno {} vrcholů a {} indexů", all_positions.len(), all_indices.len());
+    println!(
+        "Celkem načteno {} vrcholů a {} indexů",
+        all_positions.len(),
+        all_indices.len()
+    );
 
     Ok(CpuMesh {
         positions: Positions::F32(all_positions),
-        indices: if all_indices.is_empty() { 
-            Indices::None 
-        } else { 
-            Indices::U32(all_indices) 
+        indices: if all_indices.is_empty() {
+            Indices::None
+        } else {
+            Indices::U32(all_indices)
         },
         ..Default::default()
     })
@@ -141,7 +165,7 @@ fn process_node(
     all_positions: &mut Vec<Vec3>,
     all_indices: &mut Vec<u32>,
     vertex_offset: &mut u32,
-    parent_transform: cgmath::Matrix4<f32>
+    parent_transform: cgmath::Matrix4<f32>,
 ) -> Result<()> {
     // Získej transformaci uzlu
     let transform_matrix = cgmath::Matrix4::from(node.transform().matrix());
@@ -151,16 +175,34 @@ fn process_node(
 
     // Zpracuj mesh pokud existuje
     if let Some(mesh) = node.mesh() {
-        println!("Zpracovávám mesh: {:?} s {} primitivy", mesh.name(), mesh.primitives().count());
-        
+        println!(
+            "Zpracovávám mesh: {:?} s {} primitivy",
+            mesh.name(),
+            mesh.primitives().count()
+        );
+
         for primitive in mesh.primitives() {
-            process_primitive(&primitive, buffers, all_positions, all_indices, vertex_offset, current_transform)?;
+            process_primitive(
+                &primitive,
+                buffers,
+                all_positions,
+                all_indices,
+                vertex_offset,
+                current_transform,
+            )?;
         }
     }
 
     // Rekurzivně zpracuj potomky
     for child in node.children() {
-        process_node(&child, buffers, all_positions, all_indices, vertex_offset, current_transform)?;
+        process_node(
+            &child,
+            buffers,
+            all_positions,
+            all_indices,
+            vertex_offset,
+            current_transform,
+        )?;
     }
 
     Ok(())
@@ -172,7 +214,7 @@ fn process_primitive(
     all_positions: &mut Vec<Vec3>,
     all_indices: &mut Vec<u32>,
     vertex_offset: &mut u32,
-    transform: cgmath::Matrix4<f32>
+    transform: cgmath::Matrix4<f32>,
 ) -> Result<()> {
     println!("Zpracovávám primitiv s modem: {:?}", primitive.mode());
 
@@ -184,17 +226,17 @@ fn process_primitive(
 
     // Získej pozice vrcholů
     let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
-    
+
     if let Some(positions) = reader.read_positions() {
         let start_vertex_count = all_positions.len();
-        
+
         // Přidej pozice s transformací
         for position in positions {
             let pos = cgmath::Vector4::new(position[0], position[1], position[2], 1.0);
             let transformed = transform * pos;
             all_positions.push(Vec3::new(transformed.x, transformed.y, transformed.z));
         }
-        
+
         let vertex_count = all_positions.len() - start_vertex_count;
         println!("Přidáno {} vrcholů", vertex_count);
 
@@ -205,12 +247,12 @@ fn process_primitive(
                     for idx in iter {
                         all_indices.push(idx as u32 + *vertex_offset);
                     }
-                },
+                }
                 gltf::mesh::util::ReadIndices::U16(iter) => {
                     for idx in iter {
                         all_indices.push(idx as u32 + *vertex_offset);
                     }
-                },
+                }
                 gltf::mesh::util::ReadIndices::U32(iter) => {
                     for idx in iter {
                         all_indices.push(idx + *vertex_offset);
@@ -242,21 +284,27 @@ fn process_primitive(
 fn create_visible_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, ColorMaterial> {
     // Paralelní zpracování pozic a indexů
     let triangles_count = triangles.len();
-    
+
     // Paralelně vytvoříme pozice vrcholů
-    let positions: Vec<Vec3> = triangles.par_iter().flat_map(|tri| {
-        vec![
-            vec3(tri.a.x, tri.a.y, tri.a.z),
-            vec3(tri.b.x, tri.b.y, tri.b.z),
-            vec3(tri.c.x, tri.c.y, tri.c.z),
-        ]
-    }).collect();
-    
+    let positions: Vec<Vec3> = triangles
+        .par_iter()
+        .flat_map(|tri| {
+            vec![
+                vec3(tri.a.x, tri.a.y, tri.a.z),
+                vec3(tri.b.x, tri.b.y, tri.b.z),
+                vec3(tri.c.x, tri.c.y, tri.c.z),
+            ]
+        })
+        .collect();
+
     // Paralelně vygenerujeme indexy
-    let indices: Vec<u32> = (0..triangles_count as u32).into_par_iter().flat_map(|i| {
-        let base_idx = i * 3;
-        vec![base_idx, base_idx + 1, base_idx + 2]
-    }).collect();
+    let indices: Vec<u32> = (0..triangles_count as u32)
+        .into_par_iter()
+        .flat_map(|i| {
+            let base_idx = i * 3;
+            vec![base_idx, base_idx + 1, base_idx + 2]
+        })
+        .collect();
 
     // Vytvoření nového meshe
     let visible_mesh = CpuMesh {
@@ -264,13 +312,16 @@ fn create_visible_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, Co
         indices: Indices::U32(indices),
         ..Default::default()
     };
-    
+
     // Vytvoření materiálu a modelu
-    let material = ColorMaterial::new_opaque(context, &CpuMaterial {
-        albedo: Srgba::new(100, 150, 255, 255),
-        ..Default::default()
-    });
-    
+    let material = ColorMaterial::new_opaque(
+        context,
+        &CpuMaterial {
+            albedo: Srgba::new(100, 150, 255, 255),
+            ..Default::default()
+        },
+    );
+
     Gm::new(Mesh::new(context, &visible_mesh), material)
 }
 
@@ -284,7 +335,9 @@ fn gpu_cull_triangles(job: &GpuJob, tris: &[Triangle], frustum: &Frustum) -> Vec
             bytes.extend_from_slice(&1f32.to_ne_bytes());
         }
     }
-    unsafe { job.update_ssbo_data(&bytes); }
+    unsafe {
+        job.update_ssbo_data(&bytes);
+    }
 
     let planes = frustum.as_vec4_array();
     let mut flat = [0f32; 24];
@@ -320,9 +373,9 @@ fn main() -> Result<()> {
     println!("🚀 Spouštím BSP Viewer...");
 
     // okno + GL
-    let window = Window::new(WindowSettings { 
-        title: "BSP Viewer (three‑d 0.18)".into(), 
-        ..Default::default() 
+    let window = Window::new(WindowSettings {
+        title: "BSP Viewer (three‑d 0.18)".into(),
+        ..Default::default()
     })?;
     println!("✓ Okno vytvořeno");
 
@@ -337,7 +390,11 @@ fn main() -> Result<()> {
     println!("✓ Model načten");
 
     let mut loaded_file_name = if initial_path.exists() {
-        initial_path.file_name().unwrap().to_string_lossy().into_owned()
+        initial_path
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned()
     } else {
         "embedded sphere".to_string()
     };
@@ -396,39 +453,53 @@ fn main() -> Result<()> {
 
     // stav pro vykreslovaný mesh
     let _glb_path: Option<PathBuf> = None;
-    let material = ColorMaterial::new_opaque(&context, &CpuMaterial {
-        albedo: Srgba::new(100, 150, 255, 255), // Modrá barva aby byl model viditelný
-        ..Default::default()
-    });
+    let material = ColorMaterial::new_opaque(
+        &context,
+        &CpuMaterial {
+            albedo: Srgba::new(100, 150, 255, 255), // Modrá barva aby byl model viditelný
+            ..Default::default()
+        },
+    );
     let _model = Gm::new(Mesh::new(&context, &cpu_mesh), material.clone());
-    
+
     // Glow efekty pro pozice kamer
     let glow_mesh = CpuMesh::sphere(16);
-    
+
     // Materiály pro glow efekty
-    let spectator_glow_material = ColorMaterial::new_opaque(&context, &CpuMaterial {
-        albedo: Srgba::new(0, 255, 100, 200), // Zelená pro spectator
-        ..Default::default()
-    });
-    
-    let third_person_glow_material = ColorMaterial::new_opaque(&context, &CpuMaterial {
-        albedo: Srgba::new(255, 100, 0, 200), // Oranžová pro third person
-        ..Default::default()
-    });
-    
+    let spectator_glow_material = ColorMaterial::new_opaque(
+        &context,
+        &CpuMaterial {
+            albedo: Srgba::new(0, 255, 100, 200), // Zelená pro spectator
+            ..Default::default()
+        },
+    );
+
+    let third_person_glow_material = ColorMaterial::new_opaque(
+        &context,
+        &CpuMaterial {
+            albedo: Srgba::new(255, 100, 0, 200), // Oranžová pro third person
+            ..Default::default()
+        },
+    );
+
     // Materiál pro směrový paprsek kamery
-    let direction_material = ColorMaterial::new_opaque(&context, &CpuMaterial {
-        albedo: Srgba::new(255, 255, 0, 200), // Žlutá barva pro směrový paprsek
-        ..Default::default()
-    });
+    let direction_material = ColorMaterial::new_opaque(
+        &context,
+        &CpuMaterial {
+            albedo: Srgba::new(255, 255, 0, 200), // Žlutá barva pro směrový paprsek
+            ..Default::default()
+        },
+    );
 
     let mut spectator_glow = Gm::new(Mesh::new(&context, &glow_mesh), spectator_glow_material);
-    let mut third_person_glow = Gm::new(Mesh::new(&context, &glow_mesh), third_person_glow_material);
-    
+    let mut third_person_glow =
+        Gm::new(Mesh::new(&context, &glow_mesh), third_person_glow_material);
+
     // Vytvoření kuželu (cone) pro směrový indikátor kamery místo cylindru
     let direction_mesh = CpuMesh::cone(16);
-    let mut camera_direction_ray = Gm::new(Mesh::new(&context, &direction_mesh), direction_material);
-    
+    let mut camera_direction_ray =
+        Gm::new(Mesh::new(&context, &direction_mesh), direction_material);
+
     let ambient_light = AmbientLight::new(&context, 1.0, Srgba::WHITE); // Zvýšit intenzitu světla
 
     // Nastavení výchozích pozic pro kamery (spawnpoint)
@@ -440,18 +511,26 @@ fn main() -> Result<()> {
     let mut spectator_state = CameraState::from_camera(&cam);
     let mut third_person_state = CameraState::new(default_third_person_pos); // Jiná pozice pro lepší vizualizaci
     let mut mode = CamMode::Spectator;
-    
+
     // Proměnná pro sledování, zda zobrazit směr pohledu kamery
     let mut show_camera_direction = false;
 
     // Nastavení pozic glow efektů podle stavů kamer
-    spectator_glow.set_transformation(Mat4::from_translation(vec3(
-        spectator_state.pos.x, spectator_state.pos.y, spectator_state.pos.z
-    )) * Mat4::from_scale(0.2)); // Malé koule
-    
-    third_person_glow.set_transformation(Mat4::from_translation(vec3(
-        third_person_state.pos.x, third_person_state.pos.y, third_person_state.pos.z
-    )) * Mat4::from_scale(0.2));
+    spectator_glow.set_transformation(
+        Mat4::from_translation(vec3(
+            spectator_state.pos.x,
+            spectator_state.pos.y,
+            spectator_state.pos.z,
+        )) * Mat4::from_scale(0.2),
+    ); // Malé koule
+
+    third_person_glow.set_transformation(
+        Mat4::from_translation(vec3(
+            third_person_state.pos.x,
+            third_person_state.pos.y,
+            third_person_state.pos.z,
+        )) * Mat4::from_scale(0.2),
+    );
 
     // Inicializace InputManageru pro plynulé ovládání s více klávesami
     let mut input_manager = InputManager::new();
@@ -477,7 +556,13 @@ fn main() -> Result<()> {
                     bsp_root = Some(tree);
                     println!("✅ BSP strom úspěšně načten do GUI!");
                 }
-                Message::NewFile { cpu_mesh: new_cpu_mesh, triangles: new_triangles, file_name, load_status: _, bsp_tree } => {
+                Message::NewFile {
+                    cpu_mesh: new_cpu_mesh,
+                    triangles: new_triangles,
+                    file_name,
+                    load_status: _,
+                    bsp_tree,
+                } => {
                     current_cpu_mesh = new_cpu_mesh;
                     current_triangles = new_triangles;
                     loaded_file_name = file_name;
@@ -505,10 +590,17 @@ fn main() -> Result<()> {
         // Vytvoření frustumu kamery pro view-culling
         let camera_obj = cam.cam(frame_input.viewport);
 
-        // Zpracuj kliknutí myší pro výběr uzlu
+        // Handle mouse clicks: cast a ray into the scene and select the
+        // deepest BSP node containing the hit point. The selected ID is
+        // reflected in the left control panel.
         let mut click_position = None;
         for event in events {
-            if let Event::MousePress { button: MouseButton::Left, position, .. } = event {
+            if let Event::MousePress {
+                button: MouseButton::Left,
+                position,
+                ..
+            } = event
+            {
                 click_position = Some(*position);
             }
         }
@@ -523,22 +615,23 @@ fn main() -> Result<()> {
                 }
             }
         }
-        
+
         // Použij správnou pozici pozorovatele pro traverzování BSP stromu
         let observer_position = match mode {
-            CamMode::Spectator => cam.pos,  // V režimu Spectator používáme pozici kamery
-            CamMode::ThirdPerson => spectator_state.pos,  // V režimu ThirdPerson používáme pozici Spectator kamery
+            CamMode::Spectator => cam.pos, // V režimu Spectator používáme pozici kamery
+            CamMode::ThirdPerson => spectator_state.pos, // V režimu ThirdPerson používáme pozici Spectator kamery
         };
-        
+
         // V třetí osobě vytvoříme frustum z pozice pozorovatele
         let frustum = if mode == CamMode::ThirdPerson {
             // Vytvoříme kameru z pozice spectator
             let spectator_dir = Vector3::new(
                 spectator_state.yaw.cos() * spectator_state.pitch.cos(),
                 spectator_state.pitch.sin(),
-                spectator_state.yaw.sin() * spectator_state.pitch.cos()
-            ).normalize();
-            
+                spectator_state.yaw.sin() * spectator_state.pitch.cos(),
+            )
+            .normalize();
+
             let spectator_camera = Camera::new_perspective(
                 frame_input.viewport,
                 spectator_state.pos,
@@ -546,7 +639,7 @@ fn main() -> Result<()> {
                 Vector3::unit_y(),
                 Deg(60.0),
                 0.1,
-                1000.0
+                1000.0,
             );
             Frustum::from_camera(&spectator_camera)
         } else {
@@ -576,7 +669,13 @@ fn main() -> Result<()> {
         } else {
             let mut tris = Vec::new();
             if let Some(ref root) = bsp_root {
-                traverse_bsp_with_frustum(root, observer_position, &frustum, &mut current_stats, &mut tris);
+                traverse_bsp_with_frustum(
+                    root,
+                    observer_position,
+                    &frustum,
+                    &mut current_stats,
+                    &mut tris,
+                );
             }
             tris
         };
@@ -594,7 +693,11 @@ fn main() -> Result<()> {
         // Pomocná funkce pro kvantizaci středu trojúhelníku
         fn quantized_center(tri: &Triangle) -> (i32, i32, i32) {
             let c = triangle_center(tri);
-            ((c.x * 1000.0) as i32, (c.y * 1000.0) as i32, (c.z * 1000.0) as i32)
+            (
+                (c.x * 1000.0) as i32,
+                (c.y * 1000.0) as i32,
+                (c.z * 1000.0) as i32,
+            )
         }
 
         use std::collections::HashSet;
@@ -628,29 +731,35 @@ fn main() -> Result<()> {
         };
 
         // --- GUI ---
-        gui.update(&mut frame_input.events.clone(), frame_input.accumulated_time, frame_input.viewport, frame_input.device_pixel_ratio, |ctx| {
-            crate::gui::draw_left_panel(
-                ctx,
-                mode,
-                &mut loaded_file_name,
-                &mut file_loading,
-                &tx_gui,
-                &rx,
-                &mut current_cpu_mesh,
-                &mut current_triangles,
-                &mut bsp_root,
-                &mut selected_node,
-                &mut show_splitting_plane,
-                &mut disable_culling,
-                &mut use_gpu_culling,
-                &mut hide_selected_area,
-                &mut show_camera_direction,
-                &mut spectator_state,
-                &mut third_person_state,
-                &mut cam,
-                &current_stats,
-            );
-        });
+        gui.update(
+            &mut frame_input.events.clone(),
+            frame_input.accumulated_time,
+            frame_input.viewport,
+            frame_input.device_pixel_ratio,
+            |ctx| {
+                crate::gui::draw_left_panel(
+                    ctx,
+                    mode,
+                    &mut loaded_file_name,
+                    &mut file_loading,
+                    &tx_gui,
+                    &rx,
+                    &mut current_cpu_mesh,
+                    &mut current_triangles,
+                    &mut bsp_root,
+                    &mut selected_node,
+                    &mut show_splitting_plane,
+                    &mut disable_culling,
+                    &mut use_gpu_culling,
+                    &mut hide_selected_area,
+                    &mut show_camera_direction,
+                    &mut spectator_state,
+                    &mut third_person_state,
+                    &mut cam,
+                    &current_stats,
+                );
+            },
+        );
 
         // --- ovládání ---
         // --- ovládání přepnutí režimu pomocí kláves F a G ---
@@ -669,7 +778,7 @@ fn main() -> Result<()> {
                         spectator_state.apply_to_camera(&mut cam);
 
                         println!("Přepnuto na režim: Spectator");
-                    },
+                    }
                     CamMode::ThirdPerson => {
                         // Ulož aktuální pozici do Spectator stavu
                         spectator_state = CameraState::from_camera(&cam);
@@ -686,13 +795,21 @@ fn main() -> Result<()> {
                 switch_delay.record_switch(current_time);
 
                 // Aktualizuj pozice glow značek
-                spectator_glow.set_transformation(Mat4::from_translation(vec3(
-                    spectator_state.pos.x, spectator_state.pos.y, spectator_state.pos.z
-                )) * Mat4::from_scale(0.2));
-                
-                third_person_glow.set_transformation(Mat4::from_translation(vec3(
-                    third_person_state.pos.x, third_person_state.pos.y, third_person_state.pos.z
-                )) * Mat4::from_scale(0.2));
+                spectator_glow.set_transformation(
+                    Mat4::from_translation(vec3(
+                        spectator_state.pos.x,
+                        spectator_state.pos.y,
+                        spectator_state.pos.z,
+                    )) * Mat4::from_scale(0.2),
+                );
+
+                third_person_glow.set_transformation(
+                    Mat4::from_translation(vec3(
+                        third_person_state.pos.x,
+                        third_person_state.pos.y,
+                        third_person_state.pos.z,
+                    )) * Mat4::from_scale(0.2),
+                );
             }
         };
 
@@ -715,7 +832,7 @@ fn main() -> Result<()> {
             cam.speed /= 1.2;
             println!("Rychlost snížena na: {:.1}", cam.speed);
         }
-        
+
         // Obsluha klávesy Home - návrat na výchozí pozici pro aktuální režim
         if input_manager.is_key_pressed(KeyCode::Home) {
             if mode == CamMode::Spectator {
@@ -724,7 +841,8 @@ fn main() -> Result<()> {
                 reset_state.speed = cam.speed; // Zachová aktuální rychlost
                 reset_state.apply_to_camera(&mut cam);
                 println!("Kamera resetována na výchozí spectator pozici");
-            } else { // ThirdPerson
+            } else {
+                // ThirdPerson
                 // Vytvoření nového stavu kamery s výchozí pozicí, ale aktuální rychlostí kamery
                 let mut reset_state = CameraState::new(default_third_person_pos);
                 reset_state.speed = cam.speed; // Zachová aktuální rychlost
@@ -735,45 +853,50 @@ fn main() -> Result<()> {
 
         // Aktualizace kamery pomocí nové metody pro hladký pohyb
         cam.update_smooth(&input_manager, dt);
-        
+
         // Aktualizace stavů kamer a značek podle aktuálního režimu
         if mode == CamMode::Spectator {
             // Aktualizuj stav aktuální kamery (Spectator)
             spectator_state = CameraState::from_camera(&cam);
-            
+
             // Aktualizuj pozici značky aktuální kamery (Spectator)
-            spectator_glow.set_transformation(Mat4::from_translation(vec3(
-                spectator_state.pos.x, spectator_state.pos.y, spectator_state.pos.z
-            )) * Mat4::from_scale(0.2));
-            
+            spectator_glow.set_transformation(
+                Mat4::from_translation(vec3(
+                    spectator_state.pos.x,
+                    spectator_state.pos.y,
+                    spectator_state.pos.z,
+                )) * Mat4::from_scale(0.2),
+            );
+
             // Aktualizuj směrový paprsek pro spectator kameru
             if show_camera_direction {
                 // Získáme směrový vektor kamery a nastavíme transformaci paprsku
                 let dir = cam.dir();
-                
+
                 // Vytvoříme rotační matici, která natočí válec (který je standardně podél osy Y)
                 // ve směru pohledu kamery
-                
+
                 // 1. Vypočítáme úhel mezi osou Y a směrovým vektorem kamery
                 let y_axis = Vector3::unit_y();
                 let angle = y_axis.dot(dir).acos();
-                
+
                 // 2. Vypočítáme osu rotace (kolmou na rovinu obsahující osu Y a směrový vektor)
                 let rotation_axis = y_axis.cross(dir).normalize();
-                
+
                 // Vytvoření transformační matice pro válec
                 let scale = 0.05; // tenký válec
                 let length = 3.0; // délka paprsku
-                
+
                 // Vytvoření matice transformace
                 let translation = Mat4::from_translation(vec3(
-                    spectator_state.pos.x, 
-                    spectator_state.pos.y, 
-                    spectator_state.pos.z
+                    spectator_state.pos.x,
+                    spectator_state.pos.y,
+                    spectator_state.pos.z,
                 ));
-                
+
                 // Pokud je směrový vektor téměř rovnoběžný s osou Y, použijeme speciální zacházení
-                let rotation = if angle.abs() < 0.01 || (std::f32::consts::PI - angle).abs() < 0.01 {
+                let rotation = if angle.abs() < 0.01 || (std::f32::consts::PI - angle).abs() < 0.01
+                {
                     // Pro případ kdy je vektor téměř rovnoběžný s osou Y
                     if dir.y > 0.0 {
                         Mat4::identity() // směr už je podél osy Y
@@ -785,26 +908,30 @@ fn main() -> Result<()> {
                     // Normální případ - rotace kolem vypočtené osy
                     Mat4::from_axis_angle(
                         vec3(rotation_axis.x, rotation_axis.y, rotation_axis.z),
-                        Rad(angle)
+                        Rad(angle),
                     )
                 };
-                
+
                 // Měřítko - válec je standardně výšky 2.0, chceme jej natáhnout na délku `length`
                 // a zúžit na šířku `scale`
                 let scaling = Mat4::from_nonuniform_scale(scale, length / 2.0, scale);
-                
+
                 // Aplikujeme transformace v pořadí: měřítko, rotace, posun
                 camera_direction_ray.set_transformation(translation * rotation * scaling);
             }
         } else {
             // Aktualizuj stav aktuální kamery (ThirdPerson)
             third_person_state = CameraState::from_camera(&cam);
-            
+
             // Aktualizuj pozici značky aktuální kamery (ThirdPerson)
-            third_person_glow.set_transformation(Mat4::from_translation(vec3(
-                third_person_state.pos.x, third_person_state.pos.y, third_person_state.pos.z
-            )) * Mat4::from_scale(0.2));
-            
+            third_person_glow.set_transformation(
+                Mat4::from_translation(vec3(
+                    third_person_state.pos.x,
+                    third_person_state.pos.y,
+                    third_person_state.pos.z,
+                )) * Mat4::from_scale(0.2),
+            );
+
             // Když jsme v third person mode, zobrazíme směrový paprsek pro spectator kameru
             if show_camera_direction {
                 // Získáme směrový vektor kamery a nastavíme transformaci paprsku
@@ -812,28 +939,30 @@ fn main() -> Result<()> {
                 let dir = Vector3::new(
                     spectator_state.yaw.cos() * spectator_state.pitch.cos(),
                     spectator_state.pitch.sin(),
-                    spectator_state.yaw.sin() * spectator_state.pitch.cos()
-                ).normalize();
-                
+                    spectator_state.yaw.sin() * spectator_state.pitch.cos(),
+                )
+                .normalize();
+
                 // 1. Vypočítáme úhel mezi osou Y a směrovým vektorem kamery
                 let y_axis = Vector3::unit_y();
                 let angle = y_axis.dot(dir).acos();
-                
+
                 // 2. Vypočítáme osu rotace (kolmou na rovinu obsahující osu Y a směrový vektor)
                 let rotation_axis = y_axis.cross(dir).normalize();
-                
+
                 // Vytvoření transformační matice pro válec
                 let scale = 0.05; // tenký válec
                 let length = 3.0; // délka paprsku
-                // Vytvoření matice transformace
+                                  // Vytvoření matice transformace
                 let translation = Mat4::from_translation(vec3(
-                    spectator_state.pos.x, 
-                    spectator_state.pos.y, 
-                    spectator_state.pos.z
+                    spectator_state.pos.x,
+                    spectator_state.pos.y,
+                    spectator_state.pos.z,
                 ));
-                
+
                 // Pokud je směrový vektor téměř rovnoběžný s osou Y, použijeme speciální zacházení
-                let rotation = if angle.abs() < 0.01 || (std::f32::consts::PI - angle).abs() < 0.01 {
+                let rotation = if angle.abs() < 0.01 || (std::f32::consts::PI - angle).abs() < 0.01
+                {
                     // Pro případ kdy je vektor téměř rovnoběžný s osou Y
                     if dir.y > 0.0 {
                         Mat4::identity() // směr už je podél osy Y
@@ -845,14 +974,14 @@ fn main() -> Result<()> {
                     // Normální případ - rotace kolem vypočtené osy
                     Mat4::from_axis_angle(
                         vec3(rotation_axis.x, rotation_axis.y, rotation_axis.z),
-                        Rad(angle)
+                        Rad(angle),
                     )
                 };
-                
+
                 // Měřítko - válec - válec je standardně výšky 2.0, chceme jej natáhnout na délku `length`
                 // a zúžit na šířku `scale`
                 let scaling = Mat4::from_nonuniform_scale(scale, length / 2.0, scale);
-                
+
                 // Aplikujeme transformace v pořadí: měřítko, rotace, posun
                 camera_direction_ray.set_transformation(translation * rotation * scaling);
             }
@@ -860,7 +989,10 @@ fn main() -> Result<()> {
 
         // --- vykreslení ---
         let screen = frame_input.screen();
-        screen.clear(ClearState::color_and_depth(0.1, 0.1, 0.1, 1.0, 1.0));
+        // Clear the screen using the configured background color
+        screen.clear(ClearState::color_and_depth(
+            BG_COLOR.0, BG_COLOR.1, BG_COLOR.2, 1.0, 1.0,
+        ));
         let mut objects_to_render: Vec<&dyn Object> = Vec::new();
         objects_to_render.push(&base_model);
         // ... další objekty ...
@@ -875,7 +1007,8 @@ fn main() -> Result<()> {
                     if let Some(node) = find_node(root, sel_id) {
                         if let Some(ref plane) = node.plane {
                             // Vytvoř mesh dělící roviny pro vybraný uzel
-                            splitting_plane_mesh = Some(create_plane_mesh(plane, &node.bounds, &context));
+                            splitting_plane_mesh =
+                                Some(create_plane_mesh(plane, &node.bounds, &context));
                         }
                     }
                 }
@@ -885,7 +1018,11 @@ fn main() -> Result<()> {
             objects_to_render.push(plane_mesh);
         }
         // ... další objekty ...
-        screen.render(&cam.cam(frame_input.viewport), &objects_to_render, &[&ambient_light]);
+        screen.render(
+            &cam.cam(frame_input.viewport),
+            &objects_to_render,
+            &[&ambient_light],
+        );
         let _ = gui.render();
         FrameOutput::default()
     });
