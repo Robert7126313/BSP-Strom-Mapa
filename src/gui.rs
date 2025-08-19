@@ -1,4 +1,111 @@
 use cgmath::InnerSpace;
+use std::collections::HashMap;
+use egui_plot::{Line, Plot, PlotPoint, Points, Text};
+
+struct TreePlotData {
+    positions: HashMap<usize, PlotPoint>,
+    lines: Vec<[PlotPoint; 2]>,
+}
+
+fn layout_bsp_tree(
+    node: &crate::bsp::BspNode,
+    depth: f64,
+    next_x: &mut f64,
+    data: &mut TreePlotData,
+) -> f64 {
+    let left = if let Some(ref front) = node.front {
+        Some(layout_bsp_tree(front, depth + 1.0, next_x, data))
+    } else {
+        None
+    };
+    let right = if let Some(ref back) = node.back {
+        Some(layout_bsp_tree(back, depth + 1.0, next_x, data))
+    } else {
+        None
+    };
+
+    let self_x = match (left, right) {
+        (Some(l), Some(r)) => (l + r) / 2.0,
+        (Some(l), None) => l,
+        (None, Some(r)) => r,
+        (None, None) => {
+            let x = *next_x;
+            *next_x += 1.0;
+            x
+        }
+    };
+
+    let self_point = PlotPoint { x: self_x, y: -depth };
+    data.positions.insert(node.id, self_point);
+
+    if let Some(ref front) = node.front {
+        if let Some(&child_point) = data.positions.get(&front.id) {
+            data.lines.push([self_point, child_point]);
+        }
+    }
+    if let Some(ref back) = node.back {
+        if let Some(&child_point) = data.positions.get(&back.id) {
+            data.lines.push([self_point, child_point]);
+        }
+    }
+
+    self_x
+}
+
+fn draw_bsp_tree_window(
+    ctx: &egui::Context,
+    open: &mut bool,
+    root: &crate::bsp::BspNode,
+    selected: &mut Option<usize>,
+) {
+    egui::Window::new("BSP Tree")
+        .open(open)
+        .vscroll(true)
+        .hscroll(true)
+        .show(ctx, |ui| {
+            let mut data = TreePlotData { positions: HashMap::new(), lines: Vec::new() };
+            let mut next_x = 0.0;
+            layout_bsp_tree(root, 0.0, &mut next_x, &mut data);
+
+            let plot = Plot::new("bsp_tree_plot").data_aspect(1.0);
+            let plot_resp = plot.show(ui, |plot_ui| {
+                for line in &data.lines {
+                    let pts = vec![[line[0].x, line[0].y], [line[1].x, line[1].y]];
+                    plot_ui.line(Line::new(pts).color(egui::Color32::LIGHT_GRAY));
+                }
+                for (&id, &pos) in &data.positions {
+                    let color = if selected == &Some(id) {
+                        egui::Color32::YELLOW
+                    } else {
+                        egui::Color32::LIGHT_BLUE
+                    };
+                    let pt = vec![[pos.x, pos.y]];
+                    plot_ui.points(Points::new(pt).radius(4.0).color(color));
+                    plot_ui.text(Text::new(pos, format!("{}", id)).anchor(egui::Align2::CENTER_CENTER));
+                }
+                plot_ui.pointer_coordinate()
+            });
+
+            if plot_resp.response.clicked() {
+                if let Some(pointer) = plot_resp.inner {
+                    let mut best = None;
+                    let mut best_dist = f64::INFINITY;
+                    for (&id, &p) in &data.positions {
+                        let dx = pointer.x - p.x;
+                        let dy = pointer.y - p.y;
+                        let d = dx * dx + dy * dy;
+                        if d < best_dist {
+                            best_dist = d;
+                            best = Some(id);
+                        }
+                    }
+                    if let Some(id) = best {
+                        *selected = Some(id);
+                    }
+                }
+            }
+        });
+}
 
 pub fn draw_left_panel(
     ctx: &egui::Context,
@@ -20,6 +127,7 @@ pub fn draw_left_panel(
     third_person_state: &mut crate::camera::CameraState,
     cam: &mut crate::camera::FreeCamera,
     current_stats: &crate::bsp::BspStats,
+    tree_window_open: &mut bool,
 ) {
     egui::SidePanel::left("tree").show(ctx, |side_ui| {
         egui::ScrollArea::vertical().show(side_ui, |ui| {
@@ -80,20 +188,9 @@ pub fn draw_left_panel(
             ui.separator();
             ui.heading("Struktura BSP stromu");
             ui.checkbox(show_splitting_plane, "Zobrazit dělící rovinu");
-
-            ui.separator();
-            ui.heading("Nastavení zobrazení");
-            ui.checkbox(disable_culling, "Zobrazit celý BSP strom (bez cullingu)");
-            if *disable_culling {
-                ui.label("Varování: Zobrazení celého stromu může zpomalit vykreslování.");
+            if ui.button("Otevřít vizualizaci").clicked() {
+                *tree_window_open = true;
             }
-            ui.checkbox(use_gpu_culling, "Použít GPU culling");
-            ui.checkbox(hide_selected, "Skrýt vybranou oblast");
-
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                let root = bsp_root.as_ref().unwrap();
-                crate::bsp::render_bsp_tree(ui, root, selected_node);
-            });
 
             if let Some(node_id) = *selected_node {
                 if let Some(ref root) = *bsp_root {
@@ -118,6 +215,15 @@ pub fn draw_left_panel(
                     }
                 }
             }
+
+            ui.separator();
+            ui.heading("Nastavení zobrazení");
+            ui.checkbox(disable_culling, "Zobrazit celý BSP strom (bez cullingu)");
+            if *disable_culling {
+                ui.label("Varování: Zobrazení celého stromu může zpomalit vykreslování.");
+            }
+            ui.checkbox(use_gpu_culling, "Použít GPU culling");
+            ui.checkbox(hide_selected, "Skrýt vybranou oblast");
 
             ui.separator();
             ui.heading("BSP Statistiky");
@@ -201,4 +307,11 @@ pub fn draw_left_panel(
 
         });
     });
+    if *tree_window_open {
+        if let Some(ref root) = *bsp_root {
+            draw_bsp_tree_window(ctx, tree_window_open, root, selected_node);
+        } else {
+            *tree_window_open = false;
+        }
+    }
 }

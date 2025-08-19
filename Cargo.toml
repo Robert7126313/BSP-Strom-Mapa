@@ -13,3 +13,4 @@ rfd             = { version = "0.9", default-features = false, features = ["xdg-
 gltf            = { version = "1.4", features = ["extras", "names"] }
 rayon           = "1.10.0"
 glow = "0.14"
+egui_plot       = "0.29"
