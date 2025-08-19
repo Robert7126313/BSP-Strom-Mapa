@@ -450,6 +450,7 @@ fn main() -> Result<()> {
     // Volba pro GPU akceleraci frustum cullingu
     let mut use_gpu_culling = false;
     let mut hide_selected_area = false;
+    let mut tree_window_open = false;
 
     // stav pro vykreslovaný mesh
     let _glb_path: Option<PathBuf> = None;
@@ -757,6 +758,7 @@ fn main() -> Result<()> {
                     &mut third_person_state,
                     &mut cam,
                     &current_stats,
+                    &mut tree_window_open,
                 );
             },
         );

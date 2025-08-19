@@ -9,6 +9,7 @@ dependencies = [
  "anyhow",
  "cgmath",
  "egui",
+ "egui_plot",
  "glow",
  "gltf",
  "rayon",
@@ -544,6 +545,17 @@ dependencies = [
  "memoffset 0.9.1",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "egui_plot"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8dca4871c15d51aadb79534dcf51a8189e5de3426ee7b465eb7db9a0a81ea67"
+dependencies = [
+ "ahash",
+ "egui",
+ "emath",
 ]
 
 [[package]]
