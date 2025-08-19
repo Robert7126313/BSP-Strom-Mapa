@@ -1,11 +1,11 @@
 use crate::config::MAX_BSP_DEPTH;
 use cgmath::InnerSpace;
 use egui_plot::{Line, Plot, PlotPoint, Points, Text};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 struct TreePlotData {
     positions: HashMap<usize, PlotPoint>,
-    lines: Vec<[PlotPoint; 2]>,
+    edges: Vec<(usize, usize)>,
 }
 
 fn layout_bsp_tree(
@@ -24,15 +24,11 @@ fn layout_bsp_tree(
 
     if let Some(ref front) = node.front {
         layout_bsp_tree(front, depth + 1.0, x_min, self_x, data);
-        if let Some(&child_point) = data.positions.get(&front.id) {
-            data.lines.push([self_point, child_point]);
-        }
+        data.edges.push((node.id, front.id));
     }
     if let Some(ref back) = node.back {
         layout_bsp_tree(back, depth + 1.0, self_x, x_max, data);
-        if let Some(&child_point) = data.positions.get(&back.id) {
-            data.lines.push([self_point, child_point]);
-        }
+        data.edges.push((node.id, back.id));
     }
 }
 
@@ -49,19 +45,42 @@ fn draw_bsp_tree_window(
         .show(ctx, |ui| {
             let mut data = TreePlotData {
                 positions: HashMap::new(),
-                lines: Vec::new(),
+                edges: Vec::new(),
             };
             layout_bsp_tree(root, 0.0, 0.0, 1.0, &mut data);
 
+            // Determine path from root to selected node
+            let mut path_ids = HashSet::new();
+            if let Some(sel_id) = *selected {
+                let mut path = Vec::new();
+                if crate::bsp::find_node_path(root, sel_id, &mut path) {
+                    for n in path {
+                        path_ids.insert(n.id);
+                    }
+                }
+            }
+
+            let highlight_color = egui::Color32::from_rgb(255, 200, 0);
+
             let plot = Plot::new("bsp_tree_plot");
             let plot_resp = plot.show(ui, |plot_ui| {
-                for line in &data.lines {
-                    let pts = vec![[line[0].x, line[0].y], [line[1].x, line[1].y]];
-                    plot_ui.line(Line::new(pts).color(egui::Color32::LIGHT_GRAY));
+                for &(a, b) in &data.edges {
+                    if let (Some(&p1), Some(&p2)) = (data.positions.get(&a), data.positions.get(&b))
+                    {
+                        let pts = vec![[p1.x, p1.y], [p2.x, p2.y]];
+                        let color = if path_ids.contains(&a) && path_ids.contains(&b) {
+                            highlight_color
+                        } else {
+                            egui::Color32::LIGHT_GRAY
+                        };
+                        plot_ui.line(Line::new(pts).color(color));
+                    }
                 }
                 for (&id, &pos) in &data.positions {
                     let color = if selected == &Some(id) {
                         egui::Color32::YELLOW
+                    } else if path_ids.contains(&id) {
+                        highlight_color
                     } else {
                         egui::Color32::LIGHT_BLUE
                     };
