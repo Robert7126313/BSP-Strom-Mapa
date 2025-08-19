@@ -7,6 +7,9 @@ use three_d::Srgba;
 /// Background color of the main render target (RGB 0.0‑1.0).
 pub const BG_COLOR: (f32, f32, f32) = (0.1, 0.1, 0.1);
 
+/// Color used for the loaded model.
+pub const MODEL_COLOR: Srgba = Srgba::new(100, 150, 255, 255);
+
 /// Color used to highlight the currently selected geometry.
 pub const HIGHLIGHT_COLOR: Srgba = Srgba::new(255, 50, 50, 150);
 
