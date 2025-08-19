@@ -431,9 +431,11 @@ fn main() -> Result<()> {
     let tx_gui = tx.clone();
 
     // Spuštění stavby BSP stromu v jiném vlákně
+    let default_branch_limit = 7u32;
+    let branch_limit_clone = default_branch_limit;
     thread::spawn(move || {
         let mut next_id = 0;
-        let tree = build_bsp(&triangles_clone, 0, &mut next_id);
+        let tree = build_bsp(&triangles_clone, 0, branch_limit_clone, &mut next_id);
         println!("✓ BSP strom sestaven s {} uzly", tree.count_nodes());
         tx.send(Message::InitialTree(tree)).unwrap();
     });
@@ -452,6 +454,7 @@ fn main() -> Result<()> {
     let mut show_loaded_model = true;
     let mut show_selected_model = true;
     let mut tree_window_open = false;
+    let mut branch_limit = default_branch_limit;
 
     // stav pro vykreslovaný mesh
     let _glb_path: Option<PathBuf> = None;
@@ -560,16 +563,17 @@ fn main() -> Result<()> {
                 }
                 Message::NewFile {
                     cpu_mesh: new_cpu_mesh,
-                    triangles: new_triangles,
+                    triangles: _,
                     file_name,
                     load_status: _,
-                    bsp_tree,
+                    bsp_tree: _,
                 } => {
                     current_cpu_mesh = new_cpu_mesh;
-                    current_triangles = new_triangles;
                     loaded_file_name = file_name;
                     file_loading = false;
-                    bsp_root = Some(bsp_tree);
+                    current_triangles = cpu_mesh_to_triangles(&current_cpu_mesh);
+                    let mut next_id = 0;
+                    bsp_root = Some(build_bsp(&current_triangles, 0, branch_limit, &mut next_id));
                     total_stats.total_nodes = bsp_root.as_ref().unwrap().count_nodes();
                     total_stats.total_triangles = current_triangles.len() as u32;
                     unsafe {
@@ -760,6 +764,7 @@ fn main() -> Result<()> {
                     &mut cam,
                     &current_stats,
                     &mut tree_window_open,
+                    &mut branch_limit,
                 );
             },
         );
