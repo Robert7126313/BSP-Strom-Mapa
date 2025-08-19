@@ -13,8 +13,8 @@ pub const HIGHLIGHT_COLOR: Srgba = Srgba::new(255, 50, 50, 150);
 /// Color of the optional splitting plane preview.
 pub const PLANE_COLOR: Srgba = Srgba::new(200, 200, 50, 128);
 
-/// Maximum allowed depth when building the BSP tree.
-pub const MAX_BSP_DEPTH: u32 = 16;
+/// Default maximum depth when building the BSP tree.
+pub const DEFAULT_MAX_BSP_DEPTH: u32 = 10;
 
 /// Minimum number of triangles inside a leaf before we stop splitting.
 pub const MIN_TRIANGLES_PER_LEAF: usize = 20;

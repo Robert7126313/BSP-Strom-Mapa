@@ -37,7 +37,7 @@ use crate::bsp::{
     triangle_center, BspNode, BspStats, Frustum, Triangle,
 };
 use crate::camera::{CamMode, CameraState, FreeCamera, SwitchDelay};
-use crate::config::BG_COLOR;
+use crate::config::{BG_COLOR, DEFAULT_MAX_BSP_DEPTH};
 use crate::gpu_job::GpuJob;
 use crate::input::{InputManager, KeyCode};
 
@@ -404,6 +404,7 @@ fn main() -> Result<()> {
     let mut current_triangles = cpu_mesh_to_triangles(&cpu_mesh);
     let mut file_loading = false;
     let mut gpu_job: Option<GpuJob> = None;
+    let mut max_depth = DEFAULT_MAX_BSP_DEPTH;
 
     // Vytvoření triangles z CPU meshe
     println!("🔺 Převádím mesh na trojúhelníky...");
@@ -431,9 +432,10 @@ fn main() -> Result<()> {
     let tx_gui = tx.clone();
 
     // Spuštění stavby BSP stromu v jiném vlákně
+    let max_depth_copy = max_depth;
     thread::spawn(move || {
         let mut next_id = 0;
-        let tree = build_bsp(&triangles_clone, 0, &mut next_id);
+        let tree = build_bsp(&triangles_clone, 0, max_depth_copy, &mut next_id);
         println!("✓ BSP strom sestaven s {} uzly", tree.count_nodes());
         tx.send(Message::InitialTree(tree)).unwrap();
     });
@@ -760,6 +762,7 @@ fn main() -> Result<()> {
                     &mut cam,
                     &current_stats,
                     &mut tree_window_open,
+                    &mut max_depth,
                 );
             },
         );

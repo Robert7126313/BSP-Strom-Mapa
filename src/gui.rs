@@ -116,6 +116,7 @@ pub fn draw_left_panel(
     cam: &mut crate::camera::FreeCamera,
     current_stats: &crate::bsp::BspStats,
     tree_window_open: &mut bool,
+    max_depth: &mut u32,
 ) {
     egui::SidePanel::left("tree").show(ctx, |side_ui| {
         egui::ScrollArea::vertical().show(side_ui, |ui| {
@@ -172,6 +173,18 @@ pub fn draw_left_panel(
             ui.separator();
             ui.heading("Struktura BSP stromu");
             ui.checkbox(show_splitting_plane, "Zobrazit dělící rovinu");
+            let depth_changed = ui
+                .add(egui::Slider::new(max_depth, 1..=32).text("Max. hloubka"))
+                .changed();
+            if depth_changed {
+                let mut next_id = 0;
+                *bsp_root = Some(crate::bsp::build_bsp(
+                    current_triangles,
+                    0,
+                    *max_depth,
+                    &mut next_id,
+                ));
+            }
             if ui.button("Otevřít vizualizaci").clicked() {
                 *tree_window_open = true;
             }
@@ -341,7 +354,12 @@ pub fn draw_left_panel(
                         *file_loading = false;
                         *current_triangles = crate::bsp::cpu_mesh_to_triangles(current_cpu_mesh);
                         let mut next_id = 0;
-                        *bsp_root = Some(crate::bsp::build_bsp(current_triangles, 0, &mut next_id));
+                        *bsp_root = Some(crate::bsp::build_bsp(
+                            current_triangles,
+                            0,
+                            *max_depth,
+                            &mut next_id,
+                        ));
                     }
                     _ => {}
                 }
