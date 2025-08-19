@@ -1,6 +1,6 @@
 use cgmath::InnerSpace;
-use std::collections::HashMap;
 use egui_plot::{Line, Plot, PlotPoint, Points, Text};
+use std::collections::HashMap;
 
 struct TreePlotData {
     positions: HashMap<usize, PlotPoint>,
@@ -15,7 +15,10 @@ fn layout_bsp_tree(
     data: &mut TreePlotData,
 ) {
     let self_x = (x_min + x_max) / 2.0;
-    let self_point = PlotPoint { x: self_x, y: -depth };
+    let self_point = PlotPoint {
+        x: self_x,
+        y: -depth,
+    };
     data.positions.insert(node.id, self_point);
 
     if let Some(ref front) = node.front {
@@ -43,7 +46,10 @@ fn draw_bsp_tree_window(
         .vscroll(true)
         .hscroll(true)
         .show(ctx, |ui| {
-            let mut data = TreePlotData { positions: HashMap::new(), lines: Vec::new() };
+            let mut data = TreePlotData {
+                positions: HashMap::new(),
+                lines: Vec::new(),
+            };
             layout_bsp_tree(root, 0.0, 0.0, 1.0, &mut data);
 
             let plot = Plot::new("bsp_tree_plot");
@@ -60,7 +66,9 @@ fn draw_bsp_tree_window(
                     };
                     let pt = vec![[pos.x, pos.y]];
                     plot_ui.points(Points::new(pt).radius(4.0).color(color));
-                    plot_ui.text(Text::new(pos, format!("{}", id)).anchor(egui::Align2::CENTER_CENTER));
+                    plot_ui.text(
+                        Text::new(pos, format!("{}", id)).anchor(egui::Align2::CENTER_CENTER),
+                    );
                 }
                 plot_ui.pointer_coordinate()
             });
@@ -100,7 +108,8 @@ pub fn draw_left_panel(
     show_splitting_plane: &mut bool,
     disable_culling: &mut bool,
     use_gpu_culling: &mut bool,
-    hide_selected: &mut bool,
+    show_loaded_model: &mut bool,
+    show_selected_model: &mut bool,
     show_camera_direction: &mut bool,
     spectator_state: &mut crate::camera::CameraState,
     third_person_state: &mut crate::camera::CameraState,
@@ -125,11 +134,7 @@ pub fn draw_left_panel(
                 {
                     *file_loading = true;
                     let path_clone = path.clone();
-                    let file_name_clone = path
-                        .file_name()
-                        .unwrap()
-                        .to_string_lossy()
-                        .into_owned();
+                    let file_name_clone = path.file_name().unwrap().to_string_lossy().into_owned();
                     let tx_gui_clone = tx_gui.clone();
                     std::thread::spawn(move || {
                         let (new_cpu_mesh, load_status) = crate::load_cpu_mesh(&path_clone);
@@ -180,14 +185,23 @@ pub fn draw_left_panel(
                         ui.label(format!("Trojúhelníků: {}", node.triangles.len()));
                         if let Some(ref plane) = node.plane {
                             ui.label("Dělící rovina:");
-                            ui.label(format!("Normála: ({:.2}, {:.2}, {:.2})", plane.n.x, plane.n.y, plane.n.z));
+                            ui.label(format!(
+                                "Normála: ({:.2}, {:.2}, {:.2})",
+                                plane.n.x, plane.n.y, plane.n.z
+                            ));
                             ui.label(format!("Vzdálenost: {:.2}", plane.d));
                         } else {
                             ui.label("List (bez dělící roviny)");
                         }
                         ui.label("Obalový objem:");
-                        ui.label(format!("Min: ({:.2}, {:.2}, {:.2})", node.bounds.min.x, node.bounds.min.y, node.bounds.min.z));
-                        ui.label(format!("Max: ({:.2}, {:.2}, {:.2})", node.bounds.max.x, node.bounds.max.y, node.bounds.max.z));
+                        ui.label(format!(
+                            "Min: ({:.2}, {:.2}, {:.2})",
+                            node.bounds.min.x, node.bounds.min.y, node.bounds.min.z
+                        ));
+                        ui.label(format!(
+                            "Max: ({:.2}, {:.2}, {:.2})",
+                            node.bounds.max.x, node.bounds.max.y, node.bounds.max.z
+                        ));
                         if ui.button("Odznačit").clicked() {
                             *selected_node = None;
                         }
@@ -202,22 +216,40 @@ pub fn draw_left_panel(
                 ui.label("Varování: Zobrazení celého stromu může zpomalit vykreslování.");
             }
             ui.checkbox(use_gpu_culling, "Použít GPU culling");
-            ui.checkbox(hide_selected, "Skrýt vybranou oblast");
+            ui.checkbox(show_loaded_model, "Zobrazit načtený model");
+            ui.checkbox(show_selected_model, "Zobrazit vybranou oblast");
 
             ui.separator();
             ui.heading("BSP Statistiky");
             ui.label(format!("Celkem uzlů: {}", current_stats.total_nodes));
-            ui.label(format!("Celkem trojúhelníků: {}", current_stats.total_triangles));
+            ui.label(format!(
+                "Celkem trojúhelníků: {}",
+                current_stats.total_triangles
+            ));
             ui.label(format!("Navštíveno uzlů: {}", current_stats.nodes_visited));
-            ui.label(format!("Vykresleno trojúhelníků: {}", current_stats.triangles_rendered));
-            ui.label(format!("Procházka efektivita: {:.1}%", if current_stats.total_nodes > 0 { (current_stats.nodes_visited as f32 / current_stats.total_nodes as f32) * 100.0 } else { 0.0 }));
+            ui.label(format!(
+                "Vykresleno trojúhelníků: {}",
+                current_stats.triangles_rendered
+            ));
+            ui.label(format!(
+                "Procházka efektivita: {:.1}%",
+                if current_stats.total_nodes > 0 {
+                    (current_stats.nodes_visited as f32 / current_stats.total_nodes as f32) * 100.0
+                } else {
+                    0.0
+                }
+            ));
 
             ui.separator();
             ui.heading("Mesh Info");
             ui.label(format!("Vrcholy: {}", current_cpu_mesh.positions.len()));
             match &current_cpu_mesh.indices {
-                three_d_asset::Indices::U32(idx) => ui.label(format!("Indexy (U32): {}", idx.len())),
-                three_d_asset::Indices::U16(idx) => ui.label(format!("Indexy (U16): {}", idx.len())),
+                three_d_asset::Indices::U32(idx) => {
+                    ui.label(format!("Indexy (U32): {}", idx.len()))
+                }
+                three_d_asset::Indices::U16(idx) => {
+                    ui.label(format!("Indexy (U16): {}", idx.len()))
+                }
                 _ => ui.label("Indexy: žádné"),
             };
 
@@ -238,7 +270,10 @@ pub fn draw_left_panel(
             ui.label("• ↓ - Díváš se dolů");
             ui.label("• ← - Otočit hlavu doleva");
             ui.label("• → - Otočit hlavu doprava");
-            ui.label(format!("Rychlost rozhlížení: {:.1}°/s", cam.look_speed * 180.0 / std::f32::consts::PI));
+            ui.label(format!(
+                "Rychlost rozhlížení: {:.1}°/s",
+                cam.look_speed * 180.0 / std::f32::consts::PI
+            ));
             ui.add(egui::Slider::new(&mut cam.look_speed, 0.5..=5.0).text("Rychlost rozhlížení"));
 
             ui.separator();
@@ -252,27 +287,55 @@ pub fn draw_left_panel(
             ui.heading("Informace o kameře");
             ui.label(format!("Aktivní režim: {:?}", mode));
             ui.collapsing("Spectator kamera", |ui| {
-                ui.label(format!("Pozice: ({:.1}, {:.1}, {:.1})", spectator_state.pos.x, spectator_state.pos.y, spectator_state.pos.z));
-                ui.label(format!("Směr (yaw): {:.1}°", spectator_state.yaw * 180.0 / std::f32::consts::PI));
-                ui.label(format!("Náklon (pitch): {:.1}°", spectator_state.pitch * 180.0 / std::f32::consts::PI));
+                ui.label(format!(
+                    "Pozice: ({:.1}, {:.1}, {:.1})",
+                    spectator_state.pos.x, spectator_state.pos.y, spectator_state.pos.z
+                ));
+                ui.label(format!(
+                    "Směr (yaw): {:.1}°",
+                    spectator_state.yaw * 180.0 / std::f32::consts::PI
+                ));
+                ui.label(format!(
+                    "Náklon (pitch): {:.1}°",
+                    spectator_state.pitch * 180.0 / std::f32::consts::PI
+                ));
                 ui.label(format!("Rychlost: {:.1}", spectator_state.speed));
             });
             ui.collapsing("ThirdPerson kamera", |ui| {
-                ui.label(format!("Pozice: ({:.1}, {:.1}, {:.1})", third_person_state.pos.x, third_person_state.pos.y, third_person_state.pos.z));
-                ui.label(format!("Směr (yaw): {:.1}°", third_person_state.yaw * 180.0 / std::f32::consts::PI));
-                ui.label(format!("Náklon (pitch): {:.1}°", third_person_state.pitch * 180.0 / std::f32::consts::PI));
+                ui.label(format!(
+                    "Pozice: ({:.1}, {:.1}, {:.1})",
+                    third_person_state.pos.x, third_person_state.pos.y, third_person_state.pos.z
+                ));
+                ui.label(format!(
+                    "Směr (yaw): {:.1}°",
+                    third_person_state.yaw * 180.0 / std::f32::consts::PI
+                ));
+                ui.label(format!(
+                    "Náklon (pitch): {:.1}°",
+                    third_person_state.pitch * 180.0 / std::f32::consts::PI
+                ));
                 ui.label(format!("Rychlost: {:.1}", third_person_state.speed));
             });
 
-            ui.label(format!("Aktuální pozice kamery: ({:.1}, {:.1}, {:.1})", cam.pos.x, cam.pos.y, cam.pos.z));
-            ui.label(format!("Vzdálenost mezi kamerami: {:.1}", (spectator_state.pos - third_person_state.pos).magnitude()));
+            ui.label(format!(
+                "Aktuální pozice kamery: ({:.1}, {:.1}, {:.1})",
+                cam.pos.x, cam.pos.y, cam.pos.z
+            ));
+            ui.label(format!(
+                "Vzdálenost mezi kamerami: {:.1}",
+                (spectator_state.pos - third_person_state.pos).magnitude()
+            ));
             ui.checkbox(show_camera_direction, "Zobrazit směr pohledu kamery");
-
-
 
             if let Ok(msg) = rx.try_recv() {
                 match msg {
-                    crate::Message::NewFile { cpu_mesh, file_name, load_status: _, triangles: _, bsp_tree: _ } => {
+                    crate::Message::NewFile {
+                        cpu_mesh,
+                        file_name,
+                        load_status: _,
+                        triangles: _,
+                        bsp_tree: _,
+                    } => {
                         *current_cpu_mesh = cpu_mesh;
                         *loaded_file_name = file_name;
                         *file_loading = false;
@@ -283,7 +346,6 @@ pub fn draw_left_panel(
                     _ => {}
                 }
             }
-
         });
     });
     if *tree_window_open {

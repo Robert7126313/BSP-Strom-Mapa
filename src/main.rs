@@ -46,7 +46,7 @@ mod camera;
 mod config; // global constants
 mod gui;
 mod input;
-           // Message types for the channel
+// Message types for the channel
 #[derive(Debug)]
 enum Message {
     InitialTree(BspNode),
@@ -413,7 +413,7 @@ fn main() -> Result<()> {
     // Inicializace GPU jobu pro frustum culling
     unsafe {
         let gl = &*context;
-        let gpu_job = Some(GpuJob::new(
+        gpu_job = Some(GpuJob::new(
             gl,
             shaders::CULL_SHADER,
             triangles.len() * 3 * 16,
@@ -449,7 +449,8 @@ fn main() -> Result<()> {
     let mut disable_culling = false;
     // Volba pro GPU akceleraci frustum cullingu
     let mut use_gpu_culling = false;
-    let mut hide_selected_area = false;
+    let mut show_loaded_model = true;
+    let mut show_selected_model = true;
     let mut tree_window_open = false;
 
     // stav pro vykreslovaný mesh
@@ -706,26 +707,25 @@ fn main() -> Result<()> {
 
         let mut normal_tris = Vec::with_capacity(visible_triangles.len());
         let mut highlight_tris = Vec::with_capacity(picked_tris.len());
-        if hide_selected_area {
-            for tri in visible_triangles.into_iter() {
-                let c = quantized_center(&tri);
-                if !picked_centers.contains(&c) {
-                    normal_tris.push(tri);
-                }
-            }
-        } else {
-            for tri in visible_triangles.into_iter() {
-                let c = quantized_center(&tri);
-                if picked_centers.contains(&c) {
+        for tri in visible_triangles.into_iter() {
+            let is_selected = picked_centers.contains(&quantized_center(&tri));
+            if is_selected {
+                if show_selected_model {
                     highlight_tris.push(tri);
-                } else {
+                } else if show_loaded_model {
                     normal_tris.push(tri);
                 }
+            } else if show_loaded_model {
+                normal_tris.push(tri);
             }
         }
 
-        let base_model = create_visible_mesh(&normal_tris, &context);
-        let highlight_model = if !highlight_tris.is_empty() && !hide_selected_area {
+        let base_model = if !normal_tris.is_empty() {
+            Some(create_visible_mesh(&normal_tris, &context))
+        } else {
+            None
+        };
+        let highlight_model = if !highlight_tris.is_empty() {
             Some(create_highlight_mesh(&highlight_tris, &context))
         } else {
             None
@@ -752,7 +752,8 @@ fn main() -> Result<()> {
                     &mut show_splitting_plane,
                     &mut disable_culling,
                     &mut use_gpu_culling,
-                    &mut hide_selected_area,
+                    &mut show_loaded_model,
+                    &mut show_selected_model,
                     &mut show_camera_direction,
                     &mut spectator_state,
                     &mut third_person_state,
@@ -996,8 +997,9 @@ fn main() -> Result<()> {
             BG_COLOR.0, BG_COLOR.1, BG_COLOR.2, 1.0, 1.0,
         ));
         let mut objects_to_render: Vec<&dyn Object> = Vec::new();
-        objects_to_render.push(&base_model);
-        // ... další objekty ...
+        if let Some(ref base) = base_model {
+            objects_to_render.push(base);
+        }
         if let Some(ref h) = highlight_model {
             objects_to_render.push(h);
         }
