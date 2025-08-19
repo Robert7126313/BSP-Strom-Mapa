@@ -104,6 +104,7 @@ pub fn draw_left_panel(
     current_cpu_mesh: &mut three_d::CpuMesh,
     current_triangles: &mut Vec<crate::bsp::Triangle>,
     bsp_root: &mut Option<crate::bsp::BspNode>,
+    min_triangles_per_leaf: &mut usize,
     selected_node: &mut Option<usize>,
     show_splitting_plane: &mut bool,
     disable_culling: &mut bool,
@@ -171,9 +172,22 @@ pub fn draw_left_panel(
 
             ui.separator();
             ui.heading("Struktura BSP stromu");
+            let rebuild = ui
+                .add(egui::Slider::new(min_triangles_per_leaf, 1..=100).text("Limit větvení"))
+                .changed();
             ui.checkbox(show_splitting_plane, "Zobrazit dělící rovinu");
             if ui.button("Otevřít vizualizaci").clicked() {
                 *tree_window_open = true;
+            }
+            if rebuild {
+                let mut next_id = 0;
+                *bsp_root = Some(crate::bsp::build_bsp(
+                    current_triangles,
+                    0,
+                    &mut next_id,
+                    *min_triangles_per_leaf,
+                ));
+                *selected_node = None;
             }
 
             if let Some(node_id) = *selected_node {
@@ -341,7 +355,12 @@ pub fn draw_left_panel(
                         *file_loading = false;
                         *current_triangles = crate::bsp::cpu_mesh_to_triangles(current_cpu_mesh);
                         let mut next_id = 0;
-                        *bsp_root = Some(crate::bsp::build_bsp(current_triangles, 0, &mut next_id));
+                        *bsp_root = Some(crate::bsp::build_bsp(
+                            current_triangles,
+                            0,
+                            &mut next_id,
+                            *min_triangles_per_leaf,
+                        ));
                     }
                     _ => {}
                 }

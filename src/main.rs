@@ -37,7 +37,7 @@ use crate::bsp::{
     triangle_center, BspNode, BspStats, Frustum, Triangle,
 };
 use crate::camera::{CamMode, CameraState, FreeCamera, SwitchDelay};
-use crate::config::BG_COLOR;
+use crate::config::{BG_COLOR, DEFAULT_MIN_TRIANGLES_PER_LEAF};
 use crate::gpu_job::GpuJob;
 use crate::input::{InputManager, KeyCode};
 
@@ -404,6 +404,7 @@ fn main() -> Result<()> {
     let mut current_triangles = cpu_mesh_to_triangles(&cpu_mesh);
     let mut file_loading = false;
     let mut gpu_job: Option<GpuJob> = None;
+    let mut min_triangles_per_leaf = DEFAULT_MIN_TRIANGLES_PER_LEAF;
 
     // Vytvoření triangles z CPU meshe
     println!("🔺 Převádím mesh na trojúhelníky...");
@@ -431,9 +432,10 @@ fn main() -> Result<()> {
     let tx_gui = tx.clone();
 
     // Spuštění stavby BSP stromu v jiném vlákně
+    let min_tris = min_triangles_per_leaf;
     thread::spawn(move || {
         let mut next_id = 0;
-        let tree = build_bsp(&triangles_clone, 0, &mut next_id);
+        let tree = build_bsp(&triangles_clone, 0, &mut next_id, min_tris);
         println!("✓ BSP strom sestaven s {} uzly", tree.count_nodes());
         tx.send(Message::InitialTree(tree)).unwrap();
     });
@@ -748,6 +750,7 @@ fn main() -> Result<()> {
                     &mut current_cpu_mesh,
                     &mut current_triangles,
                     &mut bsp_root,
+                    &mut min_triangles_per_leaf,
                     &mut selected_node,
                     &mut show_splitting_plane,
                     &mut disable_culling,
