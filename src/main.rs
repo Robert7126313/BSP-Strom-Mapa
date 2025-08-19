@@ -37,7 +37,7 @@ use crate::bsp::{
     triangle_center, BspNode, BspStats, Frustum, Triangle,
 };
 use crate::camera::{CamMode, CameraState, FreeCamera, SwitchDelay};
-use crate::config::{BG_COLOR, DEFAULT_BRANCH_LIMIT};
+use crate::config::{BG_COLOR, DEFAULT_BRANCH_LIMIT, MODEL_COLOR};
 use crate::gpu_job::GpuJob;
 use crate::input::{InputManager, KeyCode};
 
@@ -317,7 +317,7 @@ fn create_visible_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, Co
     let material = ColorMaterial::new_opaque(
         context,
         &CpuMaterial {
-            albedo: Srgba::new(100, 150, 255, 255),
+            albedo: MODEL_COLOR,
             ..Default::default()
         },
     );
@@ -461,7 +461,7 @@ fn main() -> Result<()> {
     let material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: Srgba::new(100, 150, 255, 255), // Modrá barva aby byl model viditelný
+            albedo: MODEL_COLOR, // Modrá barva aby byl model viditelný
             ..Default::default()
         },
     );

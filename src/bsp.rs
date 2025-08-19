@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use three_d::*;
 
 // Configuration values (colors and tree limits)
-use crate::config::{HIGHLIGHT_COLOR, MIN_TRIANGLES_PER_LEAF, PLANE_COLOR};
+use crate::config::{HIGHLIGHT_COLOR, MIN_TRIANGLES_PER_LEAF, MODEL_COLOR, PLANE_COLOR};
 
 // ---------------- BSP Implementation -------------------------------------- //
 
@@ -756,7 +756,7 @@ fn create_material_and_model(
     let material = ColorMaterial::new_opaque(
         context,
         &CpuMaterial {
-            albedo: Srgba::new(100, 150, 255, 255), // Modrá barva aby byl model viditelný
+            albedo: MODEL_COLOR, // Modrá barva aby byl model viditelný
             ..Default::default()
         },
     );
