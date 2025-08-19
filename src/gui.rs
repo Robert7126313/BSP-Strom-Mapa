@@ -10,46 +10,26 @@ struct TreePlotData {
 fn layout_bsp_tree(
     node: &crate::bsp::BspNode,
     depth: f64,
-    next_x: &mut f64,
+    x_min: f64,
+    x_max: f64,
     data: &mut TreePlotData,
-) -> f64 {
-    let left = if let Some(ref front) = node.front {
-        Some(layout_bsp_tree(front, depth + 1.0, next_x, data))
-    } else {
-        None
-    };
-    let right = if let Some(ref back) = node.back {
-        Some(layout_bsp_tree(back, depth + 1.0, next_x, data))
-    } else {
-        None
-    };
-
-    let self_x = match (left, right) {
-        (Some(l), Some(r)) => (l + r) / 2.0,
-        (Some(l), None) => l,
-        (None, Some(r)) => r,
-        (None, None) => {
-            let x = *next_x;
-            *next_x += 1.0;
-            x
-        }
-    };
-
+) {
+    let self_x = (x_min + x_max) / 2.0;
     let self_point = PlotPoint { x: self_x, y: -depth };
     data.positions.insert(node.id, self_point);
 
     if let Some(ref front) = node.front {
+        layout_bsp_tree(front, depth + 1.0, x_min, self_x, data);
         if let Some(&child_point) = data.positions.get(&front.id) {
             data.lines.push([self_point, child_point]);
         }
     }
     if let Some(ref back) = node.back {
+        layout_bsp_tree(back, depth + 1.0, self_x, x_max, data);
         if let Some(&child_point) = data.positions.get(&back.id) {
             data.lines.push([self_point, child_point]);
         }
     }
-
-    self_x
 }
 
 fn draw_bsp_tree_window(
@@ -64,10 +44,9 @@ fn draw_bsp_tree_window(
         .hscroll(true)
         .show(ctx, |ui| {
             let mut data = TreePlotData { positions: HashMap::new(), lines: Vec::new() };
-            let mut next_x = 0.0;
-            layout_bsp_tree(root, 0.0, &mut next_x, &mut data);
+            layout_bsp_tree(root, 0.0, 0.0, 1.0, &mut data);
 
-            let plot = Plot::new("bsp_tree_plot").data_aspect(1.0);
+            let plot = Plot::new("bsp_tree_plot");
             let plot_resp = plot.show(ui, |plot_ui| {
                 for line in &data.lines {
                     let pts = vec![[line[0].x, line[0].y], [line[1].x, line[1].y]];
