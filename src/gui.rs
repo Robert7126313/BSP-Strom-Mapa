@@ -1,3 +1,4 @@
+use crate::config::MAX_BSP_DEPTH;
 use cgmath::InnerSpace;
 use egui_plot::{Line, Plot, PlotPoint, Points, Text};
 use std::collections::HashMap;
@@ -116,6 +117,7 @@ pub fn draw_left_panel(
     cam: &mut crate::camera::FreeCamera,
     current_stats: &crate::bsp::BspStats,
     tree_window_open: &mut bool,
+    branch_limit: &mut u32,
 ) {
     egui::SidePanel::left("tree").show(ctx, |side_ui| {
         egui::ScrollArea::vertical().show(side_ui, |ui| {
@@ -171,6 +173,7 @@ pub fn draw_left_panel(
 
             ui.separator();
             ui.heading("Struktura BSP stromu");
+            ui.add(egui::Slider::new(branch_limit, 1..=MAX_BSP_DEPTH).text("Limit větvení"));
             ui.checkbox(show_splitting_plane, "Zobrazit dělící rovinu");
             if ui.button("Otevřít vizualizaci").clicked() {
                 *tree_window_open = true;
@@ -341,7 +344,12 @@ pub fn draw_left_panel(
                         *file_loading = false;
                         *current_triangles = crate::bsp::cpu_mesh_to_triangles(current_cpu_mesh);
                         let mut next_id = 0;
-                        *bsp_root = Some(crate::bsp::build_bsp(current_triangles, 0, &mut next_id));
+                        *bsp_root = Some(crate::bsp::build_bsp(
+                            current_triangles,
+                            0,
+                            *branch_limit,
+                            &mut next_id,
+                        ));
                     }
                     _ => {}
                 }

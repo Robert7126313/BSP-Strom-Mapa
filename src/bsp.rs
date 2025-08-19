@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use three_d::*;
 
 // Configuration values (colors and tree limits)
-use crate::config::{HIGHLIGHT_COLOR, MAX_BSP_DEPTH, MIN_TRIANGLES_PER_LEAF, PLANE_COLOR};
+use crate::config::{HIGHLIGHT_COLOR, MIN_TRIANGLES_PER_LEAF, PLANE_COLOR};
 
 // ---------------- BSP Implementation -------------------------------------- //
 
@@ -283,11 +283,16 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
 }
 
 // Upravená funkce build_bsp, která přiřazuje ID uzlům
-pub fn build_bsp(triangles: &[Triangle], depth: u32, next_id: &mut usize) -> BspNode {
+pub fn build_bsp(
+    triangles: &[Triangle],
+    depth: u32,
+    max_depth: u32,
+    next_id: &mut usize,
+) -> BspNode {
     let my_id = *next_id;
     *next_id += 1;
 
-    if depth >= MAX_BSP_DEPTH || triangles.len() <= MIN_TRIANGLES_PER_LEAF {
+    if depth >= max_depth || triangles.len() <= MIN_TRIANGLES_PER_LEAF {
         return BspNode::new_leaf(triangles.to_vec(), my_id);
     }
 
@@ -311,8 +316,8 @@ pub fn build_bsp(triangles: &[Triangle], depth: u32, next_id: &mut usize) -> Bsp
     }
 
     // Rekurzivní stavba podstromů - use sequential processing to fix ID assignment
-    let front_node = build_bsp(&front_triangles, depth + 1, next_id);
-    let back_node = build_bsp(&back_triangles, depth + 1, next_id);
+    let front_node = build_bsp(&front_triangles, depth + 1, max_depth, next_id);
+    let back_node = build_bsp(&back_triangles, depth + 1, max_depth, next_id);
 
     BspNode::new_node(splitting_plane, front_node, back_node, my_id)
 }
