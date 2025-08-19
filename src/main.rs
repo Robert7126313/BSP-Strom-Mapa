@@ -446,8 +446,6 @@ fn main() -> Result<()> {
         ..Default::default()
     };
 
-    // Přidáme novou proměnnou pro vypnutí cullingu
-    let mut disable_culling = false;
     // Volba pro GPU akceleraci frustum cullingu
     let mut use_gpu_culling = false;
     let mut show_loaded_model = true;
@@ -660,13 +658,7 @@ fn main() -> Result<()> {
         };
 
         // Výběr culling metody
-        let visible_triangles = if disable_culling {
-            // If culling is disabled, render all triangles without traversing
-            // the BSP tree each frame.
-            current_stats.nodes_visited = current_stats.total_nodes;
-            current_stats.triangles_rendered = current_stats.total_triangles;
-            current_triangles.clone()
-        } else if use_gpu_culling {
+        let visible_triangles = if use_gpu_culling {
             if let Some(ref job) = gpu_job {
                 gpu_cull_triangles(job, &current_triangles, &frustum)
             } else {
@@ -754,7 +746,6 @@ fn main() -> Result<()> {
                     &mut bsp_root,
                     &mut selected_node,
                     &mut show_splitting_plane,
-                    &mut disable_culling,
                     &mut use_gpu_culling,
                     &mut show_loaded_model,
                     &mut show_selected_model,
