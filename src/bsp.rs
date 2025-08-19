@@ -4,9 +4,10 @@ use cgmath::Vector3;
 use rayon::prelude::*;
 use three_d::*;
 
-// ---------------- BSP Implementation -------------------------------------- //
+// Configuration values (colors and tree limits)
+use crate::config::{HIGHLIGHT_COLOR, MAX_BSP_DEPTH, MIN_TRIANGLES_PER_LEAF, PLANE_COLOR};
 
-const MAX_DEPTH: u32 = 16;
+// ---------------- BSP Implementation -------------------------------------- //
 
 #[derive(Clone, Debug)]
 pub struct Triangle {
@@ -17,8 +18,8 @@ pub struct Triangle {
 
 #[derive(Clone, Debug)]
 pub struct Plane {
-    pub n: Vector3<f32>,  // normála
-    pub d: f32,           // vzdálenost od počátku (ax+by+cz+d=0)
+    pub n: Vector3<f32>, // normála
+    pub d: f32,          // vzdálenost od počátku (ax+by+cz+d=0)
 }
 
 impl Plane {
@@ -36,9 +37,9 @@ impl Plane {
         let dist = self.side(point);
         const EPSILON: f32 = 1e-6;
         match dist {
-            d if d > EPSILON => 1,     // front
-            d if d < -EPSILON => -1,   // back
-            _ => 0,                    // on plane
+            d if d > EPSILON => 1,   // front
+            d if d < -EPSILON => -1, // back
+            _ => 0,                  // on plane
         }
     }
 }
@@ -51,7 +52,7 @@ pub struct BspNode {
     pub back: Option<Box<BspNode>>,
     pub triangles: Vec<Triangle>,
     pub bounds: BoundingBox,
-    node_count: u32, // Cache the total number of nodes in this subtree
+    node_count: u32,   // Cache the total number of nodes in this subtree
     subtree_tris: u32, // Cache the total number of triangles in this subtree
 }
 
@@ -72,7 +73,7 @@ impl BspNode {
             back: None,
             triangles: triangles.clone(),
             bounds: BoundingBox::from_triangles(&triangles),
-            node_count: 1, // Leaf nodes count as 1
+            node_count: 1,                        // Leaf nodes count as 1
             subtree_tris: triangles.len() as u32, // Cache the triangle count
         }
     }
@@ -81,7 +82,7 @@ impl BspNode {
         // Calculate the node count and triangle count before moving the nodes into boxes
         let total_count = 1 + front.node_count + back.node_count;
         let total_tris = front.subtree_tris + back.subtree_tris;
-        
+
         // Nejprve vytvoříme společný obalový objem, než přesuneme hodnoty do boxů
         let bounds = BoundingBox::encompass(&front.bounds, &back.bounds);
 
@@ -92,20 +93,20 @@ impl BspNode {
             back: Some(Box::new(back)),
             triangles: Vec::new(),
             bounds,
-            node_count: total_count, // Use the cached count
+            node_count: total_count,  // Use the cached count
             subtree_tris: total_tris, // Cache the total triangle count in subtree
         }
     }
 
     pub fn count_nodes(&self) -> u32 {
-        1 + self.front.as_ref().map_or(0, |n| n.count_nodes()) + 
-            self.back.as_ref().map_or(0, |n| n.count_nodes())
+        1 + self.front.as_ref().map_or(0, |n| n.count_nodes())
+            + self.back.as_ref().map_or(0, |n| n.count_nodes())
     }
 
     fn count_triangles(&self) -> u32 {
-        self.triangles.len() as u32 + 
-        self.front.as_ref().map_or(0, |n| n.count_triangles()) +
-        self.back.as_ref().map_or(0, |n| n.count_triangles())
+        self.triangles.len() as u32
+            + self.front.as_ref().map_or(0, |n| n.count_triangles())
+            + self.back.as_ref().map_or(0, |n| n.count_triangles())
     }
 }
 
@@ -128,11 +129,7 @@ impl Vector3Ext<f32> for Vector3<f32> {
     where
         F: Fn(f32, f32) -> f32,
     {
-        Vector3::new(
-            f(self.x, other.x),
-            f(self.y, other.y),
-            f(self.z, other.z),
-        )
+        Vector3::new(f(self.x, other.x), f(self.y, other.y), f(self.z, other.z))
     }
 }
 
@@ -171,9 +168,13 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
     }
 
     // 3) Výběr osy podle největší extent
-    let axis = if extent.x >= extent.y && extent.x >= extent.z { 0 }
-               else if extent.y >= extent.z { 1 }
-               else { 2 };
+    let axis = if extent.x >= extent.y && extent.x >= extent.z {
+        0
+    } else if extent.y >= extent.z {
+        1
+    } else {
+        2
+    };
 
     // Pokud je extent na vybrané ose téměř nulový, použij fallback
     if extent[axis] < 1e-6 {
@@ -190,7 +191,7 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
     #[derive(Clone)]
     struct Bucket {
         count: usize,
-        bb: BoundingBox
+        bb: BoundingBox,
     }
 
     let mut buckets_data = vec![
@@ -210,7 +211,8 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
     for (i, tri) in tris.iter().enumerate() {
         let c_axis = centroid_axis[i];
         let t = ((c_axis - mins[axis]) / extent[axis] * (buckets as f32))
-            .floor().clamp(0.0, (buckets - 1) as f32) as usize;
+            .floor()
+            .clamp(0.0, (buckets - 1) as f32) as usize;
         let b = &mut buckets_data[t];
         b.count += 1;
         b.bb = BoundingBox::encompass(&b.bb, &BoundingBox::from_triangle(tri));
@@ -282,12 +284,10 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
 
 // Upravená funkce build_bsp, která přiřazuje ID uzlům
 pub fn build_bsp(triangles: &[Triangle], depth: u32, next_id: &mut usize) -> BspNode {
-    const MIN_TRIANGLES: usize = 20;
-
     let my_id = *next_id;
     *next_id += 1;
 
-    if depth >= MAX_DEPTH || triangles.len() <= MIN_TRIANGLES {
+    if depth >= MAX_BSP_DEPTH || triangles.len() <= MIN_TRIANGLES_PER_LEAF {
         return BspNode::new_leaf(triangles.to_vec(), my_id);
     }
 
@@ -299,9 +299,8 @@ pub fn build_bsp(triangles: &[Triangle], depth: u32, next_id: &mut usize) -> Bsp
     let splitting_plane = bucketed_sah_plane(triangles, 16);
 
     // Paralelní klasifikace trojúhelníků pomocí Rayon
-    let (front_triangles, back_triangles): (Vec<Triangle>, Vec<Triangle>) = triangles.par_iter()
-        .cloned()
-        .partition(|triangle| {
+    let (front_triangles, back_triangles): (Vec<Triangle>, Vec<Triangle>) =
+        triangles.par_iter().cloned().partition(|triangle| {
             let center = triangle_center(triangle);
             splitting_plane.classify(center) >= 0
         });
@@ -314,7 +313,7 @@ pub fn build_bsp(triangles: &[Triangle], depth: u32, next_id: &mut usize) -> Bsp
     // Rekurzivní stavba podstromů - use sequential processing to fix ID assignment
     let front_node = build_bsp(&front_triangles, depth + 1, next_id);
     let back_node = build_bsp(&back_triangles, depth + 1, next_id);
-    
+
     BspNode::new_node(splitting_plane, front_node, back_node, my_id)
 }
 
@@ -331,12 +330,21 @@ pub fn find_node(node: &BspNode, id: usize) -> Option<&BspNode> {
 
 /// Fills `path` with pointers from the root down *to* the node with `target_id`.
 /// Returns true if found.
-pub fn find_node_path<'a>(node: &'a BspNode, target_id: usize, path: &mut Vec<&'a BspNode>) -> bool {
+pub fn find_node_path<'a>(
+    node: &'a BspNode,
+    target_id: usize,
+    path: &mut Vec<&'a BspNode>,
+) -> bool {
     if node.id == target_id {
         path.push(node);
         return true;
     }
-    for child in node.front.as_deref().into_iter().chain(node.back.as_deref()) {
+    for child in node
+        .front
+        .as_deref()
+        .into_iter()
+        .chain(node.back.as_deref())
+    {
         if find_node_path(child, target_id, path) {
             path.push(node);
             return true;
@@ -345,7 +353,10 @@ pub fn find_node_path<'a>(node: &'a BspNode, target_id: usize, path: &mut Vec<&'
     false
 }
 
-pub fn find_deepest_node_containing_point<'a>(node: &'a BspNode, point: Vector3<f32>) -> Option<&'a BspNode> {
+pub fn find_deepest_node_containing_point<'a>(
+    node: &'a BspNode,
+    point: Vector3<f32>,
+) -> Option<&'a BspNode> {
     if !node.bounds.contains(point) {
         return None;
     }
@@ -365,13 +376,13 @@ pub fn find_deepest_node_containing_point<'a>(node: &'a BspNode, point: Vector3<
 // Funkce pro rekurzivní vykreslení stromu v UI a zpracování výběru uzlu
 pub fn render_bsp_tree(ui: &mut egui::Ui, node: &BspNode, selected: &mut Option<usize>) {
     // build the label
-    let is_leaf     = node.plane.is_none();
-    let local_tris  = node.triangles.len();
+    let is_leaf = node.plane.is_none();
+    let local_tris = node.triangles.len();
     // total tris in this subtree (using cached value)
     let subtree_tris = node.subtree_tris as usize;
     // number of children nodes
     let child_count = node.front.as_ref().map_or(0, |n| n.node_count - 1)
-                + node.back.as_ref().map_or(0, |n| n.node_count - 1);
+        + node.back.as_ref().map_or(0, |n| n.node_count - 1);
 
     let is_selected = selected == &Some(node.id);
     let label = if is_leaf {
@@ -384,21 +395,33 @@ pub fn render_bsp_tree(ui: &mut egui::Ui, node: &BspNode, selected: &mut Option<
     } else {
         // interior: show total subtree triangles
         if is_selected {
-            format!("🔸 Node {} ({} tris subtree, {} children)", node.id, subtree_tris, child_count)
+            format!(
+                "🔸 Node {} ({} tris subtree, {} children)",
+                node.id, subtree_tris, child_count
+            )
         } else {
-            format!("Node {} ({} tris subtree, {} children)", node.id, subtree_tris, child_count)
+            format!(
+                "Node {} ({} tris subtree, {} children)",
+                node.id, subtree_tris, child_count
+            )
         }
     };
 
     // collapsible header
     let header = egui::CollapsingHeader::new(label)
-        .id_salt(node.id)  // Aktualizace zastaralé metody id_source na id_salt
+        .id_salt(node.id) // Aktualizace zastaralé metody id_source na id_salt
         .default_open(node.id == selected.unwrap_or(0)); // auto-open the selected node
 
     // draw the header
     let response = header.show(ui, |ui| {
         // small "select" button inside the collapsible content
-        if ui.add(egui::SelectableLabel::new(selected == &Some(node.id), "▶ Select")).clicked() {
+        if ui
+            .add(egui::SelectableLabel::new(
+                selected == &Some(node.id),
+                "▶ Select",
+            ))
+            .clicked()
+        {
             *selected = Some(node.id);
         }
 
@@ -440,38 +463,50 @@ pub fn collect_triangles_in_subtree(node: &BspNode, triangles: &mut Vec<Triangle
 
 // Funkce pro vytvoření zvýrazněného meshe
 pub fn create_highlight_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, ColorMaterial> {
-    let positions: Vec<Vec3> = triangles.iter().flat_map(|tri| {
-        vec![
-            vec3(tri.a.x, tri.a.y, tri.a.z),
-            vec3(tri.b.x, tri.b.y, tri.b.z),
-            vec3(tri.c.x, tri.c.y, tri.c.z),
-        ]
-    }).collect();
-    
-    let indices: Vec<u32> = (0..triangles.len() as u32).flat_map(|i| {
-        let base = i * 3;
-        vec![base, base + 1, base + 2]
-    }).collect();
-    
+    let positions: Vec<Vec3> = triangles
+        .iter()
+        .flat_map(|tri| {
+            vec![
+                vec3(tri.a.x, tri.a.y, tri.a.z),
+                vec3(tri.b.x, tri.b.y, tri.b.z),
+                vec3(tri.c.x, tri.c.y, tri.c.z),
+            ]
+        })
+        .collect();
+
+    let indices: Vec<u32> = (0..triangles.len() as u32)
+        .flat_map(|i| {
+            let base = i * 3;
+            vec![base, base + 1, base + 2]
+        })
+        .collect();
+
     let cpu_mesh = CpuMesh {
         positions: Positions::F32(positions),
         indices: Indices::U32(indices),
         ..Default::default()
     };
-    
-    let material = ColorMaterial::new_transparent(context, &CpuMaterial {
-        albedo: Srgba::new(255, 50, 50, 150), // Červená s průhledností
-        ..Default::default()
-    });
-    
+
+    let material = ColorMaterial::new_transparent(
+        context,
+        &CpuMaterial {
+            albedo: HIGHLIGHT_COLOR, // configured highlight color
+            ..Default::default()
+        },
+    );
+
     Gm::new(Mesh::new(context, &cpu_mesh), material)
 }
 
 // Funkce pro vytvoření meshe dělící roviny
-pub fn create_plane_mesh(plane: &Plane, bounds: &BoundingBox, context: &Context) -> Gm<Mesh, ColorMaterial> {
+pub fn create_plane_mesh(
+    plane: &Plane,
+    bounds: &BoundingBox,
+    context: &Context,
+) -> Gm<Mesh, ColorMaterial> {
     // Vypočítáme střed obalového objemu
     let center = (bounds.min + bounds.max) * 0.5;
-    
+
     // Potřebujeme najít dva vektory kolmé na normálu roviny
     // Nejprve najdeme libovolný vektor kolmý na normálu
     let n = plane.n;
@@ -482,13 +517,13 @@ pub fn create_plane_mesh(plane: &Plane, bounds: &BoundingBox, context: &Context)
     } else {
         Vector3::new(-n.y, n.x, 0.0).normalize()
     };
-    
+
     // Druhý vektor kolmý na normálu a první vektor
     let v = n.cross(u).normalize();
-    
+
     // Velikost roviny - vycházíme z velikosti obalového objemu
     let extent = (bounds.max - bounds.min).magnitude() * 0.6;
-    
+
     // Vytvoříme čtyři rohy roviny
     let corners = [
         center + (u + v) * extent,
@@ -496,7 +531,7 @@ pub fn create_plane_mesh(plane: &Plane, bounds: &BoundingBox, context: &Context)
         center + (-u - v) * extent,
         center + (-u + v) * extent,
     ];
-    
+
     // Vytvoříme pozice a indexy pro mesh
     let positions = vec![
         vec3(corners[0].x, corners[0].y, corners[0].z),
@@ -504,21 +539,24 @@ pub fn create_plane_mesh(plane: &Plane, bounds: &BoundingBox, context: &Context)
         vec3(corners[2].x, corners[2].y, corners[2].z),
         vec3(corners[3].x, corners[3].y, corners[3].z),
     ];
-    
+
     // Dva trojúlníky pro čtyřúhelník
     let indices = vec![0, 1, 2, 2, 3, 0];
-    
+
     let cpu_mesh = CpuMesh {
         positions: Positions::F32(positions),
         indices: Indices::U32(indices),
         ..Default::default()
     };
-    
-    let material = ColorMaterial::new_transparent(context, &CpuMaterial {
-        albedo: Srgba::new(200, 200, 50, 128), // Žlutá s průhledností
-        ..Default::default()
-    });
-    
+
+    let material = ColorMaterial::new_transparent(
+        context,
+        &CpuMaterial {
+            albedo: PLANE_COLOR, // configured plane color
+            ..Default::default()
+        },
+    );
+
     Gm::new(Mesh::new(context, &cpu_mesh), material)
 }
 
@@ -543,16 +581,29 @@ pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
                     let c_idx = indices[i + 2] as usize;
 
                     // Kontrola, zda indexy jsou v rozsahu
-                    if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len() {
-                        let a = Vector3::new(positions[a_idx].x, positions[a_idx].y, positions[a_idx].z);
-                        let b = Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z);
-                        let c = Vector3::new(positions[c_idx].x, positions[c_idx].y, positions[c_idx].z);
+                    if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len()
+                    {
+                        let a = Vector3::new(
+                            positions[a_idx].x,
+                            positions[a_idx].y,
+                            positions[a_idx].z,
+                        );
+                        let b = Vector3::new(
+                            positions[b_idx].x,
+                            positions[b_idx].y,
+                            positions[b_idx].z,
+                        );
+                        let c = Vector3::new(
+                            positions[c_idx].x,
+                            positions[c_idx].y,
+                            positions[c_idx].z,
+                        );
 
                         triangles.push(Triangle { a, b, c });
                     }
                 }
             }
-        },
+        }
         Indices::U16(indices) => {
             // Pro každou trojici indexů vytvoříme trojúhelník
             for i in (0..indices.len()).step_by(3) {
@@ -562,23 +613,38 @@ pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
                     let c_idx = indices[i + 2] as usize;
 
                     // Kontrola, zda indexy jsou v rozsahu
-                    if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len() {
-                        let a = Vector3::new(positions[a_idx].x, positions[a_idx].y, positions[a_idx].z);
-                        let b = Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z);
-                        let c = Vector3::new(positions[c_idx].x, positions[c_idx].y, positions[c_idx].z);
+                    if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len()
+                    {
+                        let a = Vector3::new(
+                            positions[a_idx].x,
+                            positions[a_idx].y,
+                            positions[a_idx].z,
+                        );
+                        let b = Vector3::new(
+                            positions[b_idx].x,
+                            positions[b_idx].y,
+                            positions[b_idx].z,
+                        );
+                        let c = Vector3::new(
+                            positions[c_idx].x,
+                            positions[c_idx].y,
+                            positions[c_idx].z,
+                        );
 
                         triangles.push(Triangle { a, b, c });
                     }
                 }
             }
-        },
+        }
         Indices::None => {
             // Pokud nemáme indexy, předpokládáme, že pozice jsou přímo vrcholy trojúhelníků
             for i in (0..positions.len()).step_by(3) {
                 if i + 2 < positions.len() {
                     let a = Vector3::new(positions[i].x, positions[i].y, positions[i].z);
-                    let b = Vector3::new(positions[i + 1].x, positions[i + 1].y, positions[i + 1].z);
-                    let c = Vector3::new(positions[i + 2].x, positions[i + 2].y, positions[i + 2].z);
+                    let b =
+                        Vector3::new(positions[i + 1].x, positions[i + 1].y, positions[i + 1].z);
+                    let c =
+                        Vector3::new(positions[i + 2].x, positions[i + 2].y, positions[i + 2].z);
 
                     triangles.push(Triangle { a, b, c });
                 }
@@ -599,7 +665,7 @@ pub fn traverse_bsp_with_frustum(
     observer_position: Vector3<f32>,
     frustum: &Frustum,
     stats: &mut BspStats,
-    visible_triangles: &mut Vec<Triangle>
+    visible_triangles: &mut Vec<Triangle>,
 ) {
     stats.nodes_visited += 1;
 
@@ -636,29 +702,59 @@ pub fn traverse_bsp_with_frustum(
         if side >= 0 {
             // Pozorovatel je před rovinou, nejprve front, pak back
             if let Some(ref front) = node.front {
-                traverse_bsp_with_frustum(front, observer_position, frustum, stats, visible_triangles);
+                traverse_bsp_with_frustum(
+                    front,
+                    observer_position,
+                    frustum,
+                    stats,
+                    visible_triangles,
+                );
             }
             if let Some(ref back) = node.back {
-                traverse_bsp_with_frustum(back, observer_position, frustum, stats, visible_triangles);
+                traverse_bsp_with_frustum(
+                    back,
+                    observer_position,
+                    frustum,
+                    stats,
+                    visible_triangles,
+                );
             }
         } else {
             // Pozorovatel je za rovinou, nejprve back, pak front
             if let Some(ref back) = node.back {
-                traverse_bsp_with_frustum(back, observer_position, frustum, stats, visible_triangles);
+                traverse_bsp_with_frustum(
+                    back,
+                    observer_position,
+                    frustum,
+                    stats,
+                    visible_triangles,
+                );
             }
             if let Some(ref front) = node.front {
-                traverse_bsp_with_frustum(front, observer_position, frustum, stats, visible_triangles);
+                traverse_bsp_with_frustum(
+                    front,
+                    observer_position,
+                    frustum,
+                    stats,
+                    visible_triangles,
+                );
             }
         }
     }
 }
 
 // Funkce pro vytvoření materiálu a modelu z CPU meshe
-fn create_material_and_model(context: &Context, cpu_mesh: &CpuMesh) -> (ColorMaterial, Gm<Mesh, ColorMaterial>) {
-    let material = ColorMaterial::new_opaque(context, &CpuMaterial {
-        albedo: Srgba::new(100, 150, 255, 255), // Modrá barva aby byl model viditelný
-        ..Default::default()
-    });
+fn create_material_and_model(
+    context: &Context,
+    cpu_mesh: &CpuMesh,
+) -> (ColorMaterial, Gm<Mesh, ColorMaterial>) {
+    let material = ColorMaterial::new_opaque(
+        context,
+        &CpuMaterial {
+            albedo: Srgba::new(100, 150, 255, 255), // Modrá barva aby byl model viditelný
+            ..Default::default()
+        },
+    );
     let model = Gm::new(Mesh::new(context, cpu_mesh), material.clone());
 
     (material, model)
@@ -666,22 +762,35 @@ fn create_material_and_model(context: &Context, cpu_mesh: &CpuMesh) -> (ColorMat
 
 // Funkce pro vytvoření glow materiálu
 fn create_glow_material(context: &Context, color: Srgba, opacity: u8) -> ColorMaterial {
-    ColorMaterial::new_transparent(context, &CpuMaterial {
-        albedo: Srgba::new(color.r, color.g, color.b, opacity),
-        ..Default::default()
-    })
+    ColorMaterial::new_transparent(
+        context,
+        &CpuMaterial {
+            albedo: Srgba::new(color.r, color.g, color.b, opacity),
+            ..Default::default()
+        },
+    )
 }
 
 // Funkce pro vytvoření směrového materiálu
 fn create_direction_material(context: &Context, color: Srgba, opacity: u8) -> ColorMaterial {
-    ColorMaterial::new_transparent(context, &CpuMaterial {
-        albedo: Srgba::new(color.r, color.g, color.b, opacity),
-        ..Default::default()
-    })
+    ColorMaterial::new_transparent(
+        context,
+        &CpuMaterial {
+            albedo: Srgba::new(color.r, color.g, color.b, opacity),
+            ..Default::default()
+        },
+    )
 }
 
 // Funkce pro vytvoření směrového paprsku
-fn create_direction_ray(context: &Context, position: Vector3<f32>, direction: Vector3<f32>, color: Srgba, opacity: u8, length: f32) -> Gm<Mesh, ColorMaterial> {
+fn create_direction_ray(
+    context: &Context,
+    position: Vector3<f32>,
+    direction: Vector3<f32>,
+    color: Srgba,
+    opacity: u8,
+    length: f32,
+) -> Gm<Mesh, ColorMaterial> {
     let direction_material = create_direction_material(context, color, opacity);
     let direction_mesh = CpuMesh::cone(16);
     let mut direction_ray = Gm::new(Mesh::new(context, &direction_mesh), direction_material);
@@ -710,14 +819,14 @@ fn create_direction_ray(context: &Context, position: Vector3<f32>, direction: Ve
         // Normální případ - rotace kolem vypočtené osy
         Mat4::from_axis_angle(
             vec3(rotation_axis.x, rotation_axis.y, rotation_axis.z),
-            Rad(angle)
+            Rad(angle),
         )
     };
-    
+
     // Měřítko - válec - válec je standardně výšky 2.0, chceme jej natáhnout na délku `length`
     // a zúžit na šířku `scale`
     let scaling = Mat4::from_nonuniform_scale(scale, length / 2.0, scale);
-    
+
     // Aplikujeme transformace v pořadí: měřítko, rotace, posun
     direction_ray.set_transformation(translation * rotation * scaling);
 
@@ -739,9 +848,12 @@ impl BoundingBox {
     }
 
     pub fn contains(&self, point: Vector3<f32>) -> bool {
-        point.x >= self.min.x && point.x <= self.max.x &&
-        point.y >= self.min.y && point.y <= self.max.y &&
-        point.z >= self.min.z && point.z <= self.max.z
+        point.x >= self.min.x
+            && point.x <= self.max.x
+            && point.y >= self.min.y
+            && point.y <= self.max.y
+            && point.z >= self.min.z
+            && point.z <= self.max.z
     }
 
     fn from_triangle(tri: &Triangle) -> Self {
@@ -796,9 +908,21 @@ impl BoundingBox {
     fn intersects_plane(&self, plane: &Plane) -> bool {
         // compute the "positive vertex" for this plane's normal
         let p = Vector3::new(
-            if plane.n.x >= 0.0 { self.max.x } else { self.min.x },
-            if plane.n.y >= 0.0 { self.max.y } else { self.min.y },
-            if plane.n.z >= 0.0 { self.max.z } else { self.min.z },
+            if plane.n.x >= 0.0 {
+                self.max.x
+            } else {
+                self.min.x
+            },
+            if plane.n.y >= 0.0 {
+                self.max.y
+            } else {
+                self.min.y
+            },
+            if plane.n.z >= 0.0 {
+                self.max.z
+            } else {
+                self.min.z
+            },
         );
         // if this farthest point is in front, the box may intersect or be in front
         plane.side(p) >= 0.0
@@ -826,71 +950,65 @@ impl Frustum {
 
         // Převedeme na pole - Matrix4 nemá as_slice(), musíme použít jiný přístup
         let mat = [
-            vp_matrix.x.x, vp_matrix.x.y, vp_matrix.x.z, vp_matrix.x.w,
-            vp_matrix.y.x, vp_matrix.y.y, vp_matrix.y.z, vp_matrix.y.w,
-            vp_matrix.z.x, vp_matrix.z.y, vp_matrix.z.z, vp_matrix.z.w,
-            vp_matrix.w.x, vp_matrix.w.y, vp_matrix.w.z, vp_matrix.w.w,
+            vp_matrix.x.x,
+            vp_matrix.x.y,
+            vp_matrix.x.z,
+            vp_matrix.x.w,
+            vp_matrix.y.x,
+            vp_matrix.y.y,
+            vp_matrix.y.z,
+            vp_matrix.y.w,
+            vp_matrix.z.x,
+            vp_matrix.z.y,
+            vp_matrix.z.z,
+            vp_matrix.z.w,
+            vp_matrix.w.x,
+            vp_matrix.w.y,
+            vp_matrix.w.z,
+            vp_matrix.w.w,
         ];
 
         // Extrahujeme 6 rovin frustumu
         // Levá rovina
         let left = Plane {
-            n: Vector3::new(
-                mat[3] + mat[0],
-                mat[7] + mat[4],
-                mat[11] + mat[8],
-            ).normalize(),
-            d: (mat[15] + mat[12]) / (mat[3] + mat[0]).hypot((mat[7] + mat[4]).hypot(mat[11] + mat[8])),
+            n: Vector3::new(mat[3] + mat[0], mat[7] + mat[4], mat[11] + mat[8]).normalize(),
+            d: (mat[15] + mat[12])
+                / (mat[3] + mat[0]).hypot((mat[7] + mat[4]).hypot(mat[11] + mat[8])),
         };
 
         // Pravá rovina
         let right = Plane {
-            n: Vector3::new(
-                mat[3] - mat[0],
-                mat[7] - mat[4],
-                mat[11] - mat[8],
-            ).normalize(),
-            d: (mat[15] - mat[12]) / (mat[3] - mat[0]).hypot((mat[7] - mat[4]).hypot(mat[11] - mat[8])),
+            n: Vector3::new(mat[3] - mat[0], mat[7] - mat[4], mat[11] - mat[8]).normalize(),
+            d: (mat[15] - mat[12])
+                / (mat[3] - mat[0]).hypot((mat[7] - mat[4]).hypot(mat[11] - mat[8])),
         };
 
         // Spodní rovina
         let bottom = Plane {
-            n: Vector3::new(
-                mat[3] + mat[1],
-                mat[7] + mat[5],
-                mat[11] + mat[9],
-            ).normalize(),
-            d: (mat[15] + mat[13]) / (mat[3] + mat[1]).hypot((mat[7] + mat[5]).hypot(mat[11] + mat[9])),
+            n: Vector3::new(mat[3] + mat[1], mat[7] + mat[5], mat[11] + mat[9]).normalize(),
+            d: (mat[15] + mat[13])
+                / (mat[3] + mat[1]).hypot((mat[7] + mat[5]).hypot(mat[11] + mat[9])),
         };
 
         // Horní rovina
         let top = Plane {
-            n: Vector3::new(
-                mat[3] - mat[1],
-                mat[7] - mat[5],
-                mat[11] - mat[9],
-            ).normalize(),
-            d: (mat[15] - mat[13]) / (mat[3] - mat[1]).hypot((mat[7] - mat[5]).hypot(mat[11] - mat[9])),
+            n: Vector3::new(mat[3] - mat[1], mat[7] - mat[5], mat[11] - mat[9]).normalize(),
+            d: (mat[15] - mat[13])
+                / (mat[3] - mat[1]).hypot((mat[7] - mat[5]).hypot(mat[11] - mat[9])),
         };
 
         // Blízká rovina
         let near = Plane {
-            n: Vector3::new(
-                mat[3] + mat[2],
-                mat[7] + mat[6],
-                mat[11] + mat[10],
-            ).normalize(),
-            d: (mat[15] + mat[14]) / (mat[3] + mat[2]).hypot((mat[7] + mat[6]).hypot(mat[11] + mat[10])),
+            n: Vector3::new(mat[3] + mat[2], mat[7] + mat[6], mat[11] + mat[10]).normalize(),
+            d: (mat[15] + mat[14])
+                / (mat[3] + mat[2]).hypot((mat[7] + mat[6]).hypot(mat[11] + mat[10])),
         };
 
         // Vzdálená rovina
         let far = Plane {
-            n: Vector3::new(
-                mat[3] - mat[2],
-                mat[7] - mat[6],
-                mat[11] - mat[10],
-            ).normalize(),
-            d: (mat[15] - mat[14]) / (mat[3] - mat[2]).hypot((mat[7] - mat[6]).hypot(mat[11] - mat[10])),
+            n: Vector3::new(mat[3] - mat[2], mat[7] - mat[6], mat[11] - mat[10]).normalize(),
+            d: (mat[15] - mat[14])
+                / (mat[3] - mat[2]).hypot((mat[7] - mat[6]).hypot(mat[11] - mat[10])),
         };
 
         Frustum {
@@ -900,12 +1018,42 @@ impl Frustum {
 
     pub fn as_vec4_array(&self) -> [[f32; 4]; 6] {
         [
-            [self.planes[0].n.x, self.planes[0].n.y, self.planes[0].n.z, self.planes[0].d],
-            [self.planes[1].n.x, self.planes[1].n.y, self.planes[1].n.z, self.planes[1].d],
-            [self.planes[2].n.x, self.planes[2].n.y, self.planes[2].n.z, self.planes[2].d],
-            [self.planes[3].n.x, self.planes[3].n.y, self.planes[3].n.z, self.planes[3].d],
-            [self.planes[4].n.x, self.planes[4].n.y, self.planes[4].n.z, self.planes[4].d],
-            [self.planes[5].n.x, self.planes[5].n.y, self.planes[5].n.z, self.planes[5].d],
+            [
+                self.planes[0].n.x,
+                self.planes[0].n.y,
+                self.planes[0].n.z,
+                self.planes[0].d,
+            ],
+            [
+                self.planes[1].n.x,
+                self.planes[1].n.y,
+                self.planes[1].n.z,
+                self.planes[1].d,
+            ],
+            [
+                self.planes[2].n.x,
+                self.planes[2].n.y,
+                self.planes[2].n.z,
+                self.planes[2].d,
+            ],
+            [
+                self.planes[3].n.x,
+                self.planes[3].n.y,
+                self.planes[3].n.z,
+                self.planes[3].d,
+            ],
+            [
+                self.planes[4].n.x,
+                self.planes[4].n.y,
+                self.planes[4].n.z,
+                self.planes[4].d,
+            ],
+            [
+                self.planes[5].n.x,
+                self.planes[5].n.y,
+                self.planes[5].n.z,
+                self.planes[5].d,
+            ],
         ]
     }
 }
