@@ -394,6 +394,7 @@ fn main() -> Result<()> {
     let mut show_loaded_model = true;
     let mut show_selected_model = true;
     let mut tree_window_open = false;
+    let mut selected_node_help_open = false;
     let mut branch_limit = DEFAULT_BRANCH_LIMIT;
     let mut last_branch_limit = branch_limit;
     let mut limit_culling = false;
@@ -638,6 +639,7 @@ fn main() -> Result<()> {
                     &mut tree_window_open,
                     &mut branch_limit,
                     &mut limit_culling,
+                    &mut selected_node_help_open,
                 );
             },
         );
