@@ -600,34 +600,35 @@ fn main() -> Result<()> {
         // Použij správnou pozici pozorovatele pro traverzování BSP stromu
         let observer_position = match mode {
             CamMode::Spectator => cam.pos, // V režimu Spectator používáme pozici kamery
-            CamMode::ThirdPerson => spectator_state.pos, // V režimu ThirdPerson používáme pozici Spectator kamery
+            CamMode::ThirdPerson => third_person_state.pos, // V režimu ThirdPerson používáme pozici ThirdPerson kamery
         };
 
-        // V třetí osobě vytvoříme frustum z pozice pozorovatele
+        // V třetí osobě vytvoříme frustum z pozice third person kamery
         let frustum = if mode == CamMode::ThirdPerson {
-            // Vytvoříme kameru z pozice spectator
-            let spectator_dir = Vector3::new(
-                spectator_state.yaw.cos() * spectator_state.pitch.cos(),
-                spectator_state.pitch.sin(),
-                spectator_state.yaw.sin() * spectator_state.pitch.cos(),
+            // Vytvoříme kameru z pozice third person
+            let third_person_dir = Vector3::new(
+                third_person_state.yaw.cos() * third_person_state.pitch.cos(),
+                third_person_state.pitch.sin(),
+                third_person_state.yaw.sin() * third_person_state.pitch.cos(),
             )
             .normalize();
 
-            let spectator_up = if spectator_dir.x.abs() < 1e-4 && spectator_dir.z.abs() < 1e-4 {
-                Vector3::unit_z()
-            } else {
-                Vector3::unit_y()
-            };
-            let spectator_camera = Camera::new_perspective(
+            let third_person_up =
+                if third_person_dir.x.abs() < 1e-4 && third_person_dir.z.abs() < 1e-4 {
+                    Vector3::unit_z()
+                } else {
+                    Vector3::unit_y()
+                };
+            let third_person_camera = Camera::new_perspective(
                 frame_input.viewport,
-                spectator_state.pos,
-                spectator_state.pos + spectator_dir,
-                spectator_up,
+                third_person_state.pos,
+                third_person_state.pos + third_person_dir,
+                third_person_up,
                 Deg(60.0),
                 0.1,
                 1000.0,
             );
-            Frustum::from_camera(&spectator_camera)
+            Frustum::from_camera(&third_person_camera)
         } else {
             Frustum::from_camera(&camera_obj)
         };
@@ -954,8 +955,6 @@ fn main() -> Result<()> {
         } else {
             // Aktualizuj stav aktuální kamery (ThirdPerson)
             third_person_state = CameraState::from_camera(&cam);
-            // Synchronizuj spectator_state pro účely cullingu
-            spectator_state = third_person_state.clone();
 
             // Aktualizuj pozici značky aktuální kamery (ThirdPerson)
             third_person_glow.set_transformation(
