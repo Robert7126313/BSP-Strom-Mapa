@@ -62,6 +62,8 @@ pub struct BspStats {
     pub triangles_rendered: u32,
     pub total_nodes: u32,
     pub total_triangles: u32,
+    /// Počet uzlů navštívených při posledním výběru uzlu
+    pub nodes_to_selected: u32,
 }
 
 impl BspNode {
@@ -361,17 +363,19 @@ pub fn find_node_path<'a>(
 pub fn find_deepest_node_containing_point<'a>(
     node: &'a BspNode,
     point: Vector3<f32>,
+    visited: &mut u32,
 ) -> Option<&'a BspNode> {
+    *visited += 1;
     if !node.bounds.contains(point) {
         return None;
     }
     if let Some(ref front) = node.front {
-        if let Some(n) = find_deepest_node_containing_point(front, point) {
+        if let Some(n) = find_deepest_node_containing_point(front, point, visited) {
             return Some(n);
         }
     }
     if let Some(ref back) = node.back {
-        if let Some(n) = find_deepest_node_containing_point(back, point) {
+        if let Some(n) = find_deepest_node_containing_point(back, point, visited) {
             return Some(n);
         }
     }

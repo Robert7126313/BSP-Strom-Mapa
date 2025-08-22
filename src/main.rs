@@ -548,6 +548,8 @@ fn main() -> Result<()> {
     // Stav pro interaktivní výběr BSP:
     // ----------------------------------------------------------------------------
     let mut selected_node: Option<usize> = None;
+    // Počet uzlů navštívených při posledním hledání vybraného uzlu
+    let mut last_pick_visits: u32 = 0;
     let mut show_splitting_plane: bool = true;
 
     window.render_loop(move |mut frame_input| {
@@ -679,6 +681,8 @@ fn main() -> Result<()> {
             tris
         };
 
+        current_stats.nodes_to_selected = last_pick_visits;
+
         // --- GUI ---
         gui.update(
             events,
@@ -744,9 +748,13 @@ fn main() -> Result<()> {
                     let pick_mesh = Mesh::new(&context, &current_cpu_mesh);
                     if let Some(hit) = three_d::pick(&context, &camera_obj, pos, [&pick_mesh]) {
                         let p = Vector3::new(hit.position.x, hit.position.y, hit.position.z);
-                        if let Some(node) = find_deepest_node_containing_point(root, p) {
+                        let mut visited = 0;
+                        if let Some(node) =
+                            find_deepest_node_containing_point(root, p, &mut visited)
+                        {
                             selected_node = Some(node.id);
                         }
+                        last_pick_visits = visited;
                     }
                 }
             }
