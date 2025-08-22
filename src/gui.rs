@@ -1,5 +1,6 @@
 use crate::config::MAX_BSP_DEPTH;
 use cgmath::InnerSpace;
+use egui::{CollapsingHeader, Grid};
 use egui_plot::{Line, Plot, PlotPoint, Points, Text};
 use std::collections::{HashMap, HashSet};
 
@@ -244,71 +245,93 @@ pub fn draw_left_panel(
 
             ui.separator();
             ui.heading("BSP Statistiky");
-            ui.label(format!("Celkem uzlů: {}", current_stats.total_nodes));
-            ui.label(format!(
-                "Celkem trojúhelníků: {}",
-                current_stats.total_triangles
-            ));
-            ui.label(format!("Navštíveno uzlů: {}", current_stats.nodes_visited));
-            ui.label(format!(
-                "K výběru navštíveno uzlů: {}",
-                current_stats.nodes_to_selected
-            ));
-            ui.label(format!(
-                "Vykresleno trojúhelníků: {}",
-                current_stats.triangles_rendered
-            ));
-            ui.label(format!(
-                "Procházka efektivita: {:.1}%",
-                if current_stats.total_nodes > 0 {
-                    (current_stats.nodes_visited as f32 / current_stats.total_nodes as f32) * 100.0
-                } else {
-                    0.0
-                }
-            ));
+            Grid::new("bsp_stats_grid")
+                .num_columns(2)
+                .striped(true)
+                .show(ui, |ui| {
+                    ui.label("Celkem uzlů");
+                    ui.label(format!("{}", current_stats.total_nodes));
+                    ui.end_row();
+
+                    ui.label("Celkem trojúhelníků");
+                    ui.label(format!("{}", current_stats.total_triangles));
+                    ui.end_row();
+
+                    ui.label("Navštíveno uzlů");
+                    ui.label(format!("{}", current_stats.nodes_visited));
+                    ui.end_row();
+
+                    ui.label("K výběru navštíveno uzlů");
+                    ui.label(format!("{}", current_stats.nodes_to_selected));
+                    ui.end_row();
+
+                    ui.label("Vykresleno trojúhelníků");
+                    ui.label(format!("{}", current_stats.triangles_rendered));
+                    ui.end_row();
+
+                    ui.label("Procházka efektivita");
+                    let efficiency = if current_stats.total_nodes > 0 {
+                        (current_stats.nodes_visited as f32 / current_stats.total_nodes as f32)
+                            * 100.0
+                    } else {
+                        0.0
+                    };
+                    ui.label(format!("{:.1}%", efficiency));
+                    ui.end_row();
+                });
 
             ui.separator();
             ui.heading("Mesh Info");
-            ui.label(format!("Vrcholy: {}", current_cpu_mesh.positions.len()));
-            match &current_cpu_mesh.indices {
-                three_d_asset::Indices::U32(idx) => {
-                    ui.label(format!("Indexy (U32): {}", idx.len()))
+            Grid::new("mesh_info_grid").num_columns(2).show(ui, |ui| {
+                ui.label("Vrcholy");
+                ui.label(format!("{}", current_cpu_mesh.positions.len()));
+                ui.end_row();
+
+                ui.label("Indexy");
+                match &current_cpu_mesh.indices {
+                    three_d_asset::Indices::U32(idx) => {
+                        ui.label(format!("U32: {}", idx.len()));
+                    }
+                    three_d_asset::Indices::U16(idx) => {
+                        ui.label(format!("U16: {}", idx.len()));
+                    }
+                    _ => {
+                        ui.label("žádné");
+                    }
                 }
-                three_d_asset::Indices::U16(idx) => {
-                    ui.label(format!("Indexy (U16): {}", idx.len()))
-                }
-                _ => ui.label("Indexy: žádné"),
-            };
+                ui.end_row();
+            });
 
             ui.separator();
             ui.heading("Ovládání");
-            ui.label("POHYB:");
-            ui.label("• W - Dopředu");
-            ui.label("• S - Dozadu");
-            ui.label("• A - Doleva");
-            ui.label("• D - Doprava");
-            ui.label("• Space - Nahoru");
-            ui.label("• C - Dolů");
-            ui.label(format!("Rychlost: {:.1}", cam.speed));
-
-            ui.separator();
-            ui.label("ROZHLÍŽENÍ:");
-            ui.label("• ↑ - Díváš se nahoru");
-            ui.label("• ↓ - Díváš se dolů");
-            ui.label("• ← - Otočit hlavu doleva");
-            ui.label("• → - Otočit hlavu doprava");
-            ui.label(format!(
-                "Rychlost rozhlížení: {:.1}°/s",
-                cam.look_speed * 180.0 / std::f32::consts::PI
-            ));
-            ui.add(egui::Slider::new(&mut cam.look_speed, 0.5..=5.0).text("Rychlost rozhlížení"));
-
-            ui.separator();
-            ui.label("OSTATNÍ:");
-            ui.label("• F - Přepnout na režim Spectator");
-            ui.label("• G - Přepnout na režim ThirdPerson");
-            ui.label("• Home - Návrat na výchozí pozici");
-            ui.label("• PageUp/PageDown - Upravit rychlost");
+            CollapsingHeader::new("Pohyb").show(ui, |ui| {
+                ui.label("W - Dopředu");
+                ui.label("S - Dozadu");
+                ui.label("A - Doleva");
+                ui.label("D - Doprava");
+                ui.label("Space - Nahoru");
+                ui.label("C - Dolů");
+                ui.label(format!("Rychlost: {:.1}", cam.speed));
+            });
+            CollapsingHeader::new("Rozhlížení").show(ui, |ui| {
+                ui.label("↑ - Díváš se nahoru");
+                ui.label("↓ - Díváš se dolů");
+                ui.label("← - Otočit hlavu doleva");
+                ui.label("→ - Otočit hlavu doprava");
+                ui.label(format!(
+                    "Rychlost rozhlížení: {:.1}°/s",
+                    cam.look_speed * 180.0 / std::f32::consts::PI
+                ));
+                ui.add(
+                    egui::Slider::new(&mut cam.look_speed, 0.5..=5.0).text("Rychlost rozhlížení"),
+                );
+            });
+            CollapsingHeader::new("Ostatní").show(ui, |ui| {
+                ui.label("F - Přepnout na režim Spectator");
+                ui.label("G - Přepnout na režim ThirdPerson");
+                ui.label("Home - Návrat na výchozí pozici");
+                ui.label("PageUp/PageDown - Upravit rychlost");
+            });
 
             ui.separator();
             ui.heading("Informace o kameře");
