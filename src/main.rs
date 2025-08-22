@@ -449,6 +449,7 @@ fn main() -> Result<()> {
 
     // Volba pro GPU akceleraci frustum cullingu
     let mut use_gpu_culling = false;
+    let mut disable_culling = false;
     let mut show_loaded_model = true;
     let mut show_selected_model = true;
     let mut tree_window_open = false;
@@ -649,7 +650,11 @@ fn main() -> Result<()> {
         };
 
         // Výběr culling metody
-        let visible_triangles = if use_gpu_culling {
+        let visible_triangles = if disable_culling {
+            current_stats.nodes_visited = current_stats.total_nodes;
+            current_stats.triangles_rendered = current_triangles.len() as u32;
+            current_triangles.clone()
+        } else if use_gpu_culling {
             if let Some(ref job) = gpu_job {
                 gpu_cull_triangles(job, &current_triangles, &frustum)
             } else {
@@ -694,6 +699,7 @@ fn main() -> Result<()> {
                     &mut selected_node,
                     &mut show_splitting_plane,
                     &mut use_gpu_culling,
+                    &mut disable_culling,
                     &mut show_loaded_model,
                     &mut show_selected_model,
                     &mut show_camera_direction,
