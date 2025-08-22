@@ -127,7 +127,6 @@ pub fn draw_left_panel(
     bsp_root_preview: &mut Option<crate::bsp::BspNode>,
     selected_node: &mut Option<usize>,
     show_splitting_plane: &mut bool,
-    use_gpu_culling: &mut bool,
     disable_culling: &mut bool,
     show_loaded_model: &mut bool,
     show_selected_model: &mut bool,
@@ -228,9 +227,6 @@ pub fn draw_left_panel(
             ui.separator();
             ui.heading("Nastavení zobrazení");
             ui.checkbox(disable_culling, "Vypnout culling");
-            ui.add_enabled_ui(!*disable_culling, |ui| {
-                ui.checkbox(use_gpu_culling, "Použít GPU culling");
-            });
             ui.checkbox(show_loaded_model, "Zobrazit načtený model");
             ui.checkbox(show_selected_model, "Zobrazit vybranou oblast");
 

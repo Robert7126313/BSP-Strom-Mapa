@@ -29,8 +29,6 @@ use std::sync::mpsc;
 use std::thread;
 use three_d::*; // Add Rayon prelude for parallelization
 
-mod gpu_job;
-mod shaders;
 use crate::bsp::{
     build_bsp, collect_triangles_in_subtree, cpu_mesh_to_triangles, create_highlight_mesh,
     create_plane_mesh, find_deepest_node_containing_point, find_node, traverse_bsp_with_frustum,
@@ -38,7 +36,6 @@ use crate::bsp::{
 };
 use crate::camera::{CamMode, CameraState, FreeCamera, SwitchDelay};
 use crate::config::{BG_COLOR, DEFAULT_BRANCH_LIMIT, MAX_BSP_DEPTH, MODEL_COLOR};
-use crate::gpu_job::GpuJob;
 use crate::input::{InputManager, KeyCode};
 
 mod bsp;
@@ -325,48 +322,6 @@ fn create_visible_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, Co
     Gm::new(Mesh::new(context, &visible_mesh), material)
 }
 
-fn gpu_cull_triangles(job: &GpuJob, tris: &[Triangle], frustum: &Frustum) -> Vec<Triangle> {
-    let mut bytes = Vec::with_capacity(tris.len() * 3 * 16);
-    for t in tris {
-        for v in [&t.a, &t.b, &t.c] {
-            bytes.extend_from_slice(&v.x.to_ne_bytes());
-            bytes.extend_from_slice(&v.y.to_ne_bytes());
-            bytes.extend_from_slice(&v.z.to_ne_bytes());
-            bytes.extend_from_slice(&1f32.to_ne_bytes());
-        }
-    }
-    unsafe {
-        job.update_ssbo_data(&bytes);
-    }
-
-    let planes = frustum.as_vec4_array();
-    let mut flat = [0f32; 24];
-    for (i, p) in planes.iter().enumerate() {
-        flat[i * 4] = p[0];
-        flat[i * 4 + 1] = p[1];
-        flat[i * 4 + 2] = p[2];
-        flat[i * 4 + 3] = p[3];
-    }
-    unsafe {
-        let loc = job.gl.get_uniform_location(job.prog, "frustum").unwrap();
-        let count_loc = job.gl.get_uniform_location(job.prog, "num_tris").unwrap();
-        job.gl.use_program(Some(job.prog));
-        job.gl.uniform_4_f32_slice(Some(&loc), &flat);
-        job.gl.uniform_1_u32(Some(&count_loc), tris.len() as u32);
-        let groups = ((tris.len() as u32) + 63) / 64;
-        job.dispatch(groups, 1, 1);
-    }
-    let out = unsafe { job.read_ssbo_u8(tris.len() * 4) };
-    let mut result = Vec::new();
-    for (i, chunk) in out.chunks_exact(4).enumerate() {
-        let flag = u32::from_ne_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-        if flag != 0 {
-            result.push(tris[i].clone());
-        }
-    }
-    result
-}
-
 // ---------------- Main --------------------------------------------------- //
 
 fn main() -> Result<()> {
@@ -403,23 +358,11 @@ fn main() -> Result<()> {
     let mut current_cpu_mesh = cpu_mesh.clone();
     let mut current_triangles = cpu_mesh_to_triangles(&cpu_mesh);
     let mut file_loading = false;
-    let mut gpu_job: Option<GpuJob>;
 
     // Vytvoření triangles z CPU meshe
     println!("🔺 Převádím mesh na trojúhelníky...");
     let triangles = cpu_mesh_to_triangles(&cpu_mesh);
     println!("✓ Převedeno {} trojúhelníků", triangles.len());
-
-    // Inicializace GPU jobu pro frustum culling
-    unsafe {
-        let gl = &*context;
-        gpu_job = Some(GpuJob::new(
-            gl,
-            shaders::CULL_SHADER,
-            triangles.len() * 3 * 16,
-            triangles.len() * 4,
-        ));
-    }
 
     // Asynchronní stavba BSP stromu na pozadí
     println!("🌳 Spouštím stavbu BSP stromu na pozadí...");
@@ -447,8 +390,6 @@ fn main() -> Result<()> {
         ..Default::default()
     };
 
-    // Volba pro GPU akceleraci frustum cullingu
-    let mut use_gpu_culling = gpu_job.is_some();
     let mut disable_culling = false;
     let mut show_loaded_model = true;
     let mut show_selected_model = true;
@@ -590,15 +531,6 @@ fn main() -> Result<()> {
                     bsp_root_preview =
                         Some(build_bsp(&current_triangles, 0, branch_limit, &mut next_id));
                     total_stats.total_triangles = current_triangles.len() as u32;
-                    unsafe {
-                        let gl = &*context;
-                        gpu_job = Some(GpuJob::new(
-                            gl,
-                            shaders::CULL_SHADER,
-                            current_triangles.len() * 3 * 16,
-                            current_triangles.len() * 4,
-                        ));
-                    }
                     println!("✅ Nový model a BSP strom načteny!");
                 }
             }
@@ -637,7 +569,7 @@ fn main() -> Result<()> {
             Frustum::from_camera(&camera_obj)
         };
 
-        // Volba způsobu cullingu - CPU nebo GPU - použití přejmenované funkce
+        // Výpočet statistik a cullingu na CPU
         let mut current_stats = BspStats {
             total_nodes: if limit_culling {
                 bsp_root_preview
@@ -651,17 +583,10 @@ fn main() -> Result<()> {
             ..Default::default()
         };
 
-        // Výběr culling metody
         let visible_triangles = if disable_culling {
             current_stats.nodes_visited = current_stats.total_nodes;
             current_stats.triangles_rendered = current_triangles.len() as u32;
             current_triangles.clone()
-        } else if use_gpu_culling {
-            if let Some(ref job) = gpu_job {
-                gpu_cull_triangles(job, &current_triangles, &frustum)
-            } else {
-                Vec::new()
-            }
         } else {
             let mut tris = Vec::new();
             let root = if limit_culling {
@@ -702,7 +627,6 @@ fn main() -> Result<()> {
                     &mut bsp_root_preview,
                     &mut selected_node,
                     &mut show_splitting_plane,
-                    &mut use_gpu_culling,
                     &mut disable_culling,
                     &mut show_loaded_model,
                     &mut show_selected_model,

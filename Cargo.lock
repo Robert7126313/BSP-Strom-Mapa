@@ -10,7 +10,6 @@ dependencies = [
  "cgmath",
  "egui",
  "egui_plot",
- "glow",
  "gltf",
  "rayon",
  "rfd",
