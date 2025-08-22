@@ -443,6 +443,7 @@ fn main() -> Result<()> {
     };
 
     // Volba pro GPU akceleraci frustum cullingu
+    let mut culling_enabled = true;
     let mut use_gpu_culling = false;
     let mut show_loaded_model = true;
     let mut show_selected_model = true;
@@ -634,7 +635,11 @@ fn main() -> Result<()> {
         };
 
         // Výběr culling metody
-        let visible_triangles = if use_gpu_culling {
+        let visible_triangles = if !culling_enabled {
+            current_stats.nodes_visited = total_stats.total_nodes;
+            current_stats.triangles_rendered = total_stats.total_triangles;
+            current_triangles.clone()
+        } else if use_gpu_culling {
             if let Some(ref job) = gpu_job {
                 gpu_cull_triangles(job, &current_triangles, &frustum)
             } else {
@@ -673,6 +678,7 @@ fn main() -> Result<()> {
                     &mut bsp_root,
                     &mut selected_node,
                     &mut show_splitting_plane,
+                    &mut culling_enabled,
                     &mut use_gpu_culling,
                     &mut show_loaded_model,
                     &mut show_selected_model,
