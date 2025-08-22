@@ -3,6 +3,7 @@ use cgmath::InnerSpace;
 use egui::{CollapsingHeader, Grid};
 use egui_plot::{Line, Plot, PlotPoint, Points, Text};
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::AtomicUsize;
 
 struct TreePlotData {
     positions: HashMap<usize, PlotPoint>,
@@ -393,12 +394,12 @@ pub fn draw_left_panel(
                         *loaded_file_name = file_name;
                         *file_loading = false;
                         *current_triangles = crate::bsp::cpu_mesh_to_triangles(current_cpu_mesh);
-                        let mut next_id = 0;
+                        let next_id = AtomicUsize::new(0);
                         *bsp_root_preview = Some(crate::bsp::build_bsp(
                             current_triangles,
                             0,
                             *branch_limit,
-                            &mut next_id,
+                            &next_id,
                         ));
                     }
                     _ => {}

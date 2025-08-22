@@ -2,6 +2,7 @@
 // BSP and geometry utilities
 use cgmath::Vector3;
 use rayon::prelude::*;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use three_d::*;
 
 // Configuration values (colors and tree limits)
@@ -293,10 +294,9 @@ pub fn build_bsp(
     triangles: &[Triangle],
     depth: u32,
     max_depth: u32,
-    next_id: &mut usize,
+    next_id: &AtomicUsize,
 ) -> BspNode {
-    let my_id = *next_id;
-    *next_id += 1;
+    let my_id = next_id.fetch_add(1, Ordering::SeqCst);
 
     if depth >= max_depth || triangles.len() <= MIN_TRIANGLES_PER_LEAF {
         return BspNode::new_leaf(triangles.to_vec(), my_id);
@@ -321,9 +321,11 @@ pub fn build_bsp(
         return BspNode::new_leaf(triangles.to_vec(), my_id);
     }
 
-    // Rekurzivní stavba podstromů - use sequential processing to fix ID assignment
-    let front_node = build_bsp(&front_triangles, depth + 1, max_depth, next_id);
-    let back_node = build_bsp(&back_triangles, depth + 1, max_depth, next_id);
+    // Rekurzivní stavba podstromů v paralelních větvích
+    let (front_node, back_node) = rayon::join(
+        || build_bsp(&front_triangles, depth + 1, max_depth, next_id),
+        || build_bsp(&back_triangles, depth + 1, max_depth, next_id),
+    );
 
     BspNode::new_node(splitting_plane, front_node, back_node, my_id)
 }
@@ -582,61 +584,103 @@ pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
     };
 
     match &mesh.indices {
-        Indices::U32(indices) => indices
-            .par_chunks(3)
-            .filter_map(|chunk| {
-                if chunk.len() < 3 {
-                    return None;
-                }
-                let a_idx = chunk[0] as usize;
-                let b_idx = chunk[1] as usize;
-                let c_idx = chunk[2] as usize;
+        Indices::U32(indices) => {
+            let tri_count = indices.len() / 3;
+            let mut tris = Vec::with_capacity(tri_count);
+            tris.par_extend(
+                indices.par_chunks(3).filter_map(|chunk| {
+                    if chunk.len() < 3 {
+                        return None;
+                    }
+                    let a_idx = chunk[0] as usize;
+                    let b_idx = chunk[1] as usize;
+                    let c_idx = chunk[2] as usize;
 
-                if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len() {
-                    Some(Triangle {
-                        a: Vector3::new(positions[a_idx].x, positions[a_idx].y, positions[a_idx].z),
-                        b: Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z),
-                        c: Vector3::new(positions[c_idx].x, positions[c_idx].y, positions[c_idx].z),
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect(),
-        Indices::U16(indices) => indices
-            .par_chunks(3)
-            .filter_map(|chunk| {
-                if chunk.len() < 3 {
-                    return None;
-                }
-                let a_idx = chunk[0] as usize;
-                let b_idx = chunk[1] as usize;
-                let c_idx = chunk[2] as usize;
-
-                if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len() {
-                    Some(Triangle {
-                        a: Vector3::new(positions[a_idx].x, positions[a_idx].y, positions[a_idx].z),
-                        b: Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z),
-                        c: Vector3::new(positions[c_idx].x, positions[c_idx].y, positions[c_idx].z),
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect(),
-        Indices::None => positions
-            .par_chunks(3)
-            .filter_map(|chunk| {
-                if chunk.len() < 3 {
-                    return None;
-                }
-                Some(Triangle {
-                    a: Vector3::new(chunk[0].x, chunk[0].y, chunk[0].z),
-                    b: Vector3::new(chunk[1].x, chunk[1].y, chunk[1].z),
-                    c: Vector3::new(chunk[2].x, chunk[2].y, chunk[2].z),
+                    if a_idx < positions.len()
+                        && b_idx < positions.len()
+                        && c_idx < positions.len()
+                    {
+                        Some(Triangle {
+                            a: Vector3::new(
+                                positions[a_idx].x,
+                                positions[a_idx].y,
+                                positions[a_idx].z,
+                            ),
+                            b: Vector3::new(
+                                positions[b_idx].x,
+                                positions[b_idx].y,
+                                positions[b_idx].z,
+                            ),
+                            c: Vector3::new(
+                                positions[c_idx].x,
+                                positions[c_idx].y,
+                                positions[c_idx].z,
+                            ),
+                        })
+                    } else {
+                        None
+                    }
                 })
-            })
-            .collect(),
+            );
+            tris
+        }
+        Indices::U16(indices) => {
+            let tri_count = indices.len() / 3;
+            let mut tris = Vec::with_capacity(tri_count);
+            tris.par_extend(
+                indices.par_chunks(3).filter_map(|chunk| {
+                    if chunk.len() < 3 {
+                        return None;
+                    }
+                    let a_idx = chunk[0] as usize;
+                    let b_idx = chunk[1] as usize;
+                    let c_idx = chunk[2] as usize;
+
+                    if a_idx < positions.len()
+                        && b_idx < positions.len()
+                        && c_idx < positions.len()
+                    {
+                        Some(Triangle {
+                            a: Vector3::new(
+                                positions[a_idx].x,
+                                positions[a_idx].y,
+                                positions[a_idx].z,
+                            ),
+                            b: Vector3::new(
+                                positions[b_idx].x,
+                                positions[b_idx].y,
+                                positions[b_idx].z,
+                            ),
+                            c: Vector3::new(
+                                positions[c_idx].x,
+                                positions[c_idx].y,
+                                positions[c_idx].z,
+                            ),
+                        })
+                    } else {
+                        None
+                    }
+                })
+            );
+            tris
+        }
+        Indices::None => {
+            let tri_count = positions.len() / 3;
+            let mut tris = Vec::with_capacity(tri_count);
+            tris.par_extend(
+                positions.par_chunks(3).filter_map(|chunk| {
+                    if chunk.len() < 3 {
+                        return None;
+                    }
+                    Some(Triangle {
+                        a: Vector3::new(chunk[0].x, chunk[0].y, chunk[0].z),
+                        b: Vector3::new(chunk[1].x, chunk[1].y, chunk[1].z),
+                        c: Vector3::new(chunk[2].x, chunk[2].y, chunk[2].z),
+                    })
+                })
+            );
+            tris
+        }
         _ => Vec::new(), // Přidáno pro pokrytí všech případů
     }
 }
@@ -683,43 +727,115 @@ pub fn traverse_bsp_with_frustum(
 
         if side >= 0 {
             // Pozorovatel je před rovinou, nejprve front, pak back
-            if let Some(ref front) = node.front {
-                traverse_bsp_with_frustum(
-                    front,
-                    observer_position,
-                    frustum,
-                    stats,
-                    visible_triangles,
-                );
-            }
-            if let Some(ref back) = node.back {
-                traverse_bsp_with_frustum(
-                    back,
-                    observer_position,
-                    frustum,
-                    stats,
-                    visible_triangles,
-                );
+            match (node.front.as_ref(), node.back.as_ref()) {
+                (Some(front), Some(back)) => {
+                    let (mut front_stats, mut front_tris, mut back_stats, mut back_tris) = (
+                        BspStats::default(),
+                        Vec::new(),
+                        BspStats::default(),
+                        Vec::new(),
+                    );
+                    rayon::join(
+                        || {
+                            traverse_bsp_with_frustum(
+                                front,
+                                observer_position,
+                                frustum,
+                                &mut front_stats,
+                                &mut front_tris,
+                            );
+                        },
+                        || {
+                            traverse_bsp_with_frustum(
+                                back,
+                                observer_position,
+                                frustum,
+                                &mut back_stats,
+                                &mut back_tris,
+                            );
+                        },
+                    );
+                    stats.nodes_visited += front_stats.nodes_visited + back_stats.nodes_visited;
+                    stats.triangles_rendered +=
+                        front_stats.triangles_rendered + back_stats.triangles_rendered;
+                    visible_triangles.extend(front_tris);
+                    visible_triangles.extend(back_tris);
+                }
+                (Some(front), None) => {
+                    traverse_bsp_with_frustum(
+                        front,
+                        observer_position,
+                        frustum,
+                        stats,
+                        visible_triangles,
+                    );
+                }
+                (None, Some(back)) => {
+                    traverse_bsp_with_frustum(
+                        back,
+                        observer_position,
+                        frustum,
+                        stats,
+                        visible_triangles,
+                    );
+                }
+                _ => {}
             }
         } else {
             // Pozorovatel je za rovinou, nejprve back, pak front
-            if let Some(ref back) = node.back {
-                traverse_bsp_with_frustum(
-                    back,
-                    observer_position,
-                    frustum,
-                    stats,
-                    visible_triangles,
-                );
-            }
-            if let Some(ref front) = node.front {
-                traverse_bsp_with_frustum(
-                    front,
-                    observer_position,
-                    frustum,
-                    stats,
-                    visible_triangles,
-                );
+            match (node.back.as_ref(), node.front.as_ref()) {
+                (Some(back), Some(front)) => {
+                    let (mut back_stats, mut back_tris, mut front_stats, mut front_tris) = (
+                        BspStats::default(),
+                        Vec::new(),
+                        BspStats::default(),
+                        Vec::new(),
+                    );
+                    rayon::join(
+                        || {
+                            traverse_bsp_with_frustum(
+                                back,
+                                observer_position,
+                                frustum,
+                                &mut back_stats,
+                                &mut back_tris,
+                            );
+                        },
+                        || {
+                            traverse_bsp_with_frustum(
+                                front,
+                                observer_position,
+                                frustum,
+                                &mut front_stats,
+                                &mut front_tris,
+                            );
+                        },
+                    );
+                    stats.nodes_visited += back_stats.nodes_visited + front_stats.nodes_visited;
+                    stats.triangles_rendered +=
+                        back_stats.triangles_rendered + front_stats.triangles_rendered;
+                    visible_triangles.extend(back_tris);
+                    visible_triangles.extend(front_tris);
+                }
+                (Some(back), None) => {
+                    traverse_bsp_with_frustum(
+                        back,
+                        observer_position,
+                        frustum,
+                        stats,
+                        visible_triangles,
+                    );
+                }
+                (None, Some(front)) => {
+                    traverse_bsp_with_frustum(
+                        front,
+                        observer_position,
+                        frustum,
+                        stats,
+                        visible_triangles,
+                    );
+                }
+                _ => {}
             }
         }
     }

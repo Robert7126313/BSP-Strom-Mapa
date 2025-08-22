@@ -25,7 +25,7 @@ use anyhow::Result;
 use cgmath::{Deg, InnerSpace, Vector3};
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
+use std::sync::{atomic::AtomicUsize, mpsc};
 use std::thread;
 use three_d::*; // Add Rayon prelude for parallelization
 
@@ -282,26 +282,29 @@ fn create_visible_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, Co
     // Paralelní zpracování pozic a indexů
     let triangles_count = triangles.len();
 
-    // Paralelně vytvoříme pozice vrcholů
-    let positions: Vec<Vec3> = triangles
-        .par_iter()
-        .flat_map(|tri| {
-            vec![
-                vec3(tri.a.x, tri.a.y, tri.a.z),
-                vec3(tri.b.x, tri.b.y, tri.b.z),
-                vec3(tri.c.x, tri.c.y, tri.c.z),
-            ]
-        })
-        .collect();
+    // Předalokujeme pozice vrcholů a vyplníme je paralelně
+    let mut positions = vec![vec3(0.0, 0.0, 0.0); triangles_count * 3];
+    positions
+        .par_chunks_mut(3)
+        .enumerate()
+        .for_each(|(i, chunk)| {
+            let tri = &triangles[i];
+            chunk[0] = vec3(tri.a.x, tri.a.y, tri.a.z);
+            chunk[1] = vec3(tri.b.x, tri.b.y, tri.b.z);
+            chunk[2] = vec3(tri.c.x, tri.c.y, tri.c.z);
+        });
 
-    // Paralelně vygenerujeme indexy
-    let indices: Vec<u32> = (0..triangles_count as u32)
-        .into_par_iter()
-        .flat_map(|i| {
-            let base_idx = i * 3;
-            vec![base_idx, base_idx + 1, base_idx + 2]
-        })
-        .collect();
+    // Předalokujeme indexy a naplníme je paralelně
+    let mut indices = vec![0u32; triangles_count * 3];
+    indices
+        .par_chunks_mut(3)
+        .enumerate()
+        .for_each(|(i, chunk)| {
+            let base = i as u32 * 3;
+            chunk[0] = base;
+            chunk[1] = base + 1;
+            chunk[2] = base + 2;
+        });
 
     // Vytvoření nového meshe
     let visible_mesh = CpuMesh {
@@ -377,8 +380,8 @@ fn main() -> Result<()> {
     // Spuštění stavby BSP stromu v jiném vlákně
     let branch_limit_clone = MAX_BSP_DEPTH;
     thread::spawn(move || {
-        let mut next_id = 0;
-        let tree = build_bsp(&triangles_clone, 0, branch_limit_clone, &mut next_id);
+        let next_id = AtomicUsize::new(0);
+        let tree = build_bsp(&triangles_clone, 0, branch_limit_clone, &next_id);
         println!("✓ BSP strom sestaven s {} uzly", tree.count_nodes());
         tx.send(Message::InitialTree(tree)).unwrap();
     });
@@ -504,9 +507,9 @@ fn main() -> Result<()> {
                 Message::InitialTree(tree) => {
                     total_stats.total_nodes = tree.count_nodes();
                     bsp_root_full = Some(tree);
-                    let mut next_id = 0;
+                    let next_id = AtomicUsize::new(0);
                     bsp_root_preview =
-                        Some(build_bsp(&current_triangles, 0, branch_limit, &mut next_id));
+                        Some(build_bsp(&current_triangles, 0, branch_limit, &next_id));
                     println!("✅ BSP strom úspěšně načten do GUI!");
                 }
                 Message::NewFile {
@@ -520,17 +523,17 @@ fn main() -> Result<()> {
                     loaded_file_name = file_name;
                     file_loading = false;
                     current_triangles = cpu_mesh_to_triangles(&current_cpu_mesh);
-                    let mut next_id = 0;
+                    let next_id = AtomicUsize::new(0);
                     bsp_root_full = Some(build_bsp(
                         &current_triangles,
                         0,
                         MAX_BSP_DEPTH,
-                        &mut next_id,
+                        &next_id,
                     ));
                     total_stats.total_nodes = bsp_root_full.as_ref().unwrap().count_nodes();
-                    let mut next_id = 0;
+                    let next_id = AtomicUsize::new(0);
                     bsp_root_preview =
-                        Some(build_bsp(&current_triangles, 0, branch_limit, &mut next_id));
+                        Some(build_bsp(&current_triangles, 0, branch_limit, &next_id));
                     total_stats.total_triangles = current_triangles.len() as u32;
                     println!("✅ Nový model a BSP strom načteny!");
                 }
@@ -645,8 +648,8 @@ fn main() -> Result<()> {
         );
 
         if branch_limit != last_branch_limit {
-            let mut next_id = 0;
-            bsp_root_preview = Some(build_bsp(&current_triangles, 0, branch_limit, &mut next_id));
+            let next_id = AtomicUsize::new(0);
+            bsp_root_preview = Some(build_bsp(&current_triangles, 0, branch_limit, &next_id));
             selected_node = None;
             last_branch_limit = branch_limit;
         }
