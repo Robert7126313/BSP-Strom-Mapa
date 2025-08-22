@@ -207,6 +207,20 @@ pub fn draw_left_panel(
                         ui.heading("Vybraný uzel");
                         ui.label(format!("ID: {}", node.id));
                         ui.label(format!("Trojúhelníků: {}", node.subtree_triangles()));
+                        // Additional contextual information about the selected node
+                        // How deep in the tree this node is
+                        let mut path = Vec::new();
+                        let depth = if crate::bsp::find_node_path(root, node.id, &mut path) {
+                            path.len().saturating_sub(1)
+                        } else {
+                            0
+                        };
+                        ui.label(format!("Hloubka: {}", depth));
+                        // How many nodes were visited when this node was picked
+                        ui.label(format!(
+                            "Navštíveno uzlů při výběru: {}",
+                            current_stats.nodes_to_selected
+                        ));
                         if let Some(ref plane) = node.plane {
                             ui.label("Dělící rovina:");
                             ui.label(format!(
@@ -246,10 +260,6 @@ pub fn draw_left_panel(
 
                     ui.label("Navštíveno uzlů");
                     ui.label(format!("{}", current_stats.nodes_visited));
-                    ui.end_row();
-
-                    ui.label("K výběru navštíveno uzlů");
-                    ui.label(format!("{}", current_stats.nodes_to_selected));
                     ui.end_row();
 
                     ui.label("Vykresleno trojúhelníků");
