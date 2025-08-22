@@ -110,6 +110,10 @@ impl BspNode {
             + self.front.as_ref().map_or(0, |n| n.count_triangles())
             + self.back.as_ref().map_or(0, |n| n.count_triangles())
     }
+
+    pub fn subtree_triangles(&self) -> u32 {
+        self.subtree_tris
+    }
 }
 
 fn plane_from_triangle(tri: &Triangle) -> Plane {
