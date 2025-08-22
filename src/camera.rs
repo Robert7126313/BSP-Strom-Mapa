@@ -30,7 +30,12 @@ impl FreeCamera {
     }
 
     pub fn right(&self) -> Vector3<f32> {
-        self.dir().cross(Vector3::unit_y()).normalize()
+        let right = self.dir().cross(Vector3::unit_y());
+        if right.magnitude2() < 1e-6 {
+            Vector3::unit_x()
+        } else {
+            right.normalize()
+        }
     }
 
     pub fn update_smooth(&mut self, input_manager: &InputManager, dt: f32) {
@@ -62,11 +67,17 @@ impl FreeCamera {
     }
 
     pub fn cam(&self, vp: Viewport) -> Camera {
+        let dir = self.dir();
+        let up = if dir.x.abs() < 1e-4 && dir.z.abs() < 1e-4 {
+            Vector3::unit_z()
+        } else {
+            Vector3::unit_y()
+        };
         Camera::new_perspective(
             vp,
             self.pos,
-            self.pos + self.dir(),
-            Vector3::unit_y(),
+            self.pos + dir,
+            up,
             Deg(60.0),
             0.1,
             1000.0,

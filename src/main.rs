@@ -613,11 +613,16 @@ fn main() -> Result<()> {
             )
             .normalize();
 
+            let spectator_up = if spectator_dir.x.abs() < 1e-4 && spectator_dir.z.abs() < 1e-4 {
+                Vector3::unit_z()
+            } else {
+                Vector3::unit_y()
+            };
             let spectator_camera = Camera::new_perspective(
                 frame_input.viewport,
                 spectator_state.pos,
                 spectator_state.pos + spectator_dir,
-                Vector3::unit_y(),
+                spectator_up,
                 Deg(60.0),
                 0.1,
                 1000.0,
