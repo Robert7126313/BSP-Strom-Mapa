@@ -123,7 +123,7 @@ pub fn draw_left_panel(
     rx: &std::sync::mpsc::Receiver<crate::Message>,
     current_cpu_mesh: &mut three_d::CpuMesh,
     current_triangles: &mut Vec<crate::bsp::Triangle>,
-    bsp_root: &mut Option<crate::bsp::BspNode>,
+    bsp_root_preview: &mut Option<crate::bsp::BspNode>,
     selected_node: &mut Option<usize>,
     show_splitting_plane: &mut bool,
     use_gpu_culling: &mut bool,
@@ -136,6 +136,7 @@ pub fn draw_left_panel(
     current_stats: &crate::bsp::BspStats,
     tree_window_open: &mut bool,
     branch_limit: &mut u32,
+    limit_culling: &mut bool,
 ) {
     egui::SidePanel::left("tree").show(ctx, |side_ui| {
         egui::ScrollArea::vertical().show(side_ui, |ui| {
@@ -178,7 +179,7 @@ pub fn draw_left_panel(
                 );
             }
 
-            if bsp_root.is_none() {
+            if bsp_root_preview.is_none() {
                 ui.separator();
                 ui.label("Strom se staví…");
                 ui.add(
@@ -192,13 +193,14 @@ pub fn draw_left_panel(
             ui.separator();
             ui.heading("Struktura BSP stromu");
             ui.add(egui::Slider::new(branch_limit, 1..=MAX_BSP_DEPTH).text("Limit větvení"));
+            ui.checkbox(limit_culling, "Omezit culling podle slideru");
             ui.checkbox(show_splitting_plane, "Zobrazit dělící rovinu");
             if ui.button("Otevřít vizualizaci").clicked() {
                 *tree_window_open = true;
             }
 
             if let Some(node_id) = *selected_node {
-                if let Some(ref root) = *bsp_root {
+                if let Some(ref root) = *bsp_root_preview {
                     if let Some(node) = crate::bsp::find_node(root, node_id) {
                         ui.separator();
                         ui.heading("Vybraný uzel");
@@ -358,7 +360,7 @@ pub fn draw_left_panel(
                         *file_loading = false;
                         *current_triangles = crate::bsp::cpu_mesh_to_triangles(current_cpu_mesh);
                         let mut next_id = 0;
-                        *bsp_root = Some(crate::bsp::build_bsp(
+                        *bsp_root_preview = Some(crate::bsp::build_bsp(
                             current_triangles,
                             0,
                             *branch_limit,
@@ -371,7 +373,7 @@ pub fn draw_left_panel(
         });
     });
     if *tree_window_open {
-        if let Some(ref root) = *bsp_root {
+        if let Some(ref root) = *bsp_root_preview {
             draw_bsp_tree_window(ctx, tree_window_open, root, selected_node);
         } else {
             *tree_window_open = false;
