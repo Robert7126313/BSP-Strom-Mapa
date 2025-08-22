@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // BSP and geometry utilities
-use cgmath::Vector3;
+use cgmath::{Vector3, Vector4};
 use rayon::prelude::*;
 use three_d::*;
 
@@ -951,74 +951,29 @@ pub struct Frustum {
 impl Frustum {
     pub fn from_camera(camera: &Camera) -> Self {
         // Získáme view-projection matici
-        let vp_matrix = camera.projection() * camera.view();
+        let m = camera.projection() * camera.view();
 
-        // Převedeme na pole - Matrix4 nemá as_slice(), musíme použít jiný přístup
-        let mat = [
-            vp_matrix.x.x,
-            vp_matrix.x.y,
-            vp_matrix.x.z,
-            vp_matrix.x.w,
-            vp_matrix.y.x,
-            vp_matrix.y.y,
-            vp_matrix.y.z,
-            vp_matrix.y.w,
-            vp_matrix.z.x,
-            vp_matrix.z.y,
-            vp_matrix.z.z,
-            vp_matrix.z.w,
-            vp_matrix.w.x,
-            vp_matrix.w.y,
-            vp_matrix.w.z,
-            vp_matrix.w.w,
+        // Pomocná funkce pro vytvoření roviny z Vector4
+        fn make_plane(v: Vector4<f32>) -> Plane {
+            let normal = Vector3::new(v.x, v.y, v.z);
+            let inv_len = 1.0 / normal.magnitude();
+            Plane {
+                n: normal * inv_len,
+                d: v.w * inv_len,
+            }
+        }
+
+        // Extrahujeme 6 rovin frustumu pomocí sloupců matice
+        let planes = [
+            make_plane(m.w + m.x), // Levá rovina
+            make_plane(m.w - m.x), // Pravá rovina
+            make_plane(m.w + m.y), // Spodní rovina
+            make_plane(m.w - m.y), // Horní rovina
+            make_plane(m.w + m.z), // Blízká rovina
+            make_plane(m.w - m.z), // Vzdálená rovina
         ];
 
-        // Extrahujeme 6 rovin frustumu
-        // Levá rovina
-        let left = Plane {
-            n: Vector3::new(mat[3] + mat[0], mat[7] + mat[4], mat[11] + mat[8]).normalize(),
-            d: (mat[15] + mat[12])
-                / (mat[3] + mat[0]).hypot((mat[7] + mat[4]).hypot(mat[11] + mat[8])),
-        };
-
-        // Pravá rovina
-        let right = Plane {
-            n: Vector3::new(mat[3] - mat[0], mat[7] - mat[4], mat[11] - mat[8]).normalize(),
-            d: (mat[15] - mat[12])
-                / (mat[3] - mat[0]).hypot((mat[7] - mat[4]).hypot(mat[11] - mat[8])),
-        };
-
-        // Spodní rovina
-        let bottom = Plane {
-            n: Vector3::new(mat[3] + mat[1], mat[7] + mat[5], mat[11] + mat[9]).normalize(),
-            d: (mat[15] + mat[13])
-                / (mat[3] + mat[1]).hypot((mat[7] + mat[5]).hypot(mat[11] + mat[9])),
-        };
-
-        // Horní rovina
-        let top = Plane {
-            n: Vector3::new(mat[3] - mat[1], mat[7] - mat[5], mat[11] - mat[9]).normalize(),
-            d: (mat[15] - mat[13])
-                / (mat[3] - mat[1]).hypot((mat[7] - mat[5]).hypot(mat[11] - mat[9])),
-        };
-
-        // Blízká rovina
-        let near = Plane {
-            n: Vector3::new(mat[3] + mat[2], mat[7] + mat[6], mat[11] + mat[10]).normalize(),
-            d: (mat[15] + mat[14])
-                / (mat[3] + mat[2]).hypot((mat[7] + mat[6]).hypot(mat[11] + mat[10])),
-        };
-
-        // Vzdálená rovina
-        let far = Plane {
-            n: Vector3::new(mat[3] - mat[2], mat[7] - mat[6], mat[11] - mat[10]).normalize(),
-            d: (mat[15] - mat[14])
-                / (mat[3] - mat[2]).hypot((mat[7] - mat[6]).hypot(mat[11] - mat[10])),
-        };
-
-        Frustum {
-            planes: [left, right, bottom, top, near, far],
-        }
+        Frustum { planes }
     }
 
     pub fn as_vec4_array(&self) -> [[f32; 4]; 6] {
