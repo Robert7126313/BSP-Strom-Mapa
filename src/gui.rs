@@ -138,6 +138,7 @@ pub fn draw_left_panel(
     tree_window_open: &mut bool,
     branch_limit: &mut u32,
     limit_culling: &mut bool,
+    selected_node_help_open: &mut bool,
 ) {
     egui::SidePanel::left("tree").show(ctx, |side_ui| {
         egui::ScrollArea::vertical().show(side_ui, |ui| {
@@ -204,7 +205,12 @@ pub fn draw_left_panel(
                 if let Some(ref root) = *bsp_root_preview {
                     if let Some(node) = crate::bsp::find_node(root, node_id) {
                         ui.separator();
-                        ui.heading("Vybraný uzel");
+                        ui.horizontal(|ui| {
+                            ui.heading("Vybraný uzel");
+                            if ui.button("❓").on_hover_text("Vysvětlivky").clicked() {
+                                *selected_node_help_open = true;
+                            }
+                        });
                         ui.label(format!("ID: {}", node.id));
                         ui.label(format!("Trojúhelníků: {}", node.subtree_triangles()));
                         // Additional contextual information about the selected node
@@ -400,6 +406,19 @@ pub fn draw_left_panel(
             }
         });
     });
+    if *selected_node_help_open {
+        egui::Window::new("Vysvětlivky - Vybraný uzel")
+            .open(selected_node_help_open)
+            .show(ctx, |ui| {
+                ui.label("Tato sekce zobrazuje detaily o aktuálně vybraném uzlu v BSP stromu.");
+                ui.separator();
+                ui.label("• Hloubka udává, kolik hran vede od kořene k tomuto uzlu. Kořen má hloubku 0 a každá úroveň ji zvyšuje o 1.");
+                ui.label("• Navštíveno uzlů při výběru je počet uzlů, které algoritmus prozkoumal, než našel tento uzel. Číslo bývá vyšší než hloubka, protože se kontrolují i jiné větve stromu.");
+                ui.separator();
+                ui.label("Praktický příklad:");
+                ui.label("Uzel na hloubce 3 znamená cestu kořen → A → B → C. Pokud algoritmus při hledání zkontroluje ještě dvě vedlejší větve, může být celkový počet navštívených uzlů 5.");
+            });
+    }
     if *tree_window_open {
         if let Some(ref root) = *bsp_root_preview {
             draw_bsp_tree_window(ctx, tree_window_open, root, selected_node);
