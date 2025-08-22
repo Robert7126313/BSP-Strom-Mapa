@@ -37,7 +37,7 @@ use crate::bsp::{
     triangle_center, BspNode, BspStats, Frustum, Triangle,
 };
 use crate::camera::{CamMode, CameraState, FreeCamera, SwitchDelay};
-use crate::config::{BG_COLOR, DEFAULT_BRANCH_LIMIT, MODEL_COLOR};
+use crate::config::{BG_COLOR, DEFAULT_BRANCH_LIMIT, MAX_BSP_DEPTH, MODEL_COLOR};
 use crate::gpu_job::GpuJob;
 use crate::input::{InputManager, KeyCode};
 
@@ -423,7 +423,8 @@ fn main() -> Result<()> {
 
     // Asynchronní stavba BSP stromu na pozadí
     println!("🌳 Spouštím stavbu BSP stromu na pozadí...");
-    let mut bsp_root: Option<BspNode> = None;
+    let mut bsp_root_full: Option<BspNode> = None;
+    let mut bsp_root_preview: Option<BspNode> = None;
     let triangles_clone = triangles.clone();
     let (tx, rx) = mpsc::channel();
 
@@ -431,7 +432,7 @@ fn main() -> Result<()> {
     let tx_gui = tx.clone();
 
     // Spuštění stavby BSP stromu v jiném vlákně
-    let branch_limit_clone = DEFAULT_BRANCH_LIMIT;
+    let branch_limit_clone = MAX_BSP_DEPTH;
     thread::spawn(move || {
         let mut next_id = 0;
         let tree = build_bsp(&triangles_clone, 0, branch_limit_clone, &mut next_id);
@@ -453,6 +454,7 @@ fn main() -> Result<()> {
     let mut tree_window_open = false;
     let mut branch_limit = DEFAULT_BRANCH_LIMIT;
     let mut last_branch_limit = branch_limit;
+    let mut limit_culling = false;
 
     // stav pro vykreslovaný mesh
     let _glb_path: Option<PathBuf> = None;
@@ -556,7 +558,10 @@ fn main() -> Result<()> {
             match message {
                 Message::InitialTree(tree) => {
                     total_stats.total_nodes = tree.count_nodes();
-                    bsp_root = Some(tree);
+                    bsp_root_full = Some(tree);
+                    let mut next_id = 0;
+                    bsp_root_preview =
+                        Some(build_bsp(&current_triangles, 0, branch_limit, &mut next_id));
                     println!("✅ BSP strom úspěšně načten do GUI!");
                 }
                 Message::NewFile {
@@ -571,8 +576,16 @@ fn main() -> Result<()> {
                     file_loading = false;
                     current_triangles = cpu_mesh_to_triangles(&current_cpu_mesh);
                     let mut next_id = 0;
-                    bsp_root = Some(build_bsp(&current_triangles, 0, branch_limit, &mut next_id));
-                    total_stats.total_nodes = bsp_root.as_ref().unwrap().count_nodes();
+                    bsp_root_full = Some(build_bsp(
+                        &current_triangles,
+                        0,
+                        MAX_BSP_DEPTH,
+                        &mut next_id,
+                    ));
+                    total_stats.total_nodes = bsp_root_full.as_ref().unwrap().count_nodes();
+                    let mut next_id = 0;
+                    bsp_root_preview =
+                        Some(build_bsp(&current_triangles, 0, branch_limit, &mut next_id));
                     total_stats.total_triangles = current_triangles.len() as u32;
                     unsafe {
                         let gl = &*context;
@@ -623,7 +636,14 @@ fn main() -> Result<()> {
 
         // Volba způsobu cullingu - CPU nebo GPU - použití přejmenované funkce
         let mut current_stats = BspStats {
-            total_nodes: total_stats.total_nodes,
+            total_nodes: if limit_culling {
+                bsp_root_preview
+                    .as_ref()
+                    .map(|n| n.count_nodes())
+                    .unwrap_or(0)
+            } else {
+                total_stats.total_nodes
+            },
             total_triangles: total_stats.total_triangles,
             ..Default::default()
         };
@@ -637,9 +657,14 @@ fn main() -> Result<()> {
             }
         } else {
             let mut tris = Vec::new();
-            if let Some(ref root) = bsp_root {
+            let root = if limit_culling {
+                bsp_root_preview.as_ref()
+            } else {
+                bsp_root_full.as_ref()
+            };
+            if let Some(r) = root {
                 traverse_bsp_with_frustum(
-                    root,
+                    r,
                     observer_position,
                     &frustum,
                     &mut current_stats,
@@ -665,7 +690,7 @@ fn main() -> Result<()> {
                     &rx,
                     &mut current_cpu_mesh,
                     &mut current_triangles,
-                    &mut bsp_root,
+                    &mut bsp_root_preview,
                     &mut selected_node,
                     &mut show_splitting_plane,
                     &mut use_gpu_culling,
@@ -678,15 +703,14 @@ fn main() -> Result<()> {
                     &current_stats,
                     &mut tree_window_open,
                     &mut branch_limit,
+                    &mut limit_culling,
                 );
             },
         );
 
         if branch_limit != last_branch_limit {
             let mut next_id = 0;
-            bsp_root = Some(build_bsp(&current_triangles, 0, branch_limit, &mut next_id));
-            total_stats.total_nodes = bsp_root.as_ref().unwrap().count_nodes();
-            total_stats.total_triangles = current_triangles.len() as u32;
+            bsp_root_preview = Some(build_bsp(&current_triangles, 0, branch_limit, &mut next_id));
             selected_node = None;
             last_branch_limit = branch_limit;
         }
@@ -710,7 +734,7 @@ fn main() -> Result<()> {
                 }
             }
             if let Some(pos) = click_position {
-                if let Some(ref root) = bsp_root {
+                if let Some(ref root) = bsp_root_preview {
                     let pick_mesh = Mesh::new(&context, &current_cpu_mesh);
                     if let Some(hit) = three_d::pick(&context, &camera_obj, pos, [&pick_mesh]) {
                         let p = Vector3::new(hit.position.x, hit.position.y, hit.position.z);
@@ -725,7 +749,7 @@ fn main() -> Result<()> {
         // 1) Shromáždění trojúhelníků z vybraného podstromu
         let mut picked_tris = Vec::new();
         if let Some(sel_id) = selected_node {
-            if let Some(ref root) = bsp_root {
+            if let Some(ref root) = bsp_root_preview {
                 if let Some(node) = find_node(root, sel_id) {
                     collect_triangles_in_subtree(node, &mut picked_tris);
                 }
@@ -1014,7 +1038,7 @@ fn main() -> Result<()> {
         let mut splitting_plane_mesh = None;
         if show_splitting_plane {
             if let Some(sel_id) = selected_node {
-                if let Some(ref root) = bsp_root {
+                if let Some(ref root) = bsp_root_preview {
                     if let Some(node) = find_node(root, sel_id) {
                         if let Some(ref plane) = node.plane {
                             // Vytvoř mesh dělící roviny pro vybraný uzel
