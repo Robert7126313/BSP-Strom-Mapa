@@ -251,6 +251,10 @@ pub fn draw_left_panel(
             ));
             ui.label(format!("Navštíveno uzlů: {}", current_stats.nodes_visited));
             ui.label(format!(
+                "K výběru navštíveno uzlů: {}",
+                current_stats.nodes_to_selected
+            ));
+            ui.label(format!(
                 "Vykresleno trojúhelníků: {}",
                 current_stats.triangles_rendered
             ));
