@@ -547,9 +547,9 @@ fn main() -> Result<()> {
     let mut selected_node: Option<usize> = None;
     let mut show_splitting_plane: bool = true;
 
-    window.render_loop(move |frame_input| {
+    window.render_loop(move |mut frame_input| {
         let dt = frame_input.elapsed_time as f32 / 1000.0;
-        let events = &frame_input.events;
+        let events = &mut frame_input.events;
 
         // Zkontroluj, zda background thread dokončil stavbu BSP stromu
         if let Ok(message) = rx.try_recv() {
@@ -588,37 +588,8 @@ fn main() -> Result<()> {
             }
         }
 
-        // Aktualizuj stav kláves v InputManageru
-        input_manager.update_key_states(events);
-
         // Vytvoření frustumu kamery pro view-culling
         let camera_obj = cam.cam(frame_input.viewport);
-
-        // Handle mouse clicks: cast a ray into the scene and select the
-        // deepest BSP node containing the hit point. The selected ID is
-        // reflected in the left control panel.
-        let mut click_position = None;
-        for event in events {
-            if let Event::MousePress {
-                button: MouseButton::Left,
-                position,
-                ..
-            } = event
-            {
-                click_position = Some(*position);
-            }
-        }
-        if let Some(pos) = click_position {
-            if let Some(ref root) = bsp_root {
-                let pick_mesh = Mesh::new(&context, &current_cpu_mesh);
-                if let Some(hit) = three_d::pick(&context, &camera_obj, pos, [&pick_mesh]) {
-                    let p = Vector3::new(hit.position.x, hit.position.y, hit.position.z);
-                    if let Some(node) = find_deepest_node_containing_point(root, p) {
-                        selected_node = Some(node.id);
-                    }
-                }
-            }
-        }
 
         // Použij správnou pozici pozorovatele pro traverzování BSP stromu
         let observer_position = match mode {
@@ -678,6 +649,79 @@ fn main() -> Result<()> {
             tris
         };
 
+        // --- GUI ---
+        gui.update(
+            events,
+            frame_input.accumulated_time,
+            frame_input.viewport,
+            frame_input.device_pixel_ratio,
+            |ctx| {
+                crate::gui::draw_left_panel(
+                    ctx,
+                    mode,
+                    &mut loaded_file_name,
+                    &mut file_loading,
+                    &tx_gui,
+                    &rx,
+                    &mut current_cpu_mesh,
+                    &mut current_triangles,
+                    &mut bsp_root,
+                    &mut selected_node,
+                    &mut show_splitting_plane,
+                    &mut use_gpu_culling,
+                    &mut show_loaded_model,
+                    &mut show_selected_model,
+                    &mut show_camera_direction,
+                    &mut spectator_state,
+                    &mut third_person_state,
+                    &mut cam,
+                    &current_stats,
+                    &mut tree_window_open,
+                    &mut branch_limit,
+                );
+            },
+        );
+
+        if branch_limit != last_branch_limit {
+            let mut next_id = 0;
+            bsp_root = Some(build_bsp(&current_triangles, 0, branch_limit, &mut next_id));
+            total_stats.total_nodes = bsp_root.as_ref().unwrap().count_nodes();
+            total_stats.total_triangles = current_triangles.len() as u32;
+            selected_node = None;
+            last_branch_limit = branch_limit;
+        }
+
+        // Aktualizuj stav kláves v InputManageru
+        input_manager.update_key_states(events);
+
+        // Handle mouse clicks: cast a ray into the scene and select the
+        // deepest BSP node containing the hit point. The selected ID is
+        // reflected in the left control panel.
+        if !gui.context().wants_pointer_input() {
+            let mut click_position = None;
+            for event in events.iter() {
+                if let Event::MousePress {
+                    button: MouseButton::Left,
+                    position,
+                    ..
+                } = event
+                {
+                    click_position = Some(*position);
+                }
+            }
+            if let Some(pos) = click_position {
+                if let Some(ref root) = bsp_root {
+                    let pick_mesh = Mesh::new(&context, &current_cpu_mesh);
+                    if let Some(hit) = three_d::pick(&context, &camera_obj, pos, [&pick_mesh]) {
+                        let p = Vector3::new(hit.position.x, hit.position.y, hit.position.z);
+                        if let Some(node) = find_deepest_node_containing_point(root, p) {
+                            selected_node = Some(node.id);
+                        }
+                    }
+                }
+            }
+        }
+
         // 1) Shromáždění trojúhelníků z vybraného podstromu
         let mut picked_tris = Vec::new();
         if let Some(sel_id) = selected_node {
@@ -726,48 +770,6 @@ fn main() -> Result<()> {
         } else {
             None
         };
-
-        // --- GUI ---
-        gui.update(
-            &mut frame_input.events.clone(),
-            frame_input.accumulated_time,
-            frame_input.viewport,
-            frame_input.device_pixel_ratio,
-            |ctx| {
-                crate::gui::draw_left_panel(
-                    ctx,
-                    mode,
-                    &mut loaded_file_name,
-                    &mut file_loading,
-                    &tx_gui,
-                    &rx,
-                    &mut current_cpu_mesh,
-                    &mut current_triangles,
-                    &mut bsp_root,
-                    &mut selected_node,
-                    &mut show_splitting_plane,
-                    &mut use_gpu_culling,
-                    &mut show_loaded_model,
-                    &mut show_selected_model,
-                    &mut show_camera_direction,
-                    &mut spectator_state,
-                    &mut third_person_state,
-                    &mut cam,
-                    &current_stats,
-                    &mut tree_window_open,
-                    &mut branch_limit,
-                );
-            },
-        );
-
-        if branch_limit != last_branch_limit {
-            let mut next_id = 0;
-            bsp_root = Some(build_bsp(&current_triangles, 0, branch_limit, &mut next_id));
-            total_stats.total_nodes = bsp_root.as_ref().unwrap().count_nodes();
-            total_stats.total_triangles = current_triangles.len() as u32;
-            selected_node = None;
-            last_branch_limit = branch_limit;
-        }
 
         // --- ovládání ---
         // --- ovládání přepnutí režimu pomocí kláves F a G ---
