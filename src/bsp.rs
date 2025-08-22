@@ -9,7 +9,7 @@ use crate::config::{HIGHLIGHT_COLOR, MIN_TRIANGLES_PER_LEAF, MODEL_COLOR, PLANE_
 
 // ---------------- BSP Implementation -------------------------------------- //
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Triangle {
     pub a: Vector3<f32>,
     pub b: Vector3<f32>,
@@ -1029,5 +1029,64 @@ impl Frustum {
                 self.planes[5].d,
             ],
         ]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cgmath::Vector3;
+
+    fn test_frustum() -> Frustum {
+        Frustum {
+            planes: [
+                Plane::new(Vector3::new(1.0, 0.0, 0.0), Vector3::new(-2.0, 0.0, 0.0)),
+                Plane::new(Vector3::new(-1.0, 0.0, 0.0), Vector3::new(2.0, 0.0, 0.0)),
+                Plane::new(Vector3::new(0.0, 1.0, 0.0), Vector3::new(0.0, -2.0, 0.0)),
+                Plane::new(Vector3::new(0.0, -1.0, 0.0), Vector3::new(0.0, 2.0, 0.0)),
+                Plane::new(Vector3::new(0.0, 0.0, 1.0), Vector3::new(0.0, 0.0, -2.0)),
+                Plane::new(Vector3::new(0.0, 0.0, -1.0), Vector3::new(0.0, 0.0, 2.0)),
+            ],
+        }
+    }
+
+    #[test]
+    fn frustum_culling_skips_outside_triangles() {
+        let inside = Triangle {
+            a: Vector3::new(1.0, 0.0, 0.0),
+            b: Vector3::new(1.0, 1.0, 0.0),
+            c: Vector3::new(1.0, 0.0, 1.0),
+        };
+
+        let outside = Triangle {
+            a: Vector3::new(-10.0, 0.0, 0.0),
+            b: Vector3::new(-10.0, 1.0, 0.0),
+            c: Vector3::new(-10.0, 0.0, 1.0),
+        };
+
+        let front = BspNode::new_leaf(vec![inside.clone()], 2);
+        let back = BspNode::new_leaf(vec![outside.clone()], 3);
+        let root = BspNode::new_node(
+            Plane::new(Vector3::new(1.0, 0.0, 0.0), Vector3::new(0.0, 0.0, 0.0)),
+            front,
+            back,
+            1,
+        );
+
+        let frustum = test_frustum();
+        let mut stats = BspStats::default();
+        let mut visible = Vec::new();
+
+        traverse_bsp_with_frustum(
+            &root,
+            Vector3::new(0.0, 0.0, 0.0),
+            &frustum,
+            &mut stats,
+            &mut visible,
+        );
+
+        assert_eq!(visible.len(), 1);
+        assert!(visible.contains(&inside));
+        assert!(!visible.contains(&outside));
     }
 }
