@@ -567,101 +567,70 @@ pub fn create_plane_mesh(
 
 // ---------------- Free‑fly kamera ---------------------------------------- //
 pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
-    let mut triangles = Vec::with_capacity(mesh.positions.len() / 3);
-
     // Získáme pozice vrcholů z meshe
     let positions = match &mesh.positions {
         Positions::F32(pos) => pos,
         _ => return Vec::new(), // Pokud nemáme F32 pozice, vrátíme prázdný vektor
     };
 
-    // Zpracujeme indexy, pokud existují
     match &mesh.indices {
-        Indices::U32(indices) => {
-            // Pro každou trojici indexů vytvoříme trojúhelník
-            for i in (0..indices.len()).step_by(3) {
-                if i + 2 < indices.len() {
-                    let a_idx = indices[i] as usize;
-                    let b_idx = indices[i + 1] as usize;
-                    let c_idx = indices[i + 2] as usize;
-
-                    // Kontrola, zda indexy jsou v rozsahu
-                    if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len()
-                    {
-                        let a = Vector3::new(
-                            positions[a_idx].x,
-                            positions[a_idx].y,
-                            positions[a_idx].z,
-                        );
-                        let b = Vector3::new(
-                            positions[b_idx].x,
-                            positions[b_idx].y,
-                            positions[b_idx].z,
-                        );
-                        let c = Vector3::new(
-                            positions[c_idx].x,
-                            positions[c_idx].y,
-                            positions[c_idx].z,
-                        );
-
-                        triangles.push(Triangle { a, b, c });
-                    }
+        Indices::U32(indices) => indices
+            .par_chunks(3)
+            .filter_map(|chunk| {
+                if chunk.len() < 3 {
+                    return None;
                 }
-            }
-        }
-        Indices::U16(indices) => {
-            // Pro každou trojici indexů vytvoříme trojúhelník
-            for i in (0..indices.len()).step_by(3) {
-                if i + 2 < indices.len() {
-                    let a_idx = indices[i] as usize;
-                    let b_idx = indices[i + 1] as usize;
-                    let c_idx = indices[i + 2] as usize;
+                let a_idx = chunk[0] as usize;
+                let b_idx = chunk[1] as usize;
+                let c_idx = chunk[2] as usize;
 
-                    // Kontrola, zda indexy jsou v rozsahu
-                    if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len()
-                    {
-                        let a = Vector3::new(
-                            positions[a_idx].x,
-                            positions[a_idx].y,
-                            positions[a_idx].z,
-                        );
-                        let b = Vector3::new(
-                            positions[b_idx].x,
-                            positions[b_idx].y,
-                            positions[b_idx].z,
-                        );
-                        let c = Vector3::new(
-                            positions[c_idx].x,
-                            positions[c_idx].y,
-                            positions[c_idx].z,
-                        );
-
-                        triangles.push(Triangle { a, b, c });
-                    }
+                if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len() {
+                    Some(Triangle {
+                        a: Vector3::new(positions[a_idx].x, positions[a_idx].y, positions[a_idx].z),
+                        b: Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z),
+                        c: Vector3::new(positions[c_idx].x, positions[c_idx].y, positions[c_idx].z),
+                    })
+                } else {
+                    None
                 }
-            }
-        }
-        Indices::None => {
-            // Pokud nemáme indexy, předpokládáme, že pozice jsou přímo vrcholy trojúhelníků
-            for i in (0..positions.len()).step_by(3) {
-                if i + 2 < positions.len() {
-                    let a = Vector3::new(positions[i].x, positions[i].y, positions[i].z);
-                    let b =
-                        Vector3::new(positions[i + 1].x, positions[i + 1].y, positions[i + 1].z);
-                    let c =
-                        Vector3::new(positions[i + 2].x, positions[i + 2].y, positions[i + 2].z);
-
-                    triangles.push(Triangle { a, b, c });
+            })
+            .collect(),
+        Indices::U16(indices) => indices
+            .par_chunks(3)
+            .filter_map(|chunk| {
+                if chunk.len() < 3 {
+                    return None;
                 }
-            }
-        }
-        _ => {
-            // Přidáno pro pokrytí všech případů
-            return Vec::new();
-        }
+                let a_idx = chunk[0] as usize;
+                let b_idx = chunk[1] as usize;
+                let c_idx = chunk[2] as usize;
+
+                if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len() {
+                    Some(Triangle {
+                        a: Vector3::new(positions[a_idx].x, positions[a_idx].y, positions[a_idx].z),
+                        b: Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z),
+                        c: Vector3::new(positions[c_idx].x, positions[c_idx].y, positions[c_idx].z),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect(),
+        Indices::None => positions
+            .par_chunks(3)
+            .filter_map(|chunk| {
+                if chunk.len() < 3 {
+                    return None;
+                }
+                Some(Triangle {
+                    a: Vector3::new(chunk[0].x, chunk[0].y, chunk[0].z),
+                    b: Vector3::new(chunk[1].x, chunk[1].y, chunk[1].z),
+                    c: Vector3::new(chunk[2].x, chunk[2].y, chunk[2].z),
+                })
+            })
+            .collect(),
+        _ => Vec::new(), // Přidáno pro pokrytí všech případů
     }
-
-    triangles
 }
 
 // Funkce pro traverzování BSP stromu s frustum cullingem

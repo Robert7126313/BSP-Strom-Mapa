@@ -9,7 +9,7 @@ with `egui` for the user interface.
 
 - Loads `GLTF`/`GLB` files and converts them to a simple triangle list.
 - Builds a BSP tree in a background thread so the UI stays responsive.
-- CPU or optional GPU accelerated frustum culling of triangles.
+- CPU or optional GPU accelerated frustum culling of triangles (enabled by default when supported).
 - Two camera modes – *Spectator* and *ThirdPerson* – with smooth controls.
 - Interactive UI for exploring the BSP structure and basic statistics.
 
@@ -21,10 +21,10 @@ This project is managed with Cargo.  To compile it simply run
 cargo build
 ```
 
-or to run it directly
+For the best performance, run the viewer in release mode:
 
 ```bash
-cargo run
+cargo run --release
 ```
 
 The binary opens a window showing the loaded scene.  On the first start the

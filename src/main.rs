@@ -403,7 +403,7 @@ fn main() -> Result<()> {
     let mut current_cpu_mesh = cpu_mesh.clone();
     let mut current_triangles = cpu_mesh_to_triangles(&cpu_mesh);
     let mut file_loading = false;
-    let mut gpu_job: Option<GpuJob> = None;
+    let mut gpu_job: Option<GpuJob>;
 
     // Vytvoření triangles z CPU meshe
     println!("🔺 Převádím mesh na trojúhelníky...");
@@ -448,7 +448,7 @@ fn main() -> Result<()> {
     };
 
     // Volba pro GPU akceleraci frustum cullingu
-    let mut use_gpu_culling = false;
+    let mut use_gpu_culling = gpu_job.is_some();
     let mut disable_culling = false;
     let mut show_loaded_model = true;
     let mut show_selected_model = true;
