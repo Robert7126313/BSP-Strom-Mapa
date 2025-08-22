@@ -954,6 +954,8 @@ fn main() -> Result<()> {
         } else {
             // Aktualizuj stav aktuální kamery (ThirdPerson)
             third_person_state = CameraState::from_camera(&cam);
+            // Synchronizuj spectator_state pro účely cullingu
+            spectator_state = third_person_state.clone();
 
             // Aktualizuj pozici značky aktuální kamery (ThirdPerson)
             third_person_glow.set_transformation(
@@ -961,6 +963,15 @@ fn main() -> Result<()> {
                     third_person_state.pos.x,
                     third_person_state.pos.y,
                     third_person_state.pos.z,
+                )) * Mat4::from_scale(0.2),
+            );
+
+            // Posuň i značku spectator kamery, aby odpovídala cullingu
+            spectator_glow.set_transformation(
+                Mat4::from_translation(vec3(
+                    spectator_state.pos.x,
+                    spectator_state.pos.y,
+                    spectator_state.pos.z,
                 )) * Mat4::from_scale(0.2),
             );
 
