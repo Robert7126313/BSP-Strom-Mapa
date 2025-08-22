@@ -207,7 +207,7 @@ pub fn draw_left_panel(
                         ui.separator();
                         ui.heading("Vybraný uzel");
                         ui.label(format!("ID: {}", node.id));
-                        ui.label(format!("Trojúhelníků: {}", node.triangles.len()));
+                        ui.label(format!("Trojúhelníků: {}", node.subtree_triangles()));
                         if let Some(ref plane) = node.plane {
                             ui.label("Dělící rovina:");
                             ui.label(format!(
@@ -218,15 +218,6 @@ pub fn draw_left_panel(
                         } else {
                             ui.label("List (bez dělící roviny)");
                         }
-                        ui.label("Obalový objem:");
-                        ui.label(format!(
-                            "Min: ({:.2}, {:.2}, {:.2})",
-                            node.bounds.min.x, node.bounds.min.y, node.bounds.min.z
-                        ));
-                        ui.label(format!(
-                            "Max: ({:.2}, {:.2}, {:.2})",
-                            node.bounds.max.x, node.bounds.max.y, node.bounds.max.z
-                        ));
                         if ui.button("Odznačit").clicked() {
                             *selected_node = None;
                         }
