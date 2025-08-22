@@ -280,49 +280,45 @@ fn process_primitive(
     Ok(())
 }
 
-// Funkce pro vytvoření meshe z viditelných trojúhelníků
-fn create_visible_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, ColorMaterial> {
-    // Paralelní zpracování pozic a indexů
+// Aktualizuje pozice a indexy viditelných trojúhelníků v předalokovaných bufferech
+fn create_visible_mesh(
+    triangles: &[Triangle],
+    positions: &mut Vec<Vec3>,
+    indices: &mut Vec<u32>,
+    mesh: &mut Mesh,
+) {
     let triangles_count = triangles.len();
 
-    // Paralelně vytvoříme pozice vrcholů
-    let positions: Vec<Vec3> = triangles
-        .par_iter()
-        .flat_map(|tri| {
-            vec![
-                vec3(tri.a.x, tri.a.y, tri.a.z),
-                vec3(tri.b.x, tri.b.y, tri.b.z),
-                vec3(tri.c.x, tri.c.y, tri.c.z),
-            ]
-        })
-        .collect();
+    // Připravíme buffery pro pozice
+    positions.clear();
+    positions.resize(triangles_count * 3, vec3(0.0, 0.0, 0.0));
+    positions
+        .par_chunks_mut(3)
+        .zip(triangles.par_iter())
+        .for_each(|(chunk, tri)| {
+            chunk[0] = vec3(tri.a.x, tri.a.y, tri.a.z);
+            chunk[1] = vec3(tri.b.x, tri.b.y, tri.b.z);
+            chunk[2] = vec3(tri.c.x, tri.c.y, tri.c.z);
+        });
 
-    // Paralelně vygenerujeme indexy
-    let indices: Vec<u32> = (0..triangles_count as u32)
-        .into_par_iter()
-        .flat_map(|i| {
-            let base_idx = i * 3;
-            vec![base_idx, base_idx + 1, base_idx + 2]
-        })
-        .collect();
+    // Připravíme buffery pro indexy
+    indices.clear();
+    indices.resize(triangles_count * 3, 0);
+    indices
+        .par_chunks_mut(3)
+        .enumerate()
+        .for_each(|(i, chunk)| {
+            let base_idx = i as u32 * 3;
+            chunk[0] = base_idx;
+            chunk[1] = base_idx + 1;
+            chunk[2] = base_idx + 2;
+        });
 
-    // Vytvoření nového meshe
-    let visible_mesh = CpuMesh {
-        positions: Positions::F32(positions),
-        indices: Indices::U32(indices),
-        ..Default::default()
-    };
-
-    // Vytvoření materiálu a modelu
-    let material = ColorMaterial::new_opaque(
-        context,
-        &CpuMaterial {
-            albedo: MODEL_COLOR,
-            ..Default::default()
-        },
-    );
-
-    Gm::new(Mesh::new(context, &visible_mesh), material)
+    // Aktualizace GPU bufferů
+    mesh.positions_mut().fill(positions);
+    if let IndexBuffer::U32(buffer) = mesh.indices_mut() {
+        buffer.fill(indices);
+    }
 }
 
 fn gpu_cull_triangles(job: &GpuJob, tris: &[Triangle], frustum: &Frustum) -> Vec<Triangle> {
@@ -463,7 +459,16 @@ fn main() -> Result<()> {
             ..Default::default()
         },
     );
-    let _model = Gm::new(Mesh::new(&context, &cpu_mesh), material.clone());
+    // Persistentní mesh a jeho CPU buffery
+    let placeholder = CpuMesh {
+        positions: Positions::F32(vec![vec3(0.0, 0.0, 0.0); 3]),
+        indices: Indices::U32(vec![0, 1, 2]),
+        ..Default::default()
+    };
+    let mut base_model = Gm::new(Mesh::new(&context, &placeholder), material);
+    let mut base_model_visible = false;
+    let mut visible_positions: Vec<Vec3> = Vec::with_capacity(triangles.len() * 3);
+    let mut visible_indices: Vec<u32> = Vec::with_capacity(triangles.len() * 3);
 
     // Glow efekty pro pozice kamer
     let glow_mesh = CpuMesh::sphere(16);
@@ -760,11 +765,17 @@ fn main() -> Result<()> {
             }
         }
 
-        let base_model = if !normal_tris.is_empty() {
-            Some(create_visible_mesh(&normal_tris, &context))
+        if !normal_tris.is_empty() {
+            create_visible_mesh(
+                &normal_tris,
+                &mut visible_positions,
+                &mut visible_indices,
+                &mut base_model.geometry,
+            );
+            base_model_visible = true;
         } else {
-            None
-        };
+            base_model_visible = false;
+        }
         let highlight_model = if !highlight_tris.is_empty() {
             Some(create_highlight_mesh(&highlight_tris, &context))
         } else {
@@ -1004,8 +1015,8 @@ fn main() -> Result<()> {
             BG_COLOR.0, BG_COLOR.1, BG_COLOR.2, 1.0, 1.0,
         ));
         let mut objects_to_render: Vec<&dyn Object> = Vec::new();
-        if let Some(ref base) = base_model {
-            objects_to_render.push(base);
+        if base_model_visible {
+            objects_to_render.push(&base_model);
         }
         if let Some(ref h) = highlight_model {
             objects_to_render.push(h);
