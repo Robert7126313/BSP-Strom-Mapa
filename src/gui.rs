@@ -131,7 +131,7 @@ pub fn draw_left_panel(
     disable_culling: &mut bool,
     show_loaded_model: &mut bool,
     show_selected_model: &mut bool,
-    show_camera_direction: &mut bool,
+    show_spectator_marker: &mut bool,
     spectator_state: &mut crate::camera::CameraState,
     third_person_state: &mut crate::camera::CameraState,
     cam: &mut crate::camera::FreeCamera,
@@ -379,7 +379,7 @@ pub fn draw_left_panel(
                 "Vzdálenost mezi kamerami: {:.1}",
                 (spectator_state.pos - third_person_state.pos).magnitude()
             ));
-            ui.checkbox(show_camera_direction, "Zobrazit směr pohledu kamery");
+            ui.checkbox(show_spectator_marker, "Zobrazit pozici a směr spectatoru");
 
             if let Ok(msg) = rx.try_recv() {
                 match msg {

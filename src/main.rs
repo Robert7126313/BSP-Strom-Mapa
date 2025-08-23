@@ -463,8 +463,8 @@ fn main() -> Result<()> {
     let mut third_person_state = CameraState::new(default_third_person_pos); // Jiná pozice pro lepší vizualizaci
     let mut mode = CamMode::Spectator;
 
-    // Proměnná pro sledování, zda zobrazit směr pohledu kamery
-    let mut show_camera_direction = false;
+    // Proměnná pro zobrazení značky spectator kamery
+    let mut show_spectator_marker = false;
 
     // Nastavení pozic glow efektů podle stavů kamer
     spectator_glow.set_transformation(
@@ -524,12 +524,7 @@ fn main() -> Result<()> {
                     file_loading = false;
                     current_triangles = cpu_mesh_to_triangles(&current_cpu_mesh);
                     let next_id = AtomicUsize::new(0);
-                    bsp_root_full = Some(build_bsp(
-                        &current_triangles,
-                        0,
-                        MAX_BSP_DEPTH,
-                        &next_id,
-                    ));
+                    bsp_root_full = Some(build_bsp(&current_triangles, 0, MAX_BSP_DEPTH, &next_id));
                     total_stats.total_nodes = bsp_root_full.as_ref().unwrap().count_nodes();
                     let next_id = AtomicUsize::new(0);
                     bsp_root_preview =
@@ -634,7 +629,7 @@ fn main() -> Result<()> {
                     &mut disable_culling,
                     &mut show_loaded_model,
                     &mut show_selected_model,
-                    &mut show_camera_direction,
+                    &mut show_spectator_marker,
                     &mut spectator_state,
                     &mut third_person_state,
                     &mut cam,
@@ -846,7 +841,7 @@ fn main() -> Result<()> {
             );
 
             // Aktualizuj směrový paprsek pro spectator kameru
-            if show_camera_direction {
+            if show_spectator_marker {
                 // Získáme směrový vektor kamery a nastavíme transformaci paprsku
                 let dir = cam.dir();
 
@@ -910,7 +905,7 @@ fn main() -> Result<()> {
             );
 
             // Když jsme v third person mode, zobrazíme směrový paprsek pro spectator kameru
-            if show_camera_direction {
+            if show_spectator_marker {
                 // Získáme směrový vektor kamery a nastavíme transformaci paprsku
                 // Tentokrát použijeme směr spectator kamery
                 let dir = Vector3::new(
@@ -994,6 +989,10 @@ fn main() -> Result<()> {
         }
         if let Some(ref plane_mesh) = splitting_plane_mesh {
             objects_to_render.push(plane_mesh);
+        }
+        if show_spectator_marker && mode == CamMode::ThirdPerson {
+            objects_to_render.push(&spectator_glow);
+            objects_to_render.push(&camera_direction_ray);
         }
         // ... další objekty ...
         screen.render(
