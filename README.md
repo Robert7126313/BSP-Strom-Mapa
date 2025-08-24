@@ -54,8 +54,8 @@ highlighted in the 3D view.
 User-tunable parameters are collected in [`src/config.rs`](src/config.rs). Colors
 and lighting can be customized by editing the constants in this file, e.g.:
 
-- `SPECTATOR_GLOW_COLOR` – color of the spectator camera marker.
-- `THIRD_PERSON_GLOW_COLOR` – color of the third person marker.
-- `DIRECTION_RAY_COLOR` – color of the camera direction indicator.
+- `HIGHLIGHT_COLOR` – accent color used for selections, camera markers and the
+  direction indicator.
 - `AMBIENT_LIGHT_INTENSITY` and `AMBIENT_LIGHT_COLOR` – ambient light settings.
+- `DEFAULT_FOV_DEG` – default field of view for the camera.
 

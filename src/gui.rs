@@ -2,9 +2,9 @@ use crate::config::CONFIG;
 use cgmath::InnerSpace;
 use egui::{CollapsingHeader, Grid};
 use egui_plot::{Line, Plot, PlotPoint, Points, Text};
-use three_d::Srgba;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicUsize;
+use three_d::Srgba;
 
 struct TreePlotData {
     positions: HashMap<usize, PlotPoint>,
@@ -483,61 +483,6 @@ fn draw_config_window(ctx: &egui::Context, open: &mut bool) {
                 }
             });
 
-            let mut pcol = egui::Color32::from_rgba_unmultiplied(
-                cfg.plane_color.r,
-                cfg.plane_color.g,
-                cfg.plane_color.b,
-                cfg.plane_color.a,
-            );
-            ui.horizontal(|ui| {
-                ui.label("Plane");
-                if ui.color_edit_button_srgba(&mut pcol).changed() {
-                    cfg.plane_color = Srgba::new(pcol.r(), pcol.g(), pcol.b(), pcol.a());
-                }
-            });
-
-            let mut scol = egui::Color32::from_rgba_unmultiplied(
-                cfg.spectator_glow_color.r,
-                cfg.spectator_glow_color.g,
-                cfg.spectator_glow_color.b,
-                cfg.spectator_glow_color.a,
-            );
-            ui.horizontal(|ui| {
-                ui.label("Spectator glow");
-                if ui.color_edit_button_srgba(&mut scol).changed() {
-                    cfg.spectator_glow_color =
-                        Srgba::new(scol.r(), scol.g(), scol.b(), scol.a());
-                }
-            });
-
-            let mut tcol = egui::Color32::from_rgba_unmultiplied(
-                cfg.third_person_glow_color.r,
-                cfg.third_person_glow_color.g,
-                cfg.third_person_glow_color.b,
-                cfg.third_person_glow_color.a,
-            );
-            ui.horizontal(|ui| {
-                ui.label("Third person glow");
-                if ui.color_edit_button_srgba(&mut tcol).changed() {
-                    cfg.third_person_glow_color =
-                        Srgba::new(tcol.r(), tcol.g(), tcol.b(), tcol.a());
-                }
-            });
-
-            let mut dcol = egui::Color32::from_rgba_unmultiplied(
-                cfg.direction_ray_color.r,
-                cfg.direction_ray_color.g,
-                cfg.direction_ray_color.b,
-                cfg.direction_ray_color.a,
-            );
-            ui.horizontal(|ui| {
-                ui.label("Direction ray");
-                if ui.color_edit_button_srgba(&mut dcol).changed() {
-                    cfg.direction_ray_color =
-                        Srgba::new(dcol.r(), dcol.g(), dcol.b(), dcol.a());
-                }
-            });
-
             ui.add(
                 egui::Slider::new(&mut cfg.ambient_light_intensity, 0.0..=5.0)
                     .text("Ambient intensity"),
@@ -551,17 +496,13 @@ fn draw_config_window(ctx: &egui::Context, open: &mut bool) {
             ui.horizontal(|ui| {
                 ui.label("Ambient color");
                 if ui.color_edit_button_srgba(&mut acol).changed() {
-                    cfg.ambient_light_color =
-                        Srgba::new(acol.r(), acol.g(), acol.b(), acol.a());
+                    cfg.ambient_light_color = Srgba::new(acol.r(), acol.g(), acol.b(), acol.a());
                 }
             });
 
             ui.separator();
             ui.heading("BSP Tree");
-            ui.add(
-                egui::Slider::new(&mut cfg.bsp_tree_text_size, 8.0..=32.0)
-                    .text("Text size"),
-            );
+            ui.add(egui::Slider::new(&mut cfg.bsp_tree_text_size, 8.0..=32.0).text("Text size"));
             ui.horizontal(|ui| {
                 ui.label("Path color");
                 ui.color_edit_button_srgba(&mut cfg.bsp_tree_path_color);
@@ -573,9 +514,7 @@ fn draw_config_window(ctx: &egui::Context, open: &mut bool) {
 
             ui.separator();
             ui.heading("BSP Limits");
-            ui.add(
-                egui::Slider::new(&mut cfg.max_bsp_depth, 1..=64).text("Max depth"),
-            );
+            ui.add(egui::Slider::new(&mut cfg.max_bsp_depth, 1..=64).text("Max depth"));
             let max_depth = cfg.max_bsp_depth;
             ui.add(
                 egui::Slider::new(&mut cfg.default_branch_limit, 1..=max_depth)
@@ -589,26 +528,13 @@ fn draw_config_window(ctx: &egui::Context, open: &mut bool) {
             ui.separator();
             ui.heading("Camera");
             ui.add(
-                egui::Slider::new(&mut cfg.default_camera_speed, 0.1..=20.0)
-                    .text("Default speed"),
+                egui::Slider::new(&mut cfg.default_camera_speed, 0.1..=20.0).text("Default speed"),
             );
-            ui.add(
-                egui::Slider::new(&mut cfg.default_look_speed, 0.1..=10.0)
-                    .text("Look speed"),
-            );
-            ui.add(
-                egui::Slider::new(&mut cfg.pitch_limit, 0.1..=3.14).text("Pitch limit"),
-            );
-            ui.add(
-                egui::Slider::new(&mut cfg.default_fov_deg, 30.0..=120.0)
-                    .text("FOV deg"),
-            );
-            ui.add(
-                egui::Slider::new(&mut cfg.near_plane, 0.01..=1.0).text("Near plane"),
-            );
-            ui.add(
-                egui::Slider::new(&mut cfg.far_plane, 10.0..=5000.0).text("Far plane"),
-            );
+            ui.add(egui::Slider::new(&mut cfg.default_look_speed, 0.1..=10.0).text("Look speed"));
+            ui.add(egui::Slider::new(&mut cfg.pitch_limit, 0.1..=3.14).text("Pitch limit"));
+            ui.add(egui::Slider::new(&mut cfg.default_fov_deg, 30.0..=120.0).text("FOV deg"));
+            ui.add(egui::Slider::new(&mut cfg.near_plane, 0.01..=1.0).text("Near plane"));
+            ui.add(egui::Slider::new(&mut cfg.far_plane, 10.0..=5000.0).text("Far plane"));
             ui.add(
                 egui::Slider::new(&mut cfg.camera_switch_cooldown, 0.1..=10.0)
                     .text("Switch cooldown"),
@@ -631,16 +557,12 @@ fn draw_config_window(ctx: &egui::Context, open: &mut bool) {
                 ui.add(egui::DragValue::new(&mut cfg.default_third_person_pos.z));
             });
             ui.add(
-                egui::Slider::new(&mut cfg.camera_marker_scale, 0.01..=1.0)
-                    .text("Marker scale"),
+                egui::Slider::new(&mut cfg.camera_marker_scale, 0.01..=1.0).text("Marker scale"),
             );
             ui.add(
                 egui::Slider::new(&mut cfg.direction_ray_thickness, 0.01..=1.0)
                     .text("Ray thickness"),
             );
-            ui.add(
-                egui::Slider::new(&mut cfg.direction_ray_length, 0.1..=10.0)
-                    .text("Ray length"),
-            );
+            ui.add(egui::Slider::new(&mut cfg.direction_ray_length, 0.1..=10.0).text("Ray length"));
         });
 }

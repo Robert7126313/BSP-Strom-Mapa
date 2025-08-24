@@ -566,7 +566,7 @@ pub fn create_plane_mesh(
         ..Default::default()
     };
 
-    let plane_color = CONFIG.lock().unwrap().plane_color;
+    let plane_color = CONFIG.lock().unwrap().highlight_color;
     let material = ColorMaterial::new_transparent(
         context,
         &CpuMaterial {
@@ -590,98 +590,62 @@ pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
         Indices::U32(indices) => {
             let tri_count = indices.len() / 3;
             let mut tris = Vec::with_capacity(tri_count);
-            tris.par_extend(
-                indices.par_chunks(3).filter_map(|chunk| {
-                    if chunk.len() < 3 {
-                        return None;
-                    }
-                    let a_idx = chunk[0] as usize;
-                    let b_idx = chunk[1] as usize;
-                    let c_idx = chunk[2] as usize;
+            tris.par_extend(indices.par_chunks(3).filter_map(|chunk| {
+                if chunk.len() < 3 {
+                    return None;
+                }
+                let a_idx = chunk[0] as usize;
+                let b_idx = chunk[1] as usize;
+                let c_idx = chunk[2] as usize;
 
-                    if a_idx < positions.len()
-                        && b_idx < positions.len()
-                        && c_idx < positions.len()
-                    {
-                        Some(Triangle {
-                            a: Vector3::new(
-                                positions[a_idx].x,
-                                positions[a_idx].y,
-                                positions[a_idx].z,
-                            ),
-                            b: Vector3::new(
-                                positions[b_idx].x,
-                                positions[b_idx].y,
-                                positions[b_idx].z,
-                            ),
-                            c: Vector3::new(
-                                positions[c_idx].x,
-                                positions[c_idx].y,
-                                positions[c_idx].z,
-                            ),
-                        })
-                    } else {
-                        None
-                    }
-                })
-            );
+                if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len() {
+                    Some(Triangle {
+                        a: Vector3::new(positions[a_idx].x, positions[a_idx].y, positions[a_idx].z),
+                        b: Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z),
+                        c: Vector3::new(positions[c_idx].x, positions[c_idx].y, positions[c_idx].z),
+                    })
+                } else {
+                    None
+                }
+            }));
             tris
         }
         Indices::U16(indices) => {
             let tri_count = indices.len() / 3;
             let mut tris = Vec::with_capacity(tri_count);
-            tris.par_extend(
-                indices.par_chunks(3).filter_map(|chunk| {
-                    if chunk.len() < 3 {
-                        return None;
-                    }
-                    let a_idx = chunk[0] as usize;
-                    let b_idx = chunk[1] as usize;
-                    let c_idx = chunk[2] as usize;
+            tris.par_extend(indices.par_chunks(3).filter_map(|chunk| {
+                if chunk.len() < 3 {
+                    return None;
+                }
+                let a_idx = chunk[0] as usize;
+                let b_idx = chunk[1] as usize;
+                let c_idx = chunk[2] as usize;
 
-                    if a_idx < positions.len()
-                        && b_idx < positions.len()
-                        && c_idx < positions.len()
-                    {
-                        Some(Triangle {
-                            a: Vector3::new(
-                                positions[a_idx].x,
-                                positions[a_idx].y,
-                                positions[a_idx].z,
-                            ),
-                            b: Vector3::new(
-                                positions[b_idx].x,
-                                positions[b_idx].y,
-                                positions[b_idx].z,
-                            ),
-                            c: Vector3::new(
-                                positions[c_idx].x,
-                                positions[c_idx].y,
-                                positions[c_idx].z,
-                            ),
-                        })
-                    } else {
-                        None
-                    }
-                })
-            );
+                if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len() {
+                    Some(Triangle {
+                        a: Vector3::new(positions[a_idx].x, positions[a_idx].y, positions[a_idx].z),
+                        b: Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z),
+                        c: Vector3::new(positions[c_idx].x, positions[c_idx].y, positions[c_idx].z),
+                    })
+                } else {
+                    None
+                }
+            }));
             tris
         }
         Indices::None => {
             let tri_count = positions.len() / 3;
             let mut tris = Vec::with_capacity(tri_count);
-            tris.par_extend(
-                positions.par_chunks(3).filter_map(|chunk| {
-                    if chunk.len() < 3 {
-                        return None;
-                    }
-                    Some(Triangle {
-                        a: Vector3::new(chunk[0].x, chunk[0].y, chunk[0].z),
-                        b: Vector3::new(chunk[1].x, chunk[1].y, chunk[1].z),
-                        c: Vector3::new(chunk[2].x, chunk[2].y, chunk[2].z),
-                    })
+            tris.par_extend(positions.par_chunks(3).filter_map(|chunk| {
+                if chunk.len() < 3 {
+                    return None;
+                }
+                Some(Triangle {
+                    a: Vector3::new(chunk[0].x, chunk[0].y, chunk[0].z),
+                    b: Vector3::new(chunk[1].x, chunk[1].y, chunk[1].z),
+                    c: Vector3::new(chunk[2].x, chunk[2].y, chunk[2].z),
                 })
-            );
+            }));
             tris
         }
         _ => Vec::new(), // Přidáno pro pokrytí všech případů
