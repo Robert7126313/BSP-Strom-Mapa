@@ -3,6 +3,7 @@
 //! through the rest of the code base.
 
 use cgmath::Vector3;
+use egui::Color32;
 use three_d::Srgba;
 
 // -----------------------------------------------------------------------------
@@ -44,6 +45,22 @@ pub const AMBIENT_LIGHT_INTENSITY: f32 = 1.0;
 /// Color of the ambient light in the scene.
 /// Barva ambientního světla ve scéně.
 pub const AMBIENT_LIGHT_COLOR: Srgba = Srgba::WHITE;
+
+// -----------------------------------------------------------------------------
+// BSP tree visualization
+// -----------------------------------------------------------------------------
+
+/// Text size for BSP tree node labels in pixels.
+/// Velikost textu popisků uzlů BSP stromu v pixelech.
+pub const BSP_TREE_TEXT_SIZE: f32 = 16.0;
+
+/// Color used to highlight the path from root to the selected node.
+/// Barva použitá pro zvýraznění cesty od kořene k vybranému uzlu.
+pub const BSP_TREE_PATH_COLOR: Color32 = Color32::from_rgb(255, 200, 0);
+
+/// Color of the selected node in the BSP tree.
+/// Barva vybraného uzlu v BSP stromu.
+pub const BSP_TREE_SELECTED_COLOR: Color32 = Color32::YELLOW;
 
 // -----------------------------------------------------------------------------
 // BSP tree limits
