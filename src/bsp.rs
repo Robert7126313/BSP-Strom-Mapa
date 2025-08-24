@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use three_d::*;
 
 // Configuration values (colors and tree limits)
-use crate::config::{HIGHLIGHT_COLOR, MIN_TRIANGLES_PER_LEAF, MODEL_COLOR, PLANE_COLOR};
+use crate::config::CONFIG;
 
 // ---------------- BSP Implementation -------------------------------------- //
 
@@ -298,7 +298,8 @@ pub fn build_bsp(
 ) -> BspNode {
     let my_id = next_id.fetch_add(1, Ordering::SeqCst);
 
-    if depth >= max_depth || triangles.len() <= MIN_TRIANGLES_PER_LEAF {
+    let min_tris = CONFIG.lock().unwrap().min_triangles_per_leaf;
+    if depth >= max_depth || triangles.len() <= min_tris {
         return BspNode::new_leaf(triangles.to_vec(), my_id);
     }
 
@@ -502,10 +503,11 @@ pub fn create_highlight_mesh(triangles: &[Triangle], context: &Context) -> Gm<Me
         ..Default::default()
     };
 
+    let highlight_color = CONFIG.lock().unwrap().highlight_color;
     let material = ColorMaterial::new_transparent(
         context,
         &CpuMaterial {
-            albedo: HIGHLIGHT_COLOR, // configured highlight color
+            albedo: highlight_color,
             ..Default::default()
         },
     );
@@ -564,10 +566,11 @@ pub fn create_plane_mesh(
         ..Default::default()
     };
 
+    let plane_color = CONFIG.lock().unwrap().plane_color;
     let material = ColorMaterial::new_transparent(
         context,
         &CpuMaterial {
-            albedo: PLANE_COLOR, // configured plane color
+            albedo: plane_color,
             ..Default::default()
         },
     );
@@ -846,10 +849,11 @@ fn create_material_and_model(
     context: &Context,
     cpu_mesh: &CpuMesh,
 ) -> (ColorMaterial, Gm<Mesh, ColorMaterial>) {
+    let model_color = CONFIG.lock().unwrap().model_color;
     let material = ColorMaterial::new_opaque(
         context,
         &CpuMaterial {
-            albedo: MODEL_COLOR, // Modrá barva aby byl model viditelný
+            albedo: model_color,
             ..Default::default()
         },
     );

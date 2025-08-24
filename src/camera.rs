@@ -4,9 +4,7 @@
 use cgmath::{Deg, Vector3};
 use std::f32::consts::FRAC_PI_2;
 use three_d::*;
-use crate::config::{
-    DEFAULT_CAMERA_SPEED, DEFAULT_FOV_DEG, DEFAULT_LOOK_SPEED, FAR_PLANE, NEAR_PLANE, PITCH_LIMIT,
-};
+use crate::config::CONFIG;
 use crate::input::{InputManager, KeyCode};
 
 #[derive(Clone)]
@@ -20,12 +18,13 @@ pub struct FreeCamera {
 
 impl FreeCamera {
     pub fn new(pos: Vector3<f32>) -> Self {
+        let cfg = CONFIG.lock().unwrap().clone();
         Self {
             pos,
             yaw: -FRAC_PI_2,
             pitch: 0.0,
-            speed: DEFAULT_CAMERA_SPEED,
-            look_speed: DEFAULT_LOOK_SPEED,
+            speed: cfg.default_camera_speed,
+            look_speed: cfg.default_look_speed,
         }
     }
 
@@ -63,22 +62,25 @@ impl FreeCamera {
             self.yaw += tilt_value * self.look_speed * dt;
         }
         if input_manager.is_key_pressed(KeyCode::Up) {
-            self.pitch = (self.pitch + self.look_speed * dt).clamp(-PITCH_LIMIT, PITCH_LIMIT);
+            let limit = CONFIG.lock().unwrap().pitch_limit;
+            self.pitch = (self.pitch + self.look_speed * dt).clamp(-limit, limit);
         }
         if input_manager.is_key_pressed(KeyCode::Down) {
-            self.pitch = (self.pitch - self.look_speed * dt).clamp(-PITCH_LIMIT, PITCH_LIMIT);
+            let limit = CONFIG.lock().unwrap().pitch_limit;
+            self.pitch = (self.pitch - self.look_speed * dt).clamp(-limit, limit);
         }
     }
 
     pub fn cam(&self, vp: Viewport) -> Camera {
+        let cfg = CONFIG.lock().unwrap().clone();
         Camera::new_perspective(
             vp,
             self.pos,
             self.pos + self.dir(),
             Vector3::unit_y(),
-            Deg(DEFAULT_FOV_DEG),
-            NEAR_PLANE,
-            FAR_PLANE,
+            Deg(cfg.default_fov_deg),
+            cfg.near_plane,
+            cfg.far_plane,
         )
     }
 }
@@ -116,7 +118,8 @@ pub struct CameraState {
 
 impl CameraState {
     pub fn new(pos: Vector3<f32>) -> Self {
-        Self { pos, yaw: -FRAC_PI_2, pitch: 0.0, speed: DEFAULT_CAMERA_SPEED }
+        let speed = CONFIG.lock().unwrap().default_camera_speed;
+        Self { pos, yaw: -FRAC_PI_2, pitch: 0.0, speed }
     }
 
     pub fn from_camera(camera: &FreeCamera) -> Self {
