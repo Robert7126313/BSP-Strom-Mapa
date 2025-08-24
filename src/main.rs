@@ -424,7 +424,7 @@ fn main() -> Result<()> {
     let spectator_glow_material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: cfg.spectator_glow_color,
+            albedo: cfg.highlight_color,
             ..Default::default()
         },
     );
@@ -432,7 +432,7 @@ fn main() -> Result<()> {
     let third_person_glow_material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: cfg.third_person_glow_color,
+            albedo: cfg.highlight_color,
             ..Default::default()
         },
     );
@@ -441,7 +441,7 @@ fn main() -> Result<()> {
     let direction_material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: cfg.direction_ray_color,
+            albedo: cfg.highlight_color,
             ..Default::default()
         },
     );
@@ -510,9 +510,9 @@ fn main() -> Result<()> {
         // Apply dynamic configuration updates
         ambient_light.intensity = cfg.ambient_light_intensity;
         ambient_light.color = cfg.ambient_light_color;
-        spectator_glow.material.color = cfg.spectator_glow_color;
-        third_person_glow.material.color = cfg.third_person_glow_color;
-        camera_direction_ray.material.color = cfg.direction_ray_color;
+        spectator_glow.material.color = cfg.highlight_color;
+        third_person_glow.material.color = cfg.highlight_color;
+        camera_direction_ray.material.color = cfg.highlight_color;
 
         // Zkontroluj, zda background thread dokončil stavbu BSP stromu
         if let Ok(message) = rx.try_recv() {

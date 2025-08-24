@@ -16,10 +16,6 @@ pub struct Config {
     pub bg_color: [f32; 3],
     pub model_color: Srgba,
     pub highlight_color: Srgba,
-    pub plane_color: Srgba,
-    pub spectator_glow_color: Srgba,
-    pub third_person_glow_color: Srgba,
-    pub direction_ray_color: Srgba,
     pub ambient_light_intensity: f32,
     pub ambient_light_color: Srgba,
 
@@ -61,10 +57,6 @@ impl Default for Config {
             bg_color: [0.1, 0.1, 0.1],
             model_color: Srgba::new(100, 150, 255, 255),
             highlight_color: Srgba::new(255, 50, 50, 150),
-            plane_color: Srgba::new(200, 200, 50, 128),
-            spectator_glow_color: Srgba::new(0, 255, 100, 200),
-            third_person_glow_color: Srgba::new(255, 100, 0, 200),
-            direction_ray_color: Srgba::new(255, 255, 0, 200),
             ambient_light_intensity: 1.0,
             ambient_light_color: Srgba::WHITE,
             bsp_tree_text_size: 16.0,
@@ -92,4 +84,3 @@ impl Default for Config {
 
 /// Global mutable configuration accessible across modules.
 pub static CONFIG: Lazy<Mutex<Config>> = Lazy::new(|| Mutex::new(Config::default()));
-
