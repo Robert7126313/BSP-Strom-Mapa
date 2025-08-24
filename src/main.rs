@@ -35,7 +35,10 @@ use crate::bsp::{
     triangle_center, BspNode, BspStats, Frustum, Triangle,
 };
 use crate::camera::{CamMode, CameraState, FreeCamera, SwitchDelay};
-use crate::config::{BG_COLOR, DEFAULT_BRANCH_LIMIT, MAX_BSP_DEPTH, MODEL_COLOR};
+use crate::config::{
+    AMBIENT_LIGHT_COLOR, AMBIENT_LIGHT_INTENSITY, BG_COLOR, DEFAULT_BRANCH_LIMIT,
+    DIRECTION_RAY_COLOR, MAX_BSP_DEPTH, MODEL_COLOR, SPECTATOR_GLOW_COLOR, THIRD_PERSON_GLOW_COLOR,
+};
 use crate::input::{InputManager, KeyCode};
 
 mod bsp;
@@ -420,7 +423,7 @@ fn main() -> Result<()> {
     let spectator_glow_material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: Srgba::new(0, 255, 100, 200), // Zelená pro spectator
+            albedo: SPECTATOR_GLOW_COLOR, // Zelená pro spectator
             ..Default::default()
         },
     );
@@ -428,7 +431,7 @@ fn main() -> Result<()> {
     let third_person_glow_material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: Srgba::new(255, 100, 0, 200), // Oranžová pro third person
+            albedo: THIRD_PERSON_GLOW_COLOR, // Oranžová pro third person
             ..Default::default()
         },
     );
@@ -437,7 +440,7 @@ fn main() -> Result<()> {
     let direction_material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: Srgba::new(255, 255, 0, 200), // Žlutá barva pro směrový paprsek
+            albedo: DIRECTION_RAY_COLOR, // Žlutá barva pro směrový paprsek
             ..Default::default()
         },
     );
@@ -451,7 +454,7 @@ fn main() -> Result<()> {
     let mut camera_direction_ray =
         Gm::new(Mesh::new(&context, &direction_mesh), direction_material);
 
-    let ambient_light = AmbientLight::new(&context, 1.0, Srgba::WHITE); // Zvýšit intenzitu světla
+    let ambient_light = AmbientLight::new(&context, AMBIENT_LIGHT_INTENSITY, AMBIENT_LIGHT_COLOR); // Zvýšit intenzitu světla
 
     // Nastavení výchozích pozic pro kamery (spawnpoint)
     let default_spectator_pos = Vector3::new(0.0, 2.0, 8.0);

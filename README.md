@@ -49,3 +49,13 @@ The left panel also exposes a checkbox to disable culling and options to view
 the BSP tree.  When a node is selected, its splitting plane and triangles are
 highlighted in the 3D view.
 
+## Configuration
+
+User-tunable parameters are collected in [`src/config.rs`](src/config.rs). Colors
+and lighting can be customized by editing the constants in this file, e.g.:
+
+- `SPECTATOR_GLOW_COLOR` – color of the spectator camera marker.
+- `THIRD_PERSON_GLOW_COLOR` – color of the third person marker.
+- `DIRECTION_RAY_COLOR` – color of the camera direction indicator.
+- `AMBIENT_LIGHT_INTENSITY` and `AMBIENT_LIGHT_COLOR` – ambient light settings.
+
