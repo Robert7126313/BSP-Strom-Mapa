@@ -36,8 +36,10 @@ use crate::bsp::{
 };
 use crate::camera::{CamMode, CameraState, FreeCamera, SwitchDelay};
 use crate::config::{
-    AMBIENT_LIGHT_COLOR, AMBIENT_LIGHT_INTENSITY, BG_COLOR, DEFAULT_BRANCH_LIMIT,
-    DIRECTION_RAY_COLOR, MAX_BSP_DEPTH, MODEL_COLOR, SPECTATOR_GLOW_COLOR, THIRD_PERSON_GLOW_COLOR,
+    AMBIENT_LIGHT_COLOR, AMBIENT_LIGHT_INTENSITY, BG_COLOR, CAMERA_MARKER_SCALE,
+    CAMERA_SWITCH_COOLDOWN, DEFAULT_BRANCH_LIMIT, DEFAULT_SPECTATOR_POS, DEFAULT_THIRD_PERSON_POS,
+    DIRECTION_RAY_COLOR, DIRECTION_RAY_LENGTH, DIRECTION_RAY_THICKNESS, MAX_BSP_DEPTH,
+    MODEL_COLOR, SPECTATOR_GLOW_COLOR, SPEED_ADJUSTMENT_FACTOR, THIRD_PERSON_GLOW_COLOR,
 };
 use crate::input::{InputManager, KeyCode};
 
@@ -457,13 +459,10 @@ fn main() -> Result<()> {
     let ambient_light = AmbientLight::new(&context, AMBIENT_LIGHT_INTENSITY, AMBIENT_LIGHT_COLOR); // Zvýšit intenzitu světla
 
     // Nastavení výchozích pozic pro kamery (spawnpoint)
-    let default_spectator_pos = Vector3::new(0.0, 2.0, 8.0);
-    let default_third_person_pos = Vector3::new(5.0, 2.0, 8.0);
-
     // před inicializací kamery přidáme mutable proměnné pro stavy kamer obou režimů
-    let mut cam = FreeCamera::new(default_spectator_pos);
+    let mut cam = FreeCamera::new(DEFAULT_SPECTATOR_POS);
     let mut spectator_state = CameraState::from_camera(&cam);
-    let mut third_person_state = CameraState::new(default_third_person_pos); // Jiná pozice pro lepší vizualizaci
+    let mut third_person_state = CameraState::new(DEFAULT_THIRD_PERSON_POS); // Jiná pozice pro lepší vizualizaci
     let mut mode = CamMode::Spectator;
 
     // Proměnná pro zobrazení značky spectator kamery
@@ -475,7 +474,7 @@ fn main() -> Result<()> {
             spectator_state.pos.x,
             spectator_state.pos.y,
             spectator_state.pos.z,
-        )) * Mat4::from_scale(0.2),
+        )) * Mat4::from_scale(CAMERA_MARKER_SCALE),
     ); // Malé koule
 
     third_person_glow.set_transformation(
@@ -483,14 +482,14 @@ fn main() -> Result<()> {
             third_person_state.pos.x,
             third_person_state.pos.y,
             third_person_state.pos.z,
-        )) * Mat4::from_scale(0.2),
+        )) * Mat4::from_scale(CAMERA_MARKER_SCALE),
     );
 
     // Inicializace InputManageru pro plynulé ovládání s více klávesami
     let mut input_manager = InputManager::new();
 
     // Přidání struktury pro sledování času přepnutí režimu
-    let mut switch_delay = SwitchDelay::new(2.0); // 0.5 sekundy cooldown
+    let mut switch_delay = SwitchDelay::new(CAMERA_SWITCH_COOLDOWN); // cooldown mezi přepnutími
 
     // ----------------------------------------------------------------------------
     // Stav pro interaktivní výběr BSP:
@@ -775,7 +774,7 @@ fn main() -> Result<()> {
                         spectator_state.pos.x,
                         spectator_state.pos.y,
                         spectator_state.pos.z,
-                    )) * Mat4::from_scale(0.2),
+                    )) * Mat4::from_scale(CAMERA_MARKER_SCALE),
                 );
 
                 third_person_glow.set_transformation(
@@ -783,7 +782,7 @@ fn main() -> Result<()> {
                         third_person_state.pos.x,
                         third_person_state.pos.y,
                         third_person_state.pos.z,
-                    )) * Mat4::from_scale(0.2),
+                    )) * Mat4::from_scale(CAMERA_MARKER_SCALE),
                 );
             }
         };
@@ -800,11 +799,11 @@ fn main() -> Result<()> {
 
         // Zpracování změny rychlosti pomocí PageUp/PageDown přes InputManager
         if input_manager.is_key_pressed(KeyCode::PageUp) {
-            cam.speed *= 1.2;
+            cam.speed *= SPEED_ADJUSTMENT_FACTOR;
             println!("Rychlost zvýšena na: {:.1}", cam.speed);
         }
         if input_manager.is_key_pressed(KeyCode::PageDown) {
-            cam.speed /= 1.2;
+            cam.speed /= SPEED_ADJUSTMENT_FACTOR;
             println!("Rychlost snížena na: {:.1}", cam.speed);
         }
 
@@ -812,14 +811,14 @@ fn main() -> Result<()> {
         if input_manager.is_key_pressed(KeyCode::Home) {
             if mode == CamMode::Spectator {
                 // Vytvoření nového stavu kamery s výchozí pozicí, ale aktuální rychlostí kamery
-                let mut reset_state = CameraState::new(default_spectator_pos);
+                let mut reset_state = CameraState::new(DEFAULT_SPECTATOR_POS);
                 reset_state.speed = cam.speed; // Zachová aktuální rychlost
                 reset_state.apply_to_camera(&mut cam);
                 println!("Kamera resetována na výchozí spectator pozici");
             } else {
                 // ThirdPerson
                 // Vytvoření nového stavu kamery s výchozí pozicí, ale aktuální rychlostí kamery
-                let mut reset_state = CameraState::new(default_third_person_pos);
+                let mut reset_state = CameraState::new(DEFAULT_THIRD_PERSON_POS);
                 reset_state.speed = cam.speed; // Zachová aktuální rychlost
                 reset_state.apply_to_camera(&mut cam);
                 println!("Kamera resetována na výchozí third person pozici");
@@ -840,7 +839,7 @@ fn main() -> Result<()> {
                     spectator_state.pos.x,
                     spectator_state.pos.y,
                     spectator_state.pos.z,
-                )) * Mat4::from_scale(0.2),
+                )) * Mat4::from_scale(CAMERA_MARKER_SCALE),
             );
 
             // Aktualizuj směrový paprsek pro spectator kameru
@@ -859,8 +858,8 @@ fn main() -> Result<()> {
                 let rotation_axis = y_axis.cross(dir).normalize();
 
                 // Vytvoření transformační matice pro válec
-                let scale = 0.05; // tenký válec
-                let length = 3.0; // délka paprsku
+                let scale = DIRECTION_RAY_THICKNESS; // tenký válec
+                let length = DIRECTION_RAY_LENGTH; // délka paprsku
 
                 // Vytvoření matice transformace
                 let translation = Mat4::from_translation(vec3(
@@ -904,7 +903,7 @@ fn main() -> Result<()> {
                     third_person_state.pos.x,
                     third_person_state.pos.y,
                     third_person_state.pos.z,
-                )) * Mat4::from_scale(0.2),
+                )) * Mat4::from_scale(CAMERA_MARKER_SCALE),
             );
 
             // Když jsme v third person mode, zobrazíme směrový paprsek pro spectator kameru
@@ -926,8 +925,8 @@ fn main() -> Result<()> {
                 let rotation_axis = y_axis.cross(dir).normalize();
 
                 // Vytvoření transformační matice pro válec
-                let scale = 0.05; // tenký válec
-                let length = 3.0; // délka paprsku
+                let scale = DIRECTION_RAY_THICKNESS; // tenký válec
+                let length = DIRECTION_RAY_LENGTH; // délka paprsku
                                   // Vytvoření matice transformace
                 let translation = Mat4::from_translation(vec3(
                     spectator_state.pos.x,

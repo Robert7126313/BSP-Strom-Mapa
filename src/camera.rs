@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: MIT
 // Camera utilities
 
-use cgmath::{Vector3, Deg};
+use cgmath::{Deg, Vector3};
 use std::f32::consts::FRAC_PI_2;
 use three_d::*;
+use crate::config::{
+    DEFAULT_CAMERA_SPEED, DEFAULT_FOV_DEG, DEFAULT_LOOK_SPEED, FAR_PLANE, NEAR_PLANE, PITCH_LIMIT,
+};
 use crate::input::{InputManager, KeyCode};
 
 #[derive(Clone)]
@@ -17,7 +20,13 @@ pub struct FreeCamera {
 
 impl FreeCamera {
     pub fn new(pos: Vector3<f32>) -> Self {
-        Self { pos, yaw: -FRAC_PI_2, pitch: 0.0, speed: 4.0, look_speed: 2.0 }
+        Self {
+            pos,
+            yaw: -FRAC_PI_2,
+            pitch: 0.0,
+            speed: DEFAULT_CAMERA_SPEED,
+            look_speed: DEFAULT_LOOK_SPEED,
+        }
     }
 
     pub fn dir(&self) -> Vector3<f32> {
@@ -54,10 +63,10 @@ impl FreeCamera {
             self.yaw += tilt_value * self.look_speed * dt;
         }
         if input_manager.is_key_pressed(KeyCode::Up) {
-            self.pitch = (self.pitch + self.look_speed * dt).clamp(-1.5, 1.5);
+            self.pitch = (self.pitch + self.look_speed * dt).clamp(-PITCH_LIMIT, PITCH_LIMIT);
         }
         if input_manager.is_key_pressed(KeyCode::Down) {
-            self.pitch = (self.pitch - self.look_speed * dt).clamp(-1.5, 1.5);
+            self.pitch = (self.pitch - self.look_speed * dt).clamp(-PITCH_LIMIT, PITCH_LIMIT);
         }
     }
 
@@ -67,9 +76,9 @@ impl FreeCamera {
             self.pos,
             self.pos + self.dir(),
             Vector3::unit_y(),
-            Deg(60.0),
-            0.1,
-            1000.0,
+            Deg(DEFAULT_FOV_DEG),
+            NEAR_PLANE,
+            FAR_PLANE,
         )
     }
 }
@@ -107,7 +116,7 @@ pub struct CameraState {
 
 impl CameraState {
     pub fn new(pos: Vector3<f32>) -> Self {
-        Self { pos, yaw: -FRAC_PI_2, pitch: 0.0, speed: 4.0 }
+        Self { pos, yaw: -FRAC_PI_2, pitch: 0.0, speed: DEFAULT_CAMERA_SPEED }
     }
 
     pub fn from_camera(camera: &FreeCamera) -> Self {
