@@ -1,4 +1,6 @@
-use crate::config::MAX_BSP_DEPTH;
+use crate::config::{
+    BSP_TREE_PATH_COLOR, BSP_TREE_SELECTED_COLOR, BSP_TREE_TEXT_SIZE, MAX_BSP_DEPTH,
+};
 use cgmath::InnerSpace;
 use egui::{CollapsingHeader, Grid};
 use egui_plot::{Line, Plot, PlotPoint, Points, Text};
@@ -62,7 +64,8 @@ fn draw_bsp_tree_window(
                 }
             }
 
-            let highlight_color = egui::Color32::from_rgb(255, 200, 0);
+            let highlight_color = BSP_TREE_PATH_COLOR;
+            let selected_color = BSP_TREE_SELECTED_COLOR;
 
             let plot = Plot::new("bsp_tree_plot");
             let plot_resp = plot.show(ui, |plot_ui| {
@@ -80,7 +83,7 @@ fn draw_bsp_tree_window(
                 }
                 for (&id, &pos) in &data.positions {
                     let color = if selected == &Some(id) {
-                        egui::Color32::YELLOW
+                        selected_color
                     } else if path_ids.contains(&id) {
                         highlight_color
                     } else {
@@ -89,7 +92,11 @@ fn draw_bsp_tree_window(
                     let pt = vec![[pos.x, pos.y]];
                     plot_ui.points(Points::new(pt).radius(4.0).color(color));
                     plot_ui.text(
-                        Text::new(pos, format!("{}", id)).anchor(egui::Align2::CENTER_CENTER),
+                        Text::new(
+                            pos,
+                            egui::RichText::new(format!("{}", id)).size(BSP_TREE_TEXT_SIZE),
+                        )
+                        .anchor(egui::Align2::CENTER_CENTER),
                     );
                 }
                 plot_ui.pointer_coordinate()
