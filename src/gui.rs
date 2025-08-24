@@ -4,7 +4,7 @@ use egui::{CollapsingHeader, Grid};
 use egui_plot::{Line, Plot, PlotPoint, Points, Text};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicUsize;
-use three_d::Srgba;
+use three_d::{Srgba, Texture2DRef, CpuTexture};
 
 struct TreePlotData {
     positions: HashMap<usize, PlotPoint>,
@@ -125,6 +125,7 @@ fn draw_bsp_tree_window(
 
 pub fn draw_left_panel(
     ctx: &egui::Context,
+    gl: &three_d::Context,
     mode: crate::camera::CamMode,
     loaded_file_name: &mut String,
     file_loading: &mut bool,
@@ -132,12 +133,15 @@ pub fn draw_left_panel(
     rx: &std::sync::mpsc::Receiver<crate::Message>,
     current_cpu_mesh: &mut three_d::CpuMesh,
     current_triangles: &mut Vec<crate::bsp::Triangle>,
+    original_texture: &Option<Texture2DRef>,
+    current_texture: &mut Option<Texture2DRef>,
     bsp_root_preview: &mut Option<crate::bsp::BspNode>,
     selected_node: &mut Option<usize>,
     show_splitting_plane: &mut bool,
     disable_culling: &mut bool,
     show_loaded_model: &mut bool,
     show_selected_model: &mut bool,
+    show_texture: &mut bool,
     show_spectator_marker: &mut bool,
     spectator_state: &mut crate::camera::CameraState,
     third_person_state: &mut crate::camera::CameraState,
@@ -172,9 +176,11 @@ pub fn draw_left_panel(
                     let file_name_clone = path.file_name().unwrap().to_string_lossy().into_owned();
                     let tx_gui_clone = tx_gui.clone();
                     std::thread::spawn(move || {
-                        let (new_cpu_mesh, load_status) = crate::load_cpu_mesh(&path_clone);
+                        let (new_cpu_mesh, new_texture, load_status) =
+                            crate::load_cpu_mesh(&path_clone);
                         let _ = tx_gui_clone.send(crate::Message::NewFile {
                             cpu_mesh: new_cpu_mesh,
+                            texture: new_texture,
                             file_name: file_name_clone,
                             load_status,
                             triangles: Vec::new(),
@@ -183,6 +189,27 @@ pub fn draw_left_panel(
                     });
                 }
             }
+            if ui.button("📷 Načíst texturu").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("Image", &["png", "jpg", "jpeg"])
+                    .pick_file()
+                {
+                    if let Ok(tex) =
+                        three_d_asset::io::load_and_deserialize::<CpuTexture>(&path)
+                    {
+                        *current_texture =
+                            Some(Texture2DRef::from_cpu_texture(gl, &tex));
+                        *show_texture = true;
+                    }
+                }
+            }
+            if original_texture.is_some()
+                && ui.button("🔄 Obnovit původní texturu").clicked()
+            {
+                *current_texture = original_texture.clone();
+                *show_texture = current_texture.is_some();
+            }
+            ui.checkbox(show_texture, "Zobrazit texturu");
 
             if *file_loading {
                 ui.add(
@@ -397,6 +424,7 @@ pub fn draw_left_panel(
                 match msg {
                     crate::Message::NewFile {
                         cpu_mesh,
+                        texture,
                         file_name,
                         load_status: _,
                         triangles: _,
@@ -405,7 +433,13 @@ pub fn draw_left_panel(
                         *current_cpu_mesh = cpu_mesh;
                         *loaded_file_name = file_name;
                         *file_loading = false;
-                        *current_triangles = crate::bsp::cpu_mesh_to_triangles(current_cpu_mesh);
+                        *current_triangles =
+                            crate::bsp::cpu_mesh_to_triangles(current_cpu_mesh);
+                        *current_texture =
+                            texture.map(|t| Texture2DRef::from_cpu_texture(gl, &t));
+                        if current_texture.is_some() {
+                            *show_texture = true;
+                        }
                         let next_id = AtomicUsize::new(0);
                         *bsp_root_preview = Some(crate::bsp::build_bsp(
                             current_triangles,

@@ -49,6 +49,7 @@ enum Message {
     InitialTree(BspNode),
     NewFile {
         cpu_mesh: CpuMesh,
+        texture: Option<CpuTexture>,
         triangles: Vec<Triangle>,
         file_name: String,
         load_status: String,
@@ -57,13 +58,14 @@ enum Message {
 }
 
 // helper: načte CpuMesh z .glb/.gltf pomocí gltf crate
-fn load_cpu_mesh(path: &Path) -> (CpuMesh, String) {
+fn load_cpu_mesh(path: &Path) -> (CpuMesh, Option<CpuTexture>, String) {
     println!("Pokouším se načíst: {}", path.display());
 
     if !path.exists() {
         println!("Soubor neexistuje: {}", path.display());
         return (
             CpuMesh::sphere(32),
+            None,
             format!("Soubor neexistuje: {}", path.display()),
         );
     }
@@ -72,42 +74,44 @@ fn load_cpu_mesh(path: &Path) -> (CpuMesh, String) {
         Ok(metadata) => {
             println!("Velikost souboru: {} bytes", metadata.len());
             if metadata.len() == 0 {
-                return (CpuMesh::sphere(32), "Soubor je prázdný".to_string());
+                return (CpuMesh::sphere(32), None, "Soubor je prázdný".to_string());
             }
             if metadata.len() > 100_000_000 {
                 // 100MB limit
                 return (
                     CpuMesh::sphere(32),
+                    None,
                     "Soubor je příliš velký (>100MB)".to_string(),
                 );
             }
         }
         Err(e) => {
             println!("Nelze přečíst metadata souboru: {}", e);
-            return (CpuMesh::sphere(32), format!("Chyba metadata: {}", e));
+            return (CpuMesh::sphere(32), None, format!("Chyba metadata: {}", e));
         }
     }
 
     // Pokus načtení pomocí gltf crate
     match load_gltf_with_gltf_crate(path) {
-        Ok(mesh) => {
+        Ok((mesh, texture)) => {
             println!("✓ GLTF úspěšně načten pomocí gltf crate");
-            return (mesh, "GLTF soubor úspěšně načten".to_string());
+            return (mesh, texture, "GLTF soubor úspěšně načten".to_string());
         }
         Err(e) => {
             println!("Chyba při načítání pomocí gltf crate: {}", e);
             return (
                 CpuMesh::sphere(32),
+                None,
                 format!("Nepodařilo se načíst GLTF: {}", e),
             );
         }
     }
 }
 
-fn load_gltf_with_gltf_crate(path: &Path) -> Result<CpuMesh> {
+fn load_gltf_with_gltf_crate(path: &Path) -> Result<(CpuMesh, Option<CpuTexture>)> {
     println!("Načítám GLTF pomocí gltf crate...");
 
-    let (document, buffers, _images) = gltf::import(path)?;
+    let (document, buffers, images) = gltf::import(path)?;
 
     println!("GLTF dokument načten:");
     println!("- Scény: {}", document.scenes().count());
@@ -117,7 +121,9 @@ fn load_gltf_with_gltf_crate(path: &Path) -> Result<CpuMesh> {
 
     let mut all_positions = Vec::new();
     let mut all_indices = Vec::new();
+    let mut all_uvs = Vec::new();
     let mut vertex_offset = 0u32;
+    let mut texture: Option<CpuTexture> = None;
 
     // Projdi všechny meshe ve scéně
     for scene in document.scenes() {
@@ -127,9 +133,12 @@ fn load_gltf_with_gltf_crate(path: &Path) -> Result<CpuMesh> {
             process_node(
                 &node,
                 &buffers,
+                &images,
                 &mut all_positions,
                 &mut all_indices,
+                &mut all_uvs,
                 &mut vertex_offset,
+                &mut texture,
                 cgmath::Matrix4::identity(),
             )?;
         }
@@ -145,23 +154,28 @@ fn load_gltf_with_gltf_crate(path: &Path) -> Result<CpuMesh> {
         all_indices.len()
     );
 
-    Ok(CpuMesh {
+    let mesh = CpuMesh {
         positions: Positions::F32(all_positions),
         indices: if all_indices.is_empty() {
             Indices::None
         } else {
             Indices::U32(all_indices)
         },
+        uvs: if all_uvs.is_empty() { None } else { Some(all_uvs) },
         ..Default::default()
-    })
+    };
+    Ok((mesh, texture))
 }
 
 fn process_node(
     node: &gltf::Node,
     buffers: &[gltf::buffer::Data],
+    images: &[gltf::image::Data],
     all_positions: &mut Vec<Vec3>,
     all_indices: &mut Vec<u32>,
+    all_uvs: &mut Vec<Vec2>,
     vertex_offset: &mut u32,
+    texture: &mut Option<CpuTexture>,
     parent_transform: cgmath::Matrix4<f32>,
 ) -> Result<()> {
     // Získej transformaci uzlu
@@ -182,9 +196,12 @@ fn process_node(
             process_primitive(
                 &primitive,
                 buffers,
+                images,
                 all_positions,
                 all_indices,
+                all_uvs,
                 vertex_offset,
+                texture,
                 current_transform,
             )?;
         }
@@ -195,9 +212,12 @@ fn process_node(
         process_node(
             &child,
             buffers,
+            images,
             all_positions,
             all_indices,
+            all_uvs,
             vertex_offset,
+            texture,
             current_transform,
         )?;
     }
@@ -208,9 +228,12 @@ fn process_node(
 fn process_primitive(
     primitive: &gltf::Primitive,
     buffers: &[gltf::buffer::Data],
+    images: &[gltf::image::Data],
     all_positions: &mut Vec<Vec3>,
     all_indices: &mut Vec<u32>,
+    all_uvs: &mut Vec<Vec2>,
     vertex_offset: &mut u32,
+    texture: &mut Option<CpuTexture>,
     transform: cgmath::Matrix4<f32>,
 ) -> Result<()> {
     println!("Zpracovávám primitiv s modem: {:?}", primitive.mode());
@@ -236,6 +259,14 @@ fn process_primitive(
 
         let vertex_count = all_positions.len() - start_vertex_count;
         println!("Přidáno {} vrcholů", vertex_count);
+
+        if let Some(tex) = reader.read_tex_coords(0) {
+            for tc in tex.into_f32() {
+                all_uvs.push(vec2(tc[0], 1.0 - tc[1]));
+            }
+        } else {
+            all_uvs.extend(std::iter::repeat(vec2(0.0, 0.0)).take(vertex_count));
+        }
 
         // Získej indexy
         if let Some(indices) = reader.read_indices() {
@@ -274,11 +305,39 @@ fn process_primitive(
         println!("Primitiv nemá pozice vrcholů");
     }
 
+    if texture.is_none() {
+        if let Some(info) = primitive.material().pbr_metallic_roughness().base_color_texture() {
+            let tex = info.texture();
+            let image = &images[tex.source().index()];
+            let data = match image.format {
+                gltf::image::Format::R8G8B8A8 => {
+                    TextureData::RgbaU8(image.pixels.chunks(4).map(|c| [c[0], c[1], c[2], c[3]]).collect())
+                }
+                gltf::image::Format::R8G8B8 => {
+                    TextureData::RgbU8(image.pixels.chunks(3).map(|c| [c[0], c[1], c[2]]).collect())
+                }
+                _ => {
+                    TextureData::RgbaU8(Vec::new())
+                }
+            };
+              if !matches!(data, TextureData::RgbaU8(ref v) if v.is_empty()) {
+                *texture = Some(CpuTexture {
+                    name: "embedded".into(),
+                    data,
+                    width: image.width,
+                    height: image.height,
+                    ..Default::default()
+                });
+              }
+        }
+    }
+
     Ok(())
 }
 
 // Funkce pro vytvoření meshe z viditelných trojúhelníků
-fn create_visible_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, ColorMaterial> {
+#[allow(dead_code)]
+fn create_visible_mesh_old(triangles: &[Triangle], context: &Context) -> Gm<Mesh, ColorMaterial> {
     // Paralelní zpracování pozic a indexů
     let triangles_count = triangles.len();
 
@@ -326,6 +385,53 @@ fn create_visible_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, Co
     Gm::new(Mesh::new(context, &visible_mesh), material)
 }
 
+fn create_visible_mesh(
+    triangles: &[Triangle],
+    context: &Context,
+    texture: Option<&Texture2DRef>,
+) -> Gm<Mesh, ColorMaterial> {
+    let triangles_count = triangles.len();
+    let mut positions = vec![vec3(0.0, 0.0, 0.0); triangles_count * 3];
+    let mut uvs = vec![vec2(0.0, 0.0); triangles_count * 3];
+    positions
+        .par_chunks_mut(3)
+        .zip(uvs.par_chunks_mut(3))
+        .enumerate()
+        .for_each(|(i, (p_chunk, uv_chunk))| {
+            let tri = &triangles[i];
+            p_chunk[0] = vec3(tri.a.x, tri.a.y, tri.a.z);
+            p_chunk[1] = vec3(tri.b.x, tri.b.y, tri.b.z);
+            p_chunk[2] = vec3(tri.c.x, tri.c.y, tri.c.z);
+            uv_chunk[0] = vec2(tri.uv_a.x, tri.uv_a.y);
+            uv_chunk[1] = vec2(tri.uv_b.x, tri.uv_b.y);
+            uv_chunk[2] = vec2(tri.uv_c.x, tri.uv_c.y);
+        });
+    let mut indices = vec![0u32; triangles_count * 3];
+    indices
+        .par_chunks_mut(3)
+        .enumerate()
+        .for_each(|(i, chunk)| {
+            let base = i as u32 * 3;
+            chunk[0] = base;
+            chunk[1] = base + 1;
+            chunk[2] = base + 2;
+        });
+    let visible_mesh = CpuMesh {
+        positions: Positions::F32(positions),
+        indices: Indices::U32(indices),
+        uvs: Some(uvs),
+        ..Default::default()
+    };
+    let model_color = CONFIG.lock().unwrap().model_color;
+    let material = ColorMaterial {
+        color: model_color,
+        texture: texture.cloned(),
+        render_states: RenderStates::default(),
+        is_transparent: false,
+    };
+    Gm::new(Mesh::new(context, &visible_mesh), material)
+}
+
 // ---------------- Main --------------------------------------------------- //
 
 fn main() -> Result<()> {
@@ -347,7 +453,7 @@ fn main() -> Result<()> {
     // stavová proměnná: název aktuálního souboru a úspěšnost načtení
     let initial_path = Path::new("assets/model.glb");
     println!("📁 Načítám model z: {}", initial_path.display());
-    let (cpu_mesh, _load_status) = load_cpu_mesh(initial_path);
+    let (cpu_mesh, initial_texture, _load_status) = load_cpu_mesh(initial_path);
     println!("✓ Model načten");
 
     let mut loaded_file_name = if initial_path.exists() {
@@ -363,6 +469,10 @@ fn main() -> Result<()> {
     // Add state for file loading
     let mut current_cpu_mesh = cpu_mesh.clone();
     let mut current_triangles = cpu_mesh_to_triangles(&cpu_mesh);
+    let mut original_texture =
+        initial_texture.map(|t| Texture2DRef::from_cpu_texture(&context, &t));
+    let mut current_texture = original_texture.clone();
+    let mut show_texture = current_texture.is_some();
     let mut file_loading = false;
 
     // Vytvoření triangles z CPU meshe
@@ -527,6 +637,7 @@ fn main() -> Result<()> {
                 }
                 Message::NewFile {
                     cpu_mesh: new_cpu_mesh,
+                    texture: new_tex,
                     triangles: _,
                     file_name,
                     load_status: _,
@@ -536,6 +647,10 @@ fn main() -> Result<()> {
                     loaded_file_name = file_name;
                     file_loading = false;
                     current_triangles = cpu_mesh_to_triangles(&current_cpu_mesh);
+                    original_texture =
+                        new_tex.map(|t| Texture2DRef::from_cpu_texture(&context, &t));
+                    current_texture = original_texture.clone();
+                    show_texture = current_texture.is_some();
                     let next_id = AtomicUsize::new(0);
                     bsp_root_full = Some(build_bsp(
                         &current_triangles,
@@ -543,7 +658,8 @@ fn main() -> Result<()> {
                         cfg.max_bsp_depth,
                         &next_id,
                     ));
-                    total_stats.total_nodes = bsp_root_full.as_ref().unwrap().count_nodes();
+                    total_stats.total_nodes =
+                        bsp_root_full.as_ref().unwrap().count_nodes();
                     let next_id = AtomicUsize::new(0);
                     bsp_root_preview =
                         Some(build_bsp(&current_triangles, 0, branch_limit, &next_id));
@@ -634,6 +750,7 @@ fn main() -> Result<()> {
             |ctx| {
                 crate::gui::draw_left_panel(
                     ctx,
+                    &context,
                     mode,
                     &mut loaded_file_name,
                     &mut file_loading,
@@ -641,12 +758,15 @@ fn main() -> Result<()> {
                     &rx,
                     &mut current_cpu_mesh,
                     &mut current_triangles,
+                    &original_texture,
+                    &mut current_texture,
                     &mut bsp_root_preview,
                     &mut selected_node,
                     &mut show_splitting_plane,
                     &mut disable_culling,
                     &mut show_loaded_model,
                     &mut show_selected_model,
+                    &mut show_texture,
                     &mut show_spectator_marker,
                     &mut spectator_state,
                     &mut third_person_state,
@@ -742,7 +862,11 @@ fn main() -> Result<()> {
         }
 
         let base_model = if !normal_tris.is_empty() {
-            Some(create_visible_mesh(&normal_tris, &context))
+            Some(create_visible_mesh(
+                &normal_tris,
+                &context,
+                if show_texture { current_texture.as_ref() } else { None },
+            ))
         } else {
             None
         };
