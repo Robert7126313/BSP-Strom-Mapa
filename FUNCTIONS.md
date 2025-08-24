@@ -48,7 +48,7 @@ source code so you can jump directly to the implementation.
   tilt from arrow keys.
 
 ## `src/main.rs`
-- [`load_cpu_mesh`](src/main.rs#L65-L110) – load a GLTF/GLB file into a CPU
-  mesh with basic validation.
-- [`load_gltf_with_gltf_crate`](src/main.rs#L112-L162) – helper using the `gltf`
-  crate to parse meshes.
+- [`load_cpu_mesh`](src/main.rs#L61-L109) – load a GLTF/GLB file into a CPU
+  mesh and optional texture with basic validation.
+- [`load_gltf_with_gltf_crate`](src/main.rs#L111-L168) – helper using the
+  `gltf` crate to parse meshes and textures.
