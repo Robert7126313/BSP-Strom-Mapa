@@ -49,3 +49,24 @@ The left panel also exposes a checkbox to disable culling and options to view
 the BSP tree.  When a node is selected, its splitting plane and triangles are
 highlighted in the 3D view.
 
+## Configuration / Konfigurace
+
+User-tunable parameters are collected in [`src/config.rs`](src/config.rs). Colors
+use `Srgba::new(R, G, B, A)` with 0–255 components and lighting can be adjusted
+by editing the constants in this file.
+
+Uživatelsky nastavitelné parametry jsou soustředěny v [`src/config.rs`](src/config.rs).
+Barvy používají `Srgba::new(R, G, B, A)` s hodnotami 0–255 a společně s osvětlením
+je lze měnit úpravou konstant v tomto souboru.
+
+- `SPECTATOR_GLOW_COLOR` – color of the glowing marker showing the Spectator camera /
+  barva svítící značky kamery v režimu Spectator.
+- `THIRD_PERSON_GLOW_COLOR` – color of the third-person camera marker /
+  barva značky kamery ve třetí osobě.
+- `DIRECTION_RAY_COLOR` – color of the ray visualizing the camera direction /
+  barva paprsku znázorňujícího směr kamery.
+- `AMBIENT_LIGHT_INTENSITY` – how strong the ambient light is /
+  jak silné je ambientní světlo.
+- `AMBIENT_LIGHT_COLOR` – color tint of the ambient light /
+  barva ambientního světla.
+

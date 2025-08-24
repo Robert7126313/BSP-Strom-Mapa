@@ -35,7 +35,10 @@ use crate::bsp::{
     triangle_center, BspNode, BspStats, Frustum, Triangle,
 };
 use crate::camera::{CamMode, CameraState, FreeCamera, SwitchDelay};
-use crate::config::{BG_COLOR, DEFAULT_BRANCH_LIMIT, MAX_BSP_DEPTH, MODEL_COLOR};
+use crate::config::{
+    AMBIENT_LIGHT_COLOR, AMBIENT_LIGHT_INTENSITY, BG_COLOR, DEFAULT_BRANCH_LIMIT,
+    DIRECTION_RAY_COLOR, MAX_BSP_DEPTH, MODEL_COLOR, SPECTATOR_GLOW_COLOR, THIRD_PERSON_GLOW_COLOR,
+};
 use crate::input::{InputManager, KeyCode};
 
 mod bsp;
@@ -407,20 +410,22 @@ fn main() -> Result<()> {
     let material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: MODEL_COLOR, // Modrá barva aby byl model viditelný
+            albedo: MODEL_COLOR, // Model color / Barva modelu
             ..Default::default()
         },
     );
     let _model = Gm::new(Mesh::new(&context, &cpu_mesh), material.clone());
 
-    // Glow efekty pro pozice kamer
+    // Mesh used for glowing camera markers
+    // Mesh pro svítící značky kamer
     let glow_mesh = CpuMesh::sphere(16);
 
-    // Materiály pro glow efekty
+    // Materials for the camera markers
+    // Materiály pro značky kamer
     let spectator_glow_material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: Srgba::new(0, 255, 100, 200), // Zelená pro spectator
+            albedo: SPECTATOR_GLOW_COLOR, // Spectator marker color / Zelená pro spectator
             ..Default::default()
         },
     );
@@ -428,16 +433,17 @@ fn main() -> Result<()> {
     let third_person_glow_material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: Srgba::new(255, 100, 0, 200), // Oranžová pro third person
+            albedo: THIRD_PERSON_GLOW_COLOR, // Third-person marker color / Oranžová pro third person
             ..Default::default()
         },
     );
 
+    // Material for the camera direction ray
     // Materiál pro směrový paprsek kamery
     let direction_material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: Srgba::new(255, 255, 0, 200), // Žlutá barva pro směrový paprsek
+            albedo: DIRECTION_RAY_COLOR, // Color of the direction ray / Žlutá barva pro směrový paprsek
             ..Default::default()
         },
     );
@@ -446,12 +452,15 @@ fn main() -> Result<()> {
     let mut third_person_glow =
         Gm::new(Mesh::new(&context, &glow_mesh), third_person_glow_material);
 
-    // Vytvoření kuželu (cone) pro směrový indikátor kamery místo cylindru
+    // Create a cone mesh for the camera direction indicator
+    // Vytvoření kuželu pro směrový indikátor kamery
     let direction_mesh = CpuMesh::cone(16);
     let mut camera_direction_ray =
         Gm::new(Mesh::new(&context, &direction_mesh), direction_material);
 
-    let ambient_light = AmbientLight::new(&context, 1.0, Srgba::WHITE); // Zvýšit intenzitu světla
+    // Ambient light that brightens the whole scene
+    // Ambientní světlo, které prosvětlí celou scénu
+    let ambient_light = AmbientLight::new(&context, AMBIENT_LIGHT_INTENSITY, AMBIENT_LIGHT_COLOR);
 
     // Nastavení výchozích pozic pro kamery (spawnpoint)
     let default_spectator_pos = Vector3::new(0.0, 2.0, 8.0);
