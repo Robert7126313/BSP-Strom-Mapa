@@ -3,8 +3,7 @@ use cgmath::InnerSpace;
 use egui::{CollapsingHeader, Grid};
 use egui_plot::{Line, Plot, PlotPoint, Points, Text};
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::AtomicUsize;
-use three_d::{Srgba, Texture2DRef, CpuTexture};
+use three_d::{CpuTexture, Srgba};
 
 struct TreePlotData {
     positions: HashMap<usize, PlotPoint>,
@@ -125,15 +124,11 @@ fn draw_bsp_tree_window(
 
 pub fn draw_left_panel(
     ctx: &egui::Context,
-    gl: &three_d::Context,
     mode: crate::camera::CamMode,
     loaded_file_name: &mut String,
     file_loading: &mut bool,
     tx_gui: &std::sync::mpsc::Sender<crate::Message>,
-    rx: &std::sync::mpsc::Receiver<crate::Message>,
     current_cpu_mesh: &mut three_d::CpuMesh,
-    current_triangles: &mut Vec<crate::bsp::Triangle>,
-    current_texture: &mut Option<Texture2DRef>,
     bsp_root_preview: &mut Option<crate::bsp::BspNode>,
     selected_node: &mut Option<usize>,
     show_splitting_plane: &mut bool,
@@ -193,13 +188,15 @@ pub fn draw_left_panel(
                     .add_filter("Image", &["png", "jpg", "jpeg"])
                     .pick_file()
                 {
-                    if let Ok(tex) =
-                        three_d_asset::io::load_and_deserialize::<CpuTexture>(&path)
-                    {
-                        *current_texture =
-                            Some(Texture2DRef::from_cpu_texture(gl, &tex));
-                        *show_texture = true;
-                    }
+                    let tx_gui_clone = tx_gui.clone();
+                    let path_clone = path.clone();
+                    std::thread::spawn(move || {
+                        if let Ok(tex) =
+                            three_d_asset::io::load_and_deserialize::<CpuTexture>(&path_clone)
+                        {
+                            let _ = tx_gui_clone.send(crate::Message::NewTexture { texture: tex });
+                        }
+                    });
                 }
             }
             ui.checkbox(show_texture, "Zobrazit texturu");
@@ -413,37 +410,6 @@ pub fn draw_left_panel(
             ));
             ui.checkbox(show_spectator_marker, "Zobrazit pozici a směr spectatoru");
 
-            if let Ok(msg) = rx.try_recv() {
-                match msg {
-                    crate::Message::NewFile {
-                        cpu_mesh,
-                        texture,
-                        file_name,
-                        load_status: _,
-                        triangles: _,
-                        bsp_tree: _,
-                    } => {
-                        *current_cpu_mesh = cpu_mesh;
-                        *loaded_file_name = file_name;
-                        *file_loading = false;
-                        *current_triangles =
-                            crate::bsp::cpu_mesh_to_triangles(current_cpu_mesh);
-                        *current_texture =
-                            texture.map(|t| Texture2DRef::from_cpu_texture(gl, &t));
-                        if current_texture.is_some() {
-                            *show_texture = true;
-                        }
-                        let next_id = AtomicUsize::new(0);
-                        *bsp_root_preview = Some(crate::bsp::build_bsp(
-                            current_triangles,
-                            0,
-                            *branch_limit,
-                            &next_id,
-                        ));
-                    }
-                    _ => {}
-                }
-            }
         });
     });
     if *config_window_open {
