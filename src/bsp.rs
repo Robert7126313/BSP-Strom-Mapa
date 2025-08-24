@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // BSP and geometry utilities
-use cgmath::Vector3;
+use cgmath::{Vector2, Vector3};
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use three_d::*;
@@ -15,6 +15,9 @@ pub struct Triangle {
     pub a: Vector3<f32>,
     pub b: Vector3<f32>,
     pub c: Vector3<f32>,
+    pub uv_a: Vector2<f32>,
+    pub uv_b: Vector2<f32>,
+    pub uv_c: Vector2<f32>,
 }
 
 #[derive(Clone, Debug)]
@@ -585,6 +588,7 @@ pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
         Positions::F32(pos) => pos,
         _ => return Vec::new(), // Pokud nemáme F32 pozice, vrátíme prázdný vektor
     };
+    let uvs = mesh.uvs.as_ref();
 
     match &mesh.indices {
         Indices::U32(indices) => {
@@ -599,10 +603,14 @@ pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
                 let c_idx = chunk[2] as usize;
 
                 if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len() {
+                    let default_uv = Vector2::new(0.0, 0.0);
                     Some(Triangle {
                         a: Vector3::new(positions[a_idx].x, positions[a_idx].y, positions[a_idx].z),
                         b: Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z),
                         c: Vector3::new(positions[c_idx].x, positions[c_idx].y, positions[c_idx].z),
+                        uv_a: uvs.map_or(default_uv, |u| u[a_idx]),
+                        uv_b: uvs.map_or(default_uv, |u| u[b_idx]),
+                        uv_c: uvs.map_or(default_uv, |u| u[c_idx]),
                     })
                 } else {
                     None
@@ -622,10 +630,14 @@ pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
                 let c_idx = chunk[2] as usize;
 
                 if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len() {
+                    let default_uv = Vector2::new(0.0, 0.0);
                     Some(Triangle {
                         a: Vector3::new(positions[a_idx].x, positions[a_idx].y, positions[a_idx].z),
                         b: Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z),
                         c: Vector3::new(positions[c_idx].x, positions[c_idx].y, positions[c_idx].z),
+                        uv_a: uvs.map_or(default_uv, |u| u[a_idx]),
+                        uv_b: uvs.map_or(default_uv, |u| u[b_idx]),
+                        uv_c: uvs.map_or(default_uv, |u| u[c_idx]),
                     })
                 } else {
                     None
@@ -636,14 +648,19 @@ pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
         Indices::None => {
             let tri_count = positions.len() / 3;
             let mut tris = Vec::with_capacity(tri_count);
-            tris.par_extend(positions.par_chunks(3).filter_map(|chunk| {
+            let default_uv = Vector2::new(0.0, 0.0);
+            tris.par_extend(positions.par_chunks(3).enumerate().filter_map(|(i, chunk)| {
                 if chunk.len() < 3 {
                     return None;
                 }
+                let base = i * 3;
                 Some(Triangle {
                     a: Vector3::new(chunk[0].x, chunk[0].y, chunk[0].z),
                     b: Vector3::new(chunk[1].x, chunk[1].y, chunk[1].z),
                     c: Vector3::new(chunk[2].x, chunk[2].y, chunk[2].z),
+                    uv_a: uvs.map_or(default_uv, |u| u[base]),
+                    uv_b: uvs.map_or(default_uv, |u| u[base + 1]),
+                    uv_c: uvs.map_or(default_uv, |u| u[base + 2]),
                 })
             }));
             tris
@@ -1148,12 +1165,18 @@ mod tests {
             a: Vector3::new(1.0, 0.0, 0.0),
             b: Vector3::new(1.0, 1.0, 0.0),
             c: Vector3::new(1.0, 0.0, 1.0),
+            uv_a: Vector2::new(0.0, 0.0),
+            uv_b: Vector2::new(0.0, 0.0),
+            uv_c: Vector2::new(0.0, 0.0),
         };
 
         let outside = Triangle {
             a: Vector3::new(-10.0, 0.0, 0.0),
             b: Vector3::new(-10.0, 1.0, 0.0),
             c: Vector3::new(-10.0, 0.0, 1.0),
+            uv_a: Vector2::new(0.0, 0.0),
+            uv_b: Vector2::new(0.0, 0.0),
+            uv_c: Vector2::new(0.0, 0.0),
         };
 
         let front = BspNode::new_leaf(vec![inside.clone()], 2);
