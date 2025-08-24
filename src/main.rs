@@ -455,7 +455,11 @@ fn main() -> Result<()> {
     let mut camera_direction_ray =
         Gm::new(Mesh::new(&context, &direction_mesh), direction_material);
 
-    let ambient_light = AmbientLight::new(&context, cfg.ambient_light_intensity, cfg.ambient_light_color); // Zvýšit intenzitu světla
+    let mut ambient_light = AmbientLight::new(
+        &context,
+        cfg.ambient_light_intensity,
+        cfg.ambient_light_color,
+    ); // Zvýšit intenzitu světla
 
     // Nastavení výchozích pozic pro kamery (spawnpoint)
     // před inicializací kamery přidáme mutable proměnné pro stavy kamer obou režimů
@@ -503,6 +507,13 @@ fn main() -> Result<()> {
         let events = &mut frame_input.events;
         let cfg = CONFIG.lock().unwrap().clone();
 
+        // Apply dynamic configuration updates
+        ambient_light.intensity = cfg.ambient_light_intensity;
+        ambient_light.color = cfg.ambient_light_color;
+        spectator_glow.material.color = cfg.spectator_glow_color;
+        third_person_glow.material.color = cfg.third_person_glow_color;
+        camera_direction_ray.material.color = cfg.direction_ray_color;
+
         // Zkontroluj, zda background thread dokončil stavbu BSP stromu
         if let Ok(message) = rx.try_recv() {
             match message {
@@ -526,7 +537,12 @@ fn main() -> Result<()> {
                     file_loading = false;
                     current_triangles = cpu_mesh_to_triangles(&current_cpu_mesh);
                     let next_id = AtomicUsize::new(0);
-                    bsp_root_full = Some(build_bsp(&current_triangles, 0, cfg.max_bsp_depth, &next_id));
+                    bsp_root_full = Some(build_bsp(
+                        &current_triangles,
+                        0,
+                        cfg.max_bsp_depth,
+                        &next_id,
+                    ));
                     total_stats.total_nodes = bsp_root_full.as_ref().unwrap().count_nodes();
                     let next_id = AtomicUsize::new(0);
                     bsp_root_preview =
@@ -928,7 +944,7 @@ fn main() -> Result<()> {
                 // Vytvoření transformační matice pro válec
                 let scale = cfg.direction_ray_thickness; // tenký válec
                 let length = cfg.direction_ray_length; // délka paprsku
-                                  // Vytvoření matice transformace
+                                                       // Vytvoření matice transformace
                 let translation = Mat4::from_translation(vec3(
                     spectator_state.pos.x,
                     spectator_state.pos.y,
@@ -966,7 +982,11 @@ fn main() -> Result<()> {
         let screen = frame_input.screen();
         // Clear the screen using the configured background color
         screen.clear(ClearState::color_and_depth(
-            cfg.bg_color[0], cfg.bg_color[1], cfg.bg_color[2], 1.0, 1.0,
+            cfg.bg_color[0],
+            cfg.bg_color[1],
+            cfg.bg_color[2],
+            1.0,
+            1.0,
         ));
         let mut objects_to_render: Vec<&dyn Object> = Vec::new();
         if let Some(ref base) = base_model {
