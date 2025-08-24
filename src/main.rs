@@ -55,6 +55,7 @@ enum Message {
         load_status: String,
         bsp_tree: BspNode,
     },
+    NewTexture { texture: CpuTexture },
 }
 
 // helper: načte CpuMesh z .glb/.gltf pomocí gltf crate
@@ -623,8 +624,8 @@ fn main() -> Result<()> {
         third_person_glow.material.color = cfg.highlight_color;
         camera_direction_ray.material.color = cfg.highlight_color;
 
-        // Zkontroluj, zda background thread dokončil stavbu BSP stromu
-        if let Ok(message) = rx.try_recv() {
+        // Zpracuj zprávy z background vláken
+        while let Ok(message) = rx.try_recv() {
             match message {
                 Message::InitialTree(tree) => {
                     total_stats.total_nodes = tree.count_nodes();
@@ -665,6 +666,10 @@ fn main() -> Result<()> {
                         Some(build_bsp(&current_triangles, 0, branch_limit, &next_id));
                     total_stats.total_triangles = current_triangles.len() as u32;
                     println!("✅ Nový model a BSP strom načteny!");
+                }
+                Message::NewTexture { texture: tex } => {
+                    current_texture = Some(Texture2DRef::from_cpu_texture(&context, &tex));
+                    show_texture = true;
                 }
             }
         }
@@ -750,15 +755,11 @@ fn main() -> Result<()> {
             |ctx| {
                 crate::gui::draw_left_panel(
                     ctx,
-                    &context,
                     mode,
                     &mut loaded_file_name,
                     &mut file_loading,
                     &tx_gui,
-                    &rx,
                     &mut current_cpu_mesh,
-                    &mut current_triangles,
-                    &mut current_texture,
                     &mut bsp_root_preview,
                     &mut selected_node,
                     &mut show_splitting_plane,

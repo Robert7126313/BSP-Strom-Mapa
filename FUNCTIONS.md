@@ -36,7 +36,7 @@ source code so you can jump directly to the implementation.
 ## `src/gui.rs`
 - [`layout_bsp_tree`](src/gui.rs#L13-L35) – compute plot positions for BSP
   nodes.
-- [`draw_left_panel`](src.gui.rs#L119-L143) – render the left control panel and
+- [`draw_left_panel`](src/gui.rs#L125-L438) – render the left control panel and
   handle UI interactions.
 
 ## `src/input.rs`
