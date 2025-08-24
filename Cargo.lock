@@ -11,6 +11,7 @@ dependencies = [
  "egui",
  "egui_plot",
  "gltf",
+ "once_cell",
  "rayon",
  "rfd",
  "three-d",

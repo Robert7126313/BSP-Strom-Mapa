@@ -1,9 +1,8 @@
-use crate::config::{
-    BSP_TREE_PATH_COLOR, BSP_TREE_SELECTED_COLOR, BSP_TREE_TEXT_SIZE, MAX_BSP_DEPTH,
-};
+use crate::config::CONFIG;
 use cgmath::InnerSpace;
 use egui::{CollapsingHeader, Grid};
 use egui_plot::{Line, Plot, PlotPoint, Points, Text};
+use three_d::Srgba;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicUsize;
 
@@ -64,8 +63,9 @@ fn draw_bsp_tree_window(
                 }
             }
 
-            let highlight_color = BSP_TREE_PATH_COLOR;
-            let selected_color = BSP_TREE_SELECTED_COLOR;
+            let cfg = CONFIG.lock().unwrap().clone();
+            let highlight_color = cfg.bsp_tree_path_color;
+            let selected_color = cfg.bsp_tree_selected_color;
 
             let plot = Plot::new("bsp_tree_plot");
             let plot_resp = plot.show(ui, |plot_ui| {
@@ -94,7 +94,7 @@ fn draw_bsp_tree_window(
                     plot_ui.text(
                         Text::new(
                             pos,
-                            egui::RichText::new(format!("{}", id)).size(BSP_TREE_TEXT_SIZE),
+                            egui::RichText::new(format!("{}", id)).size(cfg.bsp_tree_text_size),
                         )
                         .anchor(egui::Align2::CENTER_CENTER),
                     );
@@ -143,6 +143,7 @@ pub fn draw_left_panel(
     third_person_state: &mut crate::camera::CameraState,
     cam: &mut crate::camera::FreeCamera,
     current_stats: &crate::bsp::BspStats,
+    config_window_open: &mut bool,
     tree_window_open: &mut bool,
     branch_limit: &mut u32,
     limit_culling: &mut bool,
@@ -151,6 +152,9 @@ pub fn draw_left_panel(
     egui::SidePanel::left("tree").show(ctx, |side_ui| {
         egui::ScrollArea::vertical().show(side_ui, |ui| {
             ui.heading("BSP Strom");
+            if ui.button("⚙️ Nastavení").clicked() {
+                *config_window_open = true;
+            }
             ui.label(format!("Režim: {:?}", mode));
 
             ui.separator();
@@ -202,7 +206,8 @@ pub fn draw_left_panel(
 
             ui.separator();
             ui.heading("Struktura BSP stromu");
-            ui.add(egui::Slider::new(branch_limit, 1..=MAX_BSP_DEPTH).text("Limit větvení"));
+            let max_depth = CONFIG.lock().unwrap().max_bsp_depth;
+            ui.add(egui::Slider::new(branch_limit, 1..=max_depth).text("Limit větvení"));
             ui.checkbox(limit_culling, "Omezit culling podle slideru");
             ui.checkbox(show_splitting_plane, "Zobrazit dělící rovinu");
             if ui.button("Otevřít vizualizaci").clicked() {
@@ -414,6 +419,9 @@ pub fn draw_left_panel(
             }
         });
     });
+    if *config_window_open {
+        draw_config_window(ctx, config_window_open);
+    }
     if *selected_node_help_open {
         egui::Window::new("Vysvětlivky - Vybraný uzel")
             .open(selected_node_help_open)
@@ -434,4 +442,205 @@ pub fn draw_left_panel(
             *tree_window_open = false;
         }
     }
+}
+
+fn draw_config_window(ctx: &egui::Context, open: &mut bool) {
+    egui::Window::new("Config")
+        .open(open)
+        .vscroll(true)
+        .show(ctx, |ui| {
+            let mut cfg = CONFIG.lock().unwrap();
+
+            ui.heading("Colors & Lighting");
+            ui.horizontal(|ui| {
+                ui.label("Background");
+                ui.color_edit_button_rgb(&mut cfg.bg_color);
+            });
+
+            let mut color = egui::Color32::from_rgba_unmultiplied(
+                cfg.model_color.r,
+                cfg.model_color.g,
+                cfg.model_color.b,
+                cfg.model_color.a,
+            );
+            ui.horizontal(|ui| {
+                ui.label("Model");
+                if ui.color_edit_button_srgba(&mut color).changed() {
+                    cfg.model_color = Srgba::new(color.r(), color.g(), color.b(), color.a());
+                }
+            });
+
+            let mut hcol = egui::Color32::from_rgba_unmultiplied(
+                cfg.highlight_color.r,
+                cfg.highlight_color.g,
+                cfg.highlight_color.b,
+                cfg.highlight_color.a,
+            );
+            ui.horizontal(|ui| {
+                ui.label("Highlight");
+                if ui.color_edit_button_srgba(&mut hcol).changed() {
+                    cfg.highlight_color = Srgba::new(hcol.r(), hcol.g(), hcol.b(), hcol.a());
+                }
+            });
+
+            let mut pcol = egui::Color32::from_rgba_unmultiplied(
+                cfg.plane_color.r,
+                cfg.plane_color.g,
+                cfg.plane_color.b,
+                cfg.plane_color.a,
+            );
+            ui.horizontal(|ui| {
+                ui.label("Plane");
+                if ui.color_edit_button_srgba(&mut pcol).changed() {
+                    cfg.plane_color = Srgba::new(pcol.r(), pcol.g(), pcol.b(), pcol.a());
+                }
+            });
+
+            let mut scol = egui::Color32::from_rgba_unmultiplied(
+                cfg.spectator_glow_color.r,
+                cfg.spectator_glow_color.g,
+                cfg.spectator_glow_color.b,
+                cfg.spectator_glow_color.a,
+            );
+            ui.horizontal(|ui| {
+                ui.label("Spectator glow");
+                if ui.color_edit_button_srgba(&mut scol).changed() {
+                    cfg.spectator_glow_color =
+                        Srgba::new(scol.r(), scol.g(), scol.b(), scol.a());
+                }
+            });
+
+            let mut tcol = egui::Color32::from_rgba_unmultiplied(
+                cfg.third_person_glow_color.r,
+                cfg.third_person_glow_color.g,
+                cfg.third_person_glow_color.b,
+                cfg.third_person_glow_color.a,
+            );
+            ui.horizontal(|ui| {
+                ui.label("Third person glow");
+                if ui.color_edit_button_srgba(&mut tcol).changed() {
+                    cfg.third_person_glow_color =
+                        Srgba::new(tcol.r(), tcol.g(), tcol.b(), tcol.a());
+                }
+            });
+
+            let mut dcol = egui::Color32::from_rgba_unmultiplied(
+                cfg.direction_ray_color.r,
+                cfg.direction_ray_color.g,
+                cfg.direction_ray_color.b,
+                cfg.direction_ray_color.a,
+            );
+            ui.horizontal(|ui| {
+                ui.label("Direction ray");
+                if ui.color_edit_button_srgba(&mut dcol).changed() {
+                    cfg.direction_ray_color =
+                        Srgba::new(dcol.r(), dcol.g(), dcol.b(), dcol.a());
+                }
+            });
+
+            ui.add(
+                egui::Slider::new(&mut cfg.ambient_light_intensity, 0.0..=5.0)
+                    .text("Ambient intensity"),
+            );
+            let mut acol = egui::Color32::from_rgba_unmultiplied(
+                cfg.ambient_light_color.r,
+                cfg.ambient_light_color.g,
+                cfg.ambient_light_color.b,
+                cfg.ambient_light_color.a,
+            );
+            ui.horizontal(|ui| {
+                ui.label("Ambient color");
+                if ui.color_edit_button_srgba(&mut acol).changed() {
+                    cfg.ambient_light_color =
+                        Srgba::new(acol.r(), acol.g(), acol.b(), acol.a());
+                }
+            });
+
+            ui.separator();
+            ui.heading("BSP Tree");
+            ui.add(
+                egui::Slider::new(&mut cfg.bsp_tree_text_size, 8.0..=32.0)
+                    .text("Text size"),
+            );
+            ui.horizontal(|ui| {
+                ui.label("Path color");
+                ui.color_edit_button_srgba(&mut cfg.bsp_tree_path_color);
+            });
+            ui.horizontal(|ui| {
+                ui.label("Selected color");
+                ui.color_edit_button_srgba(&mut cfg.bsp_tree_selected_color);
+            });
+
+            ui.separator();
+            ui.heading("BSP Limits");
+            ui.add(
+                egui::Slider::new(&mut cfg.max_bsp_depth, 1..=64).text("Max depth"),
+            );
+            let max_depth = cfg.max_bsp_depth;
+            ui.add(
+                egui::Slider::new(&mut cfg.default_branch_limit, 1..=max_depth)
+                    .text("Default branch limit"),
+            );
+            ui.add(
+                egui::Slider::new(&mut cfg.min_triangles_per_leaf, 1..=100)
+                    .text("Min triangles per leaf"),
+            );
+
+            ui.separator();
+            ui.heading("Camera");
+            ui.add(
+                egui::Slider::new(&mut cfg.default_camera_speed, 0.1..=20.0)
+                    .text("Default speed"),
+            );
+            ui.add(
+                egui::Slider::new(&mut cfg.default_look_speed, 0.1..=10.0)
+                    .text("Look speed"),
+            );
+            ui.add(
+                egui::Slider::new(&mut cfg.pitch_limit, 0.1..=3.14).text("Pitch limit"),
+            );
+            ui.add(
+                egui::Slider::new(&mut cfg.default_fov_deg, 30.0..=120.0)
+                    .text("FOV deg"),
+            );
+            ui.add(
+                egui::Slider::new(&mut cfg.near_plane, 0.01..=1.0).text("Near plane"),
+            );
+            ui.add(
+                egui::Slider::new(&mut cfg.far_plane, 10.0..=5000.0).text("Far plane"),
+            );
+            ui.add(
+                egui::Slider::new(&mut cfg.camera_switch_cooldown, 0.1..=10.0)
+                    .text("Switch cooldown"),
+            );
+            ui.add(
+                egui::Slider::new(&mut cfg.speed_adjustment_factor, 1.01..=5.0)
+                    .text("Speed factor"),
+            );
+
+            ui.horizontal(|ui| {
+                ui.label("Spectator pos");
+                ui.add(egui::DragValue::new(&mut cfg.default_spectator_pos.x));
+                ui.add(egui::DragValue::new(&mut cfg.default_spectator_pos.y));
+                ui.add(egui::DragValue::new(&mut cfg.default_spectator_pos.z));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Third person pos");
+                ui.add(egui::DragValue::new(&mut cfg.default_third_person_pos.x));
+                ui.add(egui::DragValue::new(&mut cfg.default_third_person_pos.y));
+                ui.add(egui::DragValue::new(&mut cfg.default_third_person_pos.z));
+            });
+            ui.add(
+                egui::Slider::new(&mut cfg.camera_marker_scale, 0.01..=1.0)
+                    .text("Marker scale"),
+            );
+            ui.add(
+                egui::Slider::new(&mut cfg.direction_ray_thickness, 0.01..=1.0)
+                    .text("Ray thickness"),
+            );
+            ui.add(
+                egui::Slider::new(&mut cfg.direction_ray_length, 0.1..=10.0)
+                    .text("Ray length"),
+            );
+        });
 }

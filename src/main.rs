@@ -35,12 +35,7 @@ use crate::bsp::{
     triangle_center, BspNode, BspStats, Frustum, Triangle,
 };
 use crate::camera::{CamMode, CameraState, FreeCamera, SwitchDelay};
-use crate::config::{
-    AMBIENT_LIGHT_COLOR, AMBIENT_LIGHT_INTENSITY, BG_COLOR, CAMERA_MARKER_SCALE,
-    CAMERA_SWITCH_COOLDOWN, DEFAULT_BRANCH_LIMIT, DEFAULT_SPECTATOR_POS, DEFAULT_THIRD_PERSON_POS,
-    DIRECTION_RAY_COLOR, DIRECTION_RAY_LENGTH, DIRECTION_RAY_THICKNESS, MAX_BSP_DEPTH,
-    MODEL_COLOR, SPECTATOR_GLOW_COLOR, SPEED_ADJUSTMENT_FACTOR, THIRD_PERSON_GLOW_COLOR,
-};
+use crate::config::CONFIG;
 use crate::input::{InputManager, KeyCode};
 
 mod bsp;
@@ -319,10 +314,11 @@ fn create_visible_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, Co
     };
 
     // Vytvoření materiálu a modelu
+    let model_color = CONFIG.lock().unwrap().model_color;
     let material = ColorMaterial::new_opaque(
         context,
         &CpuMaterial {
-            albedo: MODEL_COLOR,
+            albedo: model_color,
             ..Default::default()
         },
     );
@@ -345,6 +341,8 @@ fn main() -> Result<()> {
     let context = window.gl();
     let mut gui = GUI::new(&context);
     println!("✓ GUI inicializováno");
+
+    let cfg = CONFIG.lock().unwrap().clone();
 
     // stavová proměnná: název aktuálního souboru a úspěšnost načtení
     let initial_path = Path::new("assets/model.glb");
@@ -383,7 +381,7 @@ fn main() -> Result<()> {
     let tx_gui = tx.clone();
 
     // Spuštění stavby BSP stromu v jiném vlákně
-    let branch_limit_clone = MAX_BSP_DEPTH;
+    let branch_limit_clone = cfg.max_bsp_depth;
     thread::spawn(move || {
         let next_id = AtomicUsize::new(0);
         let tree = build_bsp(&triangles_clone, 0, branch_limit_clone, &next_id);
@@ -403,7 +401,8 @@ fn main() -> Result<()> {
     let mut show_selected_model = true;
     let mut tree_window_open = false;
     let mut selected_node_help_open = false;
-    let mut branch_limit = DEFAULT_BRANCH_LIMIT;
+    let mut config_window_open = false;
+    let mut branch_limit = cfg.default_branch_limit;
     let mut last_branch_limit = branch_limit;
     let mut limit_culling = false;
 
@@ -412,7 +411,7 @@ fn main() -> Result<()> {
     let material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: MODEL_COLOR, // Modrá barva aby byl model viditelný
+            albedo: cfg.model_color,
             ..Default::default()
         },
     );
@@ -425,7 +424,7 @@ fn main() -> Result<()> {
     let spectator_glow_material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: SPECTATOR_GLOW_COLOR, // Zelená pro spectator
+            albedo: cfg.spectator_glow_color,
             ..Default::default()
         },
     );
@@ -433,7 +432,7 @@ fn main() -> Result<()> {
     let third_person_glow_material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: THIRD_PERSON_GLOW_COLOR, // Oranžová pro third person
+            albedo: cfg.third_person_glow_color,
             ..Default::default()
         },
     );
@@ -442,7 +441,7 @@ fn main() -> Result<()> {
     let direction_material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: DIRECTION_RAY_COLOR, // Žlutá barva pro směrový paprsek
+            albedo: cfg.direction_ray_color,
             ..Default::default()
         },
     );
@@ -456,13 +455,13 @@ fn main() -> Result<()> {
     let mut camera_direction_ray =
         Gm::new(Mesh::new(&context, &direction_mesh), direction_material);
 
-    let ambient_light = AmbientLight::new(&context, AMBIENT_LIGHT_INTENSITY, AMBIENT_LIGHT_COLOR); // Zvýšit intenzitu světla
+    let ambient_light = AmbientLight::new(&context, cfg.ambient_light_intensity, cfg.ambient_light_color); // Zvýšit intenzitu světla
 
     // Nastavení výchozích pozic pro kamery (spawnpoint)
     // před inicializací kamery přidáme mutable proměnné pro stavy kamer obou režimů
-    let mut cam = FreeCamera::new(DEFAULT_SPECTATOR_POS);
+    let mut cam = FreeCamera::new(cfg.default_spectator_pos);
     let mut spectator_state = CameraState::from_camera(&cam);
-    let mut third_person_state = CameraState::new(DEFAULT_THIRD_PERSON_POS); // Jiná pozice pro lepší vizualizaci
+    let mut third_person_state = CameraState::new(cfg.default_third_person_pos); // Jiná pozice pro lepší vizualizaci
     let mut mode = CamMode::Spectator;
 
     // Proměnná pro zobrazení značky spectator kamery
@@ -474,7 +473,7 @@ fn main() -> Result<()> {
             spectator_state.pos.x,
             spectator_state.pos.y,
             spectator_state.pos.z,
-        )) * Mat4::from_scale(CAMERA_MARKER_SCALE),
+        )) * Mat4::from_scale(cfg.camera_marker_scale),
     ); // Malé koule
 
     third_person_glow.set_transformation(
@@ -482,14 +481,14 @@ fn main() -> Result<()> {
             third_person_state.pos.x,
             third_person_state.pos.y,
             third_person_state.pos.z,
-        )) * Mat4::from_scale(CAMERA_MARKER_SCALE),
+        )) * Mat4::from_scale(cfg.camera_marker_scale),
     );
 
     // Inicializace InputManageru pro plynulé ovládání s více klávesami
     let mut input_manager = InputManager::new();
 
     // Přidání struktury pro sledování času přepnutí režimu
-    let mut switch_delay = SwitchDelay::new(CAMERA_SWITCH_COOLDOWN); // cooldown mezi přepnutími
+    let mut switch_delay = SwitchDelay::new(cfg.camera_switch_cooldown); // cooldown mezi přepnutími
 
     // ----------------------------------------------------------------------------
     // Stav pro interaktivní výběr BSP:
@@ -502,6 +501,7 @@ fn main() -> Result<()> {
     window.render_loop(move |mut frame_input| {
         let dt = frame_input.elapsed_time as f32 / 1000.0;
         let events = &mut frame_input.events;
+        let cfg = CONFIG.lock().unwrap().clone();
 
         // Zkontroluj, zda background thread dokončil stavbu BSP stromu
         if let Ok(message) = rx.try_recv() {
@@ -526,7 +526,7 @@ fn main() -> Result<()> {
                     file_loading = false;
                     current_triangles = cpu_mesh_to_triangles(&current_cpu_mesh);
                     let next_id = AtomicUsize::new(0);
-                    bsp_root_full = Some(build_bsp(&current_triangles, 0, MAX_BSP_DEPTH, &next_id));
+                    bsp_root_full = Some(build_bsp(&current_triangles, 0, cfg.max_bsp_depth, &next_id));
                     total_stats.total_nodes = bsp_root_full.as_ref().unwrap().count_nodes();
                     let next_id = AtomicUsize::new(0);
                     bsp_root_preview =
@@ -636,6 +636,7 @@ fn main() -> Result<()> {
                     &mut third_person_state,
                     &mut cam,
                     &current_stats,
+                    &mut config_window_open,
                     &mut tree_window_open,
                     &mut branch_limit,
                     &mut limit_culling,
@@ -774,7 +775,7 @@ fn main() -> Result<()> {
                         spectator_state.pos.x,
                         spectator_state.pos.y,
                         spectator_state.pos.z,
-                    )) * Mat4::from_scale(CAMERA_MARKER_SCALE),
+                    )) * Mat4::from_scale(cfg.camera_marker_scale),
                 );
 
                 third_person_glow.set_transformation(
@@ -782,7 +783,7 @@ fn main() -> Result<()> {
                         third_person_state.pos.x,
                         third_person_state.pos.y,
                         third_person_state.pos.z,
-                    )) * Mat4::from_scale(CAMERA_MARKER_SCALE),
+                    )) * Mat4::from_scale(cfg.camera_marker_scale),
                 );
             }
         };
@@ -799,11 +800,11 @@ fn main() -> Result<()> {
 
         // Zpracování změny rychlosti pomocí PageUp/PageDown přes InputManager
         if input_manager.is_key_pressed(KeyCode::PageUp) {
-            cam.speed *= SPEED_ADJUSTMENT_FACTOR;
+            cam.speed *= cfg.speed_adjustment_factor;
             println!("Rychlost zvýšena na: {:.1}", cam.speed);
         }
         if input_manager.is_key_pressed(KeyCode::PageDown) {
-            cam.speed /= SPEED_ADJUSTMENT_FACTOR;
+            cam.speed /= cfg.speed_adjustment_factor;
             println!("Rychlost snížena na: {:.1}", cam.speed);
         }
 
@@ -811,14 +812,14 @@ fn main() -> Result<()> {
         if input_manager.is_key_pressed(KeyCode::Home) {
             if mode == CamMode::Spectator {
                 // Vytvoření nového stavu kamery s výchozí pozicí, ale aktuální rychlostí kamery
-                let mut reset_state = CameraState::new(DEFAULT_SPECTATOR_POS);
+                let mut reset_state = CameraState::new(cfg.default_spectator_pos);
                 reset_state.speed = cam.speed; // Zachová aktuální rychlost
                 reset_state.apply_to_camera(&mut cam);
                 println!("Kamera resetována na výchozí spectator pozici");
             } else {
                 // ThirdPerson
                 // Vytvoření nového stavu kamery s výchozí pozicí, ale aktuální rychlostí kamery
-                let mut reset_state = CameraState::new(DEFAULT_THIRD_PERSON_POS);
+                let mut reset_state = CameraState::new(cfg.default_third_person_pos);
                 reset_state.speed = cam.speed; // Zachová aktuální rychlost
                 reset_state.apply_to_camera(&mut cam);
                 println!("Kamera resetována na výchozí third person pozici");
@@ -839,7 +840,7 @@ fn main() -> Result<()> {
                     spectator_state.pos.x,
                     spectator_state.pos.y,
                     spectator_state.pos.z,
-                )) * Mat4::from_scale(CAMERA_MARKER_SCALE),
+                )) * Mat4::from_scale(cfg.camera_marker_scale),
             );
 
             // Aktualizuj směrový paprsek pro spectator kameru
@@ -858,8 +859,8 @@ fn main() -> Result<()> {
                 let rotation_axis = y_axis.cross(dir).normalize();
 
                 // Vytvoření transformační matice pro válec
-                let scale = DIRECTION_RAY_THICKNESS; // tenký válec
-                let length = DIRECTION_RAY_LENGTH; // délka paprsku
+                let scale = cfg.direction_ray_thickness; // tenký válec
+                let length = cfg.direction_ray_length; // délka paprsku
 
                 // Vytvoření matice transformace
                 let translation = Mat4::from_translation(vec3(
@@ -903,7 +904,7 @@ fn main() -> Result<()> {
                     third_person_state.pos.x,
                     third_person_state.pos.y,
                     third_person_state.pos.z,
-                )) * Mat4::from_scale(CAMERA_MARKER_SCALE),
+                )) * Mat4::from_scale(cfg.camera_marker_scale),
             );
 
             // Když jsme v third person mode, zobrazíme směrový paprsek pro spectator kameru
@@ -925,8 +926,8 @@ fn main() -> Result<()> {
                 let rotation_axis = y_axis.cross(dir).normalize();
 
                 // Vytvoření transformační matice pro válec
-                let scale = DIRECTION_RAY_THICKNESS; // tenký válec
-                let length = DIRECTION_RAY_LENGTH; // délka paprsku
+                let scale = cfg.direction_ray_thickness; // tenký válec
+                let length = cfg.direction_ray_length; // délka paprsku
                                   // Vytvoření matice transformace
                 let translation = Mat4::from_translation(vec3(
                     spectator_state.pos.x,
@@ -965,7 +966,7 @@ fn main() -> Result<()> {
         let screen = frame_input.screen();
         // Clear the screen using the configured background color
         screen.clear(ClearState::color_and_depth(
-            BG_COLOR.0, BG_COLOR.1, BG_COLOR.2, 1.0, 1.0,
+            cfg.bg_color[0], cfg.bg_color[1], cfg.bg_color[2], 1.0, 1.0,
         ));
         let mut objects_to_render: Vec<&dyn Object> = Vec::new();
         if let Some(ref base) = base_model {
