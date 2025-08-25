@@ -125,8 +125,7 @@ fn draw_bsp_tree_window(
 pub fn draw_left_panel(
     ctx: &egui::Context,
     mode: crate::camera::CamMode,
-    loaded_file_name: &mut String,
-    file_loading: &mut bool,
+    loaded_file_name: &str,
     tx_gui: &std::sync::mpsc::Sender<crate::Message>,
     current_cpu_mesh: &mut three_d::CpuMesh,
     bsp_root_preview: &mut Option<crate::bsp::BspNode>,
@@ -156,33 +155,9 @@ pub fn draw_left_panel(
             ui.label(format!("Režim: {:?}", mode));
 
             ui.separator();
-            ui.heading("Načtení modelu");
+            ui.heading("Model");
             ui.label("Aktuální model:");
-            ui.label(loaded_file_name.as_str());
-
-            if ui.button("📁 Načíst nový model").clicked() {
-                if let Some(path) = rfd::FileDialog::new()
-                    .add_filter("GLTF/GLB files", &["gltf", "glb"])
-                    .pick_file()
-                {
-                    *file_loading = true;
-                    let path_clone = path.clone();
-                    let file_name_clone = path.file_name().unwrap().to_string_lossy().into_owned();
-                    let tx_gui_clone = tx_gui.clone();
-                    std::thread::spawn(move || {
-                        let (new_cpu_mesh, new_texture, load_status) =
-                            crate::load_cpu_mesh(&path_clone);
-                        let _ = tx_gui_clone.send(crate::Message::NewFile {
-                            cpu_mesh: new_cpu_mesh,
-                            texture: new_texture,
-                            file_name: file_name_clone,
-                            load_status,
-                            triangles: Vec::new(),
-                            bsp_tree: crate::bsp::BspNode::new_leaf(Vec::new(), 0),
-                        });
-                    });
-                }
-            }
+            ui.label(loaded_file_name);
             if ui.button("📷 Načíst texturu").clicked() {
                 if let Some(path) = rfd::FileDialog::new()
                     .add_filter("Image", &["png", "jpg", "jpeg"])
@@ -200,15 +175,6 @@ pub fn draw_left_panel(
                 }
             }
             ui.checkbox(show_texture, "Zobrazit texturu");
-
-            if *file_loading {
-                ui.add(
-                    egui::ProgressBar::new(0.0)
-                        .desired_width(ui.available_width())
-                        .text("Načítání modelu a stavba BSP stromu...")
-                        .animate(true),
-                );
-            }
 
             if bsp_root_preview.is_none() {
                 ui.separator();

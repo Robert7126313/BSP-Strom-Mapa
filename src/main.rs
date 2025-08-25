@@ -47,14 +47,6 @@ mod input;
 #[derive(Debug)]
 enum Message {
     InitialTree(BspNode),
-    NewFile {
-        cpu_mesh: CpuMesh,
-        texture: Option<CpuTexture>,
-        triangles: Vec<Triangle>,
-        file_name: String,
-        load_status: String,
-        bsp_tree: BspNode,
-    },
     NewTexture { texture: CpuTexture },
 }
 
@@ -433,6 +425,25 @@ fn create_visible_mesh(
     Gm::new(Mesh::new(context, &visible_mesh), material)
 }
 
+fn default_checker_texture() -> CpuTexture {
+    CpuTexture {
+        name: "default_checker".into(),
+        data: three_d_asset::texture::TextureData::RgbaU8(vec![
+            [255, 255, 255, 255],
+            [0, 0, 0, 255],
+            [0, 0, 0, 255],
+            [255, 255, 255, 255],
+        ]),
+        width: 2,
+        height: 2,
+        min_filter: three_d_asset::texture::Interpolation::Nearest,
+        mag_filter: three_d_asset::texture::Interpolation::Nearest,
+        mipmap: Some(three_d_asset::texture::Mipmap::default()),
+        wrap_s: three_d_asset::texture::Wrapping::Repeat,
+        wrap_t: three_d_asset::texture::Wrapping::Repeat,
+    }
+}
+
 // ---------------- Main --------------------------------------------------- //
 
 fn main() -> Result<()> {
@@ -454,10 +465,13 @@ fn main() -> Result<()> {
     // stavová proměnná: název aktuálního souboru a úspěšnost načtení
     let initial_path = Path::new("assets/model.glb");
     println!("📁 Načítám model z: {}", initial_path.display());
-    let (cpu_mesh, initial_texture, _load_status) = load_cpu_mesh(initial_path);
+    let (cpu_mesh, mut initial_texture, _load_status) = load_cpu_mesh(initial_path);
     println!("✓ Model načten");
+    if initial_texture.is_none() {
+        initial_texture = Some(default_checker_texture());
+    }
 
-    let mut loaded_file_name = if initial_path.exists() {
+    let loaded_file_name = if initial_path.exists() {
         initial_path
             .file_name()
             .unwrap()
@@ -469,11 +483,10 @@ fn main() -> Result<()> {
 
     // Add state for file loading
     let mut current_cpu_mesh = cpu_mesh.clone();
-    let mut current_triangles = cpu_mesh_to_triangles(&cpu_mesh);
+    let current_triangles = cpu_mesh_to_triangles(&cpu_mesh);
     let mut current_texture =
         initial_texture.map(|t| Texture2DRef::from_cpu_texture(&context, &t));
     let mut show_texture = current_texture.is_some();
-    let mut file_loading = false;
 
     // Vytvoření triangles z CPU meshe
     println!("🔺 Převádím mesh na trojúhelníky...");
@@ -635,38 +648,6 @@ fn main() -> Result<()> {
                         Some(build_bsp(&current_triangles, 0, branch_limit, &next_id));
                     println!("✅ BSP strom úspěšně načten do GUI!");
                 }
-                Message::NewFile {
-                    cpu_mesh: new_cpu_mesh,
-                    texture: new_tex,
-                    triangles: _,
-                    file_name,
-                    load_status: _,
-                    bsp_tree: _,
-                } => {
-                    current_cpu_mesh = new_cpu_mesh;
-                    loaded_file_name = file_name;
-                    file_loading = false;
-                    current_triangles = cpu_mesh_to_triangles(&current_cpu_mesh);
-                    current_texture =
-                        new_tex.map(|t| Texture2DRef::from_cpu_texture(&context, &t));
-                    if current_texture.is_some() {
-                        show_texture = true;
-                    }
-                    let next_id = AtomicUsize::new(0);
-                    bsp_root_full = Some(build_bsp(
-                        &current_triangles,
-                        0,
-                        cfg.max_bsp_depth,
-                        &next_id,
-                    ));
-                    total_stats.total_nodes =
-                        bsp_root_full.as_ref().unwrap().count_nodes();
-                    let next_id = AtomicUsize::new(0);
-                    bsp_root_preview =
-                        Some(build_bsp(&current_triangles, 0, branch_limit, &next_id));
-                    total_stats.total_triangles = current_triangles.len() as u32;
-                    println!("✅ Nový model a BSP strom načteny!");
-                }
                 Message::NewTexture { texture: tex } => {
                     current_texture = Some(Texture2DRef::from_cpu_texture(&context, &tex));
                     show_texture = true;
@@ -756,8 +737,7 @@ fn main() -> Result<()> {
                 crate::gui::draw_left_panel(
                     ctx,
                     mode,
-                    &mut loaded_file_name,
-                    &mut file_loading,
+                    loaded_file_name.as_str(),
                     &tx_gui,
                     &mut current_cpu_mesh,
                     &mut bsp_root_preview,
