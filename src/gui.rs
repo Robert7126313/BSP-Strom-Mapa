@@ -459,7 +459,8 @@ fn draw_config_window(ctx: &egui::Context, open: &mut bool) {
             ui.horizontal(|ui| {
                 ui.label("Model");
                 if ui.color_edit_button_srgba(&mut color).changed() {
-                    cfg.model_color = Srgba::new(color.r(), color.g(), color.b(), color.a());
+                    let [r, g, b, a] = color.to_srgba_unmultiplied();
+                    cfg.model_color = Srgba::new(r, g, b, a);
                 }
             });
 
@@ -472,7 +473,8 @@ fn draw_config_window(ctx: &egui::Context, open: &mut bool) {
             ui.horizontal(|ui| {
                 ui.label("Highlight");
                 if ui.color_edit_button_srgba(&mut hcol).changed() {
-                    cfg.highlight_color = Srgba::new(hcol.r(), hcol.g(), hcol.b(), hcol.a());
+                    let [r, g, b, a] = hcol.to_srgba_unmultiplied();
+                    cfg.highlight_color = Srgba::new(r, g, b, a);
                 }
             });
 
@@ -489,7 +491,8 @@ fn draw_config_window(ctx: &egui::Context, open: &mut bool) {
             ui.horizontal(|ui| {
                 ui.label("Ambient color");
                 if ui.color_edit_button_srgba(&mut acol).changed() {
-                    cfg.ambient_light_color = Srgba::new(acol.r(), acol.g(), acol.b(), acol.a());
+                    let [r, g, b, a] = acol.to_srgba_unmultiplied();
+                    cfg.ambient_light_color = Srgba::new(r, g, b, a);
                 }
             });
 
