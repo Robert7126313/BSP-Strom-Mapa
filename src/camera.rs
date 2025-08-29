@@ -128,15 +128,9 @@ impl CameraState {
 
     pub fn apply_to_camera(&self, camera: &mut FreeCamera) {
         camera.pos = self.pos;
-        camera.yaw = self.yaw;
-        camera.pitch = self.pitch;
-        camera.speed = self.speed;
+       camera.yaw = self.yaw;
+       camera.pitch = self.pitch;
+       camera.speed = self.speed;
     }
-}
-
-pub fn reset_camera_to_default(camera: &mut FreeCamera, default_position: Vector3<f32>, speed: f32) {
-    let mut reset_state = CameraState::new(default_position);
-    reset_state.speed = speed;
-    reset_state.apply_to_camera(camera);
 }
 

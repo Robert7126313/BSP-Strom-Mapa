@@ -175,15 +175,12 @@ pub fn draw_left_panel(
                     let file_name_clone = path.file_name().unwrap().to_string_lossy().into_owned();
                     let tx_gui_clone = tx_gui.clone();
                     std::thread::spawn(move || {
-                        let (new_cpu_mesh, new_texture, load_status) =
+                        let (new_cpu_mesh, new_texture, _load_status) =
                             crate::load_cpu_mesh(&path_clone);
                         let _ = tx_gui_clone.send(crate::Message::NewFile {
                             cpu_mesh: new_cpu_mesh,
                             texture: new_texture,
                             file_name: file_name_clone,
-                            load_status,
-                            triangles: Vec::new(),
-                            bsp_tree: crate::bsp::BspNode::new_leaf(Vec::new(), 0),
                         });
                     });
                 }
@@ -419,9 +416,6 @@ pub fn draw_left_panel(
                         cpu_mesh,
                         texture,
                         file_name,
-                        load_status: _,
-                        triangles: _,
-                        bsp_tree: _,
                     } => {
                         *current_cpu_mesh = cpu_mesh;
                         *loaded_file_name = file_name;

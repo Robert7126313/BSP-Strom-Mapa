@@ -50,10 +50,7 @@ enum Message {
     NewFile {
         cpu_mesh: CpuMesh,
         texture: Option<CpuTexture>,
-        triangles: Vec<Triangle>,
         file_name: String,
-        load_status: String,
-        bsp_tree: BspNode,
     },
 }
 
@@ -637,10 +634,7 @@ fn main() -> Result<()> {
                 Message::NewFile {
                     cpu_mesh: new_cpu_mesh,
                     texture: new_tex,
-                    triangles: _,
                     file_name,
-                    load_status: _,
-                    bsp_tree: _,
                 } => {
                     current_cpu_mesh = new_cpu_mesh;
                     loaded_file_name = file_name;

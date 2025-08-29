@@ -109,22 +109,9 @@ impl BspNode {
             + self.back.as_ref().map_or(0, |n| n.count_nodes())
     }
 
-    fn count_triangles(&self) -> u32 {
-        self.triangles.len() as u32
-            + self.front.as_ref().map_or(0, |n| n.count_triangles())
-            + self.back.as_ref().map_or(0, |n| n.count_triangles())
-    }
-
     pub fn subtree_triangles(&self) -> u32 {
         self.subtree_tris
     }
-}
-
-fn plane_from_triangle(tri: &Triangle) -> Plane {
-    let edge1 = tri.b - tri.a;
-    let edge2 = tri.c - tri.a;
-    let normal = edge1.cross(edge2).normalize();
-    Plane::new(normal, tri.a)
 }
 
 // před funkci triangle_center přidáme trait extension pro Vector3
@@ -390,79 +377,6 @@ pub fn find_deepest_node_containing_point<'a>(
         }
     }
     Some(node)
-}
-
-// Funkce pro rekurzivní vykreslení stromu v UI a zpracování výběru uzlu
-pub fn render_bsp_tree(ui: &mut egui::Ui, node: &BspNode, selected: &mut Option<usize>) {
-    // build the label
-    let is_leaf = node.plane.is_none();
-    let local_tris = node.triangles.len();
-    // total tris in this subtree (using cached value)
-    let subtree_tris = node.subtree_tris as usize;
-    // number of children nodes
-    let child_count = node.front.as_ref().map_or(0, |n| n.node_count - 1)
-        + node.back.as_ref().map_or(0, |n| n.node_count - 1);
-
-    let is_selected = selected == &Some(node.id);
-    let label = if is_leaf {
-        // leaf: show only local triangles
-        if is_selected {
-            format!("🔸 Leaf {} ({} tris)", node.id, local_tris)
-        } else {
-            format!("Leaf {} ({} tris)", node.id, local_tris)
-        }
-    } else {
-        // interior: show total subtree triangles
-        if is_selected {
-            format!(
-                "🔸 Node {} ({} tris subtree, {} children)",
-                node.id, subtree_tris, child_count
-            )
-        } else {
-            format!(
-                "Node {} ({} tris subtree, {} children)",
-                node.id, subtree_tris, child_count
-            )
-        }
-    };
-
-    // collapsible header
-    let header = egui::CollapsingHeader::new(label)
-        .id_salt(node.id) // Aktualizace zastaralé metody id_source na id_salt
-        .default_open(node.id == selected.unwrap_or(0)); // auto-open the selected node
-
-    // draw the header
-    let response = header.show(ui, |ui| {
-        // small "select" button inside the collapsible content
-        if ui
-            .add(egui::SelectableLabel::new(
-                selected == &Some(node.id),
-                "▶ Select",
-            ))
-            .clicked()
-        {
-            *selected = Some(node.id);
-        }
-
-        // and recurse below *only if* this header is open
-        if let Some(ref front) = node.front {
-            ui.label("Front:");
-            ui.indent("front", |ui| {
-                render_bsp_tree(ui, front, selected);
-            });
-        }
-        if let Some(ref back) = node.back {
-            ui.label("Back:");
-            ui.indent("back", |ui| {
-                render_bsp_tree(ui, back, selected);
-            });
-        }
-    });
-
-    // if you want clicking the header itself to select:
-    if response.header_response.clicked() {
-        *selected = Some(node.id);
-    }
 }
 
 // Funkce pro sběr všech trojúhelníků v podstromu
@@ -825,97 +739,6 @@ pub fn traverse_bsp_with_frustum(
     }
 }
 
-// Funkce pro vytvoření materiálu a modelu z CPU meshe
-fn create_material_and_model(
-    context: &Context,
-    cpu_mesh: &CpuMesh,
-) -> (ColorMaterial, Gm<Mesh, ColorMaterial>) {
-    let model_color = CONFIG.lock().unwrap().model_color;
-    let material = ColorMaterial::new_opaque(
-        context,
-        &CpuMaterial {
-            albedo: model_color,
-            ..Default::default()
-        },
-    );
-    let model = Gm::new(Mesh::new(context, cpu_mesh), material.clone());
-
-    (material, model)
-}
-
-// Funkce pro vytvoření glow materiálu
-fn create_glow_material(context: &Context, color: Srgba, opacity: u8) -> ColorMaterial {
-    ColorMaterial::new_transparent(
-        context,
-        &CpuMaterial {
-            albedo: Srgba::new(color.r, color.g, color.b, opacity),
-            ..Default::default()
-        },
-    )
-}
-
-// Funkce pro vytvoření směrového materiálu
-fn create_direction_material(context: &Context, color: Srgba, opacity: u8) -> ColorMaterial {
-    ColorMaterial::new_transparent(
-        context,
-        &CpuMaterial {
-            albedo: Srgba::new(color.r, color.g, color.b, opacity),
-            ..Default::default()
-        },
-    )
-}
-
-// Funkce pro vytvoření směrového paprsku
-fn create_direction_ray(
-    context: &Context,
-    position: Vector3<f32>,
-    direction: Vector3<f32>,
-    color: Srgba,
-    opacity: u8,
-    length: f32,
-) -> Gm<Mesh, ColorMaterial> {
-    let direction_material = create_direction_material(context, color, opacity);
-    let direction_mesh = CpuMesh::cone(16);
-    let mut direction_ray = Gm::new(Mesh::new(context, &direction_mesh), direction_material);
-
-    // Vypočítáme úhel mezi osou Y a směrovým vektorem
-    let y_axis = Vector3::unit_y();
-    let angle = y_axis.dot(direction).acos();
-
-    // Vypočítáme osu rotace (kolmou na rovinu obsahující osu Y a směrový vektor)
-    let rotation_axis = y_axis.cross(direction).normalize();
-
-    // Vytvoření transformační matice pro válec
-    let scale = 0.05; // tenký válec
-    let translation = Mat4::from_translation(position);
-
-    // Pokud je směrový vektor téměř rovnoběžný s osou Y, použijeme speciální zacházení
-    let rotation = if angle.abs() < 0.01 || (std::f32::consts::PI - angle).abs() < 0.01 {
-        // Pro případ kdy je vektor téměř rovnoběžný s osou Y
-        if direction.y > 0.0 {
-            Mat4::identity() // směr už je podél osy Y
-        } else {
-            // Rotace o 180° kolem osy X
-            Mat4::from_angle_x(Rad(std::f32::consts::PI))
-        }
-    } else {
-        // Normální případ - rotace kolem vypočtené osy
-        Mat4::from_axis_angle(
-            vec3(rotation_axis.x, rotation_axis.y, rotation_axis.z),
-            Rad(angle),
-        )
-    };
-
-    // Měřítko - válec - válec je standardně výšky 2.0, chceme jej natáhnout na délku `length`
-    // a zúžit na šířku `scale`
-    let scaling = Mat4::from_nonuniform_scale(scale, length / 2.0, scale);
-
-    // Aplikujeme transformace v pořadí: měřítko, rotace, posun
-    direction_ray.set_transformation(translation * rotation * scaling);
-
-    direction_ray
-}
-
 #[derive(Clone, Debug)]
 pub struct BoundingBox {
     pub min: Vector3<f32>,
@@ -1097,47 +920,6 @@ impl Frustum {
         Frustum {
             planes: [left, right, bottom, top, near, far],
         }
-    }
-
-    pub fn as_vec4_array(&self) -> [[f32; 4]; 6] {
-        [
-            [
-                self.planes[0].n.x,
-                self.planes[0].n.y,
-                self.planes[0].n.z,
-                self.planes[0].d,
-            ],
-            [
-                self.planes[1].n.x,
-                self.planes[1].n.y,
-                self.planes[1].n.z,
-                self.planes[1].d,
-            ],
-            [
-                self.planes[2].n.x,
-                self.planes[2].n.y,
-                self.planes[2].n.z,
-                self.planes[2].d,
-            ],
-            [
-                self.planes[3].n.x,
-                self.planes[3].n.y,
-                self.planes[3].n.z,
-                self.planes[3].d,
-            ],
-            [
-                self.planes[4].n.x,
-                self.planes[4].n.y,
-                self.planes[4].n.z,
-                self.planes[4].d,
-            ],
-            [
-                self.planes[5].n.x,
-                self.planes[5].n.y,
-                self.planes[5].n.z,
-                self.planes[5].d,
-            ],
-        ]
     }
 }
 
