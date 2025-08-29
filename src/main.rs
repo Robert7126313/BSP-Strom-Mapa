@@ -791,6 +791,9 @@ fn main() -> Result<()> {
             last_branch_limit = branch_limit;
         }
 
+        // Reload configuration so input handling reflects any changes made in the GUI
+        let cfg = CONFIG.lock().unwrap().clone();
+
         // Aktualizuj stav kláves v InputManageru
         input_manager.update_key_states(events);
 
