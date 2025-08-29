@@ -62,13 +62,14 @@ impl FreeCamera {
             self.yaw += tilt_value * self.look_speed * dt;
         }
         if input_manager.is_key_pressed(KeyCode::Up) {
-            let limit = CONFIG.lock().unwrap().pitch_limit;
-            self.pitch = (self.pitch + self.look_speed * dt).clamp(-limit, limit);
+            self.pitch += self.look_speed * dt;
         }
         if input_manager.is_key_pressed(KeyCode::Down) {
-            let limit = CONFIG.lock().unwrap().pitch_limit;
-            self.pitch = (self.pitch - self.look_speed * dt).clamp(-limit, limit);
+            self.pitch -= self.look_speed * dt;
         }
+        // Wrap pitch to keep it within [-PI, PI] allowing full 360° rotation
+        self.pitch = (self.pitch + std::f32::consts::PI) % (2.0 * std::f32::consts::PI)
+            - std::f32::consts::PI;
     }
 
     pub fn cam(&self, vp: Viewport) -> Camera {

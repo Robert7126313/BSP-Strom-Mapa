@@ -540,7 +540,7 @@ fn main() -> Result<()> {
     let spectator_glow_material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: cfg.highlight_color,
+            albedo: cfg.marker_color,
             ..Default::default()
         },
     );
@@ -548,7 +548,7 @@ fn main() -> Result<()> {
     let third_person_glow_material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: cfg.highlight_color,
+            albedo: cfg.marker_color,
             ..Default::default()
         },
     );
@@ -557,7 +557,7 @@ fn main() -> Result<()> {
     let direction_material = ColorMaterial::new_opaque(
         &context,
         &CpuMaterial {
-            albedo: cfg.highlight_color,
+            albedo: cfg.arrow_color,
             ..Default::default()
         },
     );
@@ -626,9 +626,9 @@ fn main() -> Result<()> {
         // Apply dynamic configuration updates
         ambient_light.intensity = cfg.ambient_light_intensity;
         ambient_light.color = cfg.ambient_light_color;
-        spectator_glow.material.color = cfg.highlight_color;
-        third_person_glow.material.color = cfg.highlight_color;
-        camera_direction_ray.material.color = cfg.highlight_color;
+        spectator_glow.material.color = cfg.marker_color;
+        third_person_glow.material.color = cfg.marker_color;
+        camera_direction_ray.material.color = cfg.arrow_color;
 
         // Synchronize branch limit with configuration changes
         if branch_limit > cfg.max_bsp_depth {
