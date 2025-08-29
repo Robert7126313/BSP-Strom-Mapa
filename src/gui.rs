@@ -497,7 +497,7 @@ fn draw_config_window(
             ui.heading("Colors & Lighting");
             Grid::new("color_settings").num_columns(2).show(ui, |ui| {
                 ui.color_edit_button_rgb(&mut cfg.bg_color);
-                ui.label("Background");
+                ui.label("Background color");
                 ui.end_row();
 
                 let mut color = egui::Color32::from_rgba_unmultiplied(
@@ -509,7 +509,7 @@ fn draw_config_window(
                 if ui.color_edit_button_srgba(&mut color).changed() {
                     cfg.model_color = Srgba::new(color.r(), color.g(), color.b(), color.a());
                 }
-                ui.label("Model");
+                ui.label("Model color");
                 ui.end_row();
 
                 let mut hcol = egui::Color32::from_rgba_unmultiplied(
@@ -521,7 +521,7 @@ fn draw_config_window(
                 if ui.color_edit_button_srgba(&mut hcol).changed() {
                     cfg.highlight_color = Srgba::new(hcol.r(), hcol.g(), hcol.b(), hcol.a());
                 }
-                ui.label("Highlight");
+                ui.label("Highlight color");
                 ui.end_row();
 
                 let mut acol = egui::Color32::from_rgba_unmultiplied(
@@ -537,61 +537,100 @@ fn draw_config_window(
                 ui.end_row();
             });
 
-            ui.add(
-                egui::Slider::new(&mut cfg.ambient_light_intensity, 0.0..=5.0)
-                    .text("Ambient intensity"),
-            );
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::Slider::new(&mut cfg.ambient_light_intensity, 0.0..=5.0)
+                        .text("Ambient intensity"),
+                );
+                ui.label("Ambient light brightness");
+            });
 
             ui.separator();
             ui.heading("BSP Tree");
-            ui.add(egui::Slider::new(&mut cfg.bsp_tree_text_size, 8.0..=32.0).text("Text size"));
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::Slider::new(&mut cfg.bsp_tree_text_size, 8.0..=32.0)
+                        .text("Text size"),
+                );
+                ui.label("Size of node labels");
+            });
             Grid::new("bsp_tree_colors").num_columns(2).show(ui, |ui| {
                 ui.color_edit_button_srgba(&mut cfg.bsp_tree_path_color);
-                ui.label("Path color");
+                ui.label("Path highlight");
                 ui.end_row();
 
                 ui.color_edit_button_srgba(&mut cfg.bsp_tree_selected_color);
-                ui.label("Selected color");
+                ui.label("Selected node");
                 ui.end_row();
             });
 
             ui.separator();
             ui.heading("BSP Limits");
-            ui.add(egui::Slider::new(&mut cfg.max_bsp_depth, 1..=64).text("Max depth"));
+            ui.horizontal(|ui| {
+                ui.add(egui::Slider::new(&mut cfg.max_bsp_depth, 1..=64).text("Max depth"));
+                ui.label("Maximum recursion level");
+            });
             let max_depth = cfg.max_bsp_depth;
-            ui.add(
-                egui::Slider::new(&mut cfg.default_branch_limit, 1..=max_depth)
-                    .text("Default branch limit"),
-            );
-            ui.add(
-                egui::Slider::new(&mut cfg.min_triangles_per_leaf, 1..=100)
-                    .text("Min triangles per leaf"),
-            );
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::Slider::new(&mut cfg.default_branch_limit, 1..=max_depth)
+                        .text("Default branch limit"),
+                );
+                ui.label("Initial splits per node");
+            });
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::Slider::new(&mut cfg.min_triangles_per_leaf, 1..=100)
+                        .text("Min triangles per leaf"),
+                );
+                ui.label("Stop splitting below this");
+            });
 
             ui.separator();
             ui.heading("Camera");
-            if ui
-                .add(
-                    egui::Slider::new(&mut cfg.default_camera_speed, 0.1..=20.0)
-                        .text("Default speed"),
-                )
-                .changed()
-            {
+            let speed_changed = {
+                let mut changed = false;
+                ui.horizontal(|ui| {
+                    let resp = ui.add(
+                        egui::Slider::new(&mut cfg.default_camera_speed, 0.1..=20.0)
+                            .text("Movement speed"),
+                    );
+                    ui.label("Current camera speed (PageUp/PageDown)");
+                    changed = resp.changed();
+                });
+                changed
+            };
+            if speed_changed {
                 cam.speed = cfg.default_camera_speed;
                 spectator_state.speed = cfg.default_camera_speed;
                 third_person_state.speed = cfg.default_camera_speed;
             }
-            if ui
-                .add(egui::Slider::new(&mut cfg.default_look_speed, 0.1..=10.0).text("Look speed"))
-                .changed()
-            {
+            let look_changed = {
+                let mut changed = false;
+                ui.horizontal(|ui| {
+                    let resp = ui.add(
+                        egui::Slider::new(&mut cfg.default_look_speed, 0.1..=10.0)
+                            .text("Look speed"),
+                    );
+                    ui.label("Sensitivity of view rotation");
+                    changed = resp.changed();
+                });
+                changed
+            };
+            if look_changed {
                 cam.look_speed = cfg.default_look_speed;
             }
-            ui.add(egui::Slider::new(&mut cfg.default_fov_deg, 30.0..=120.0).text("FOV deg"));
-            ui.add(
-                egui::Slider::new(&mut cfg.speed_adjustment_factor, 1.01..=5.0)
-                    .text("Speed factor"),
-            );
+            ui.horizontal(|ui| {
+                ui.add(egui::Slider::new(&mut cfg.default_fov_deg, 30.0..=120.0).text("FOV deg"));
+                ui.label("Field of view");
+            });
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::Slider::new(&mut cfg.speed_adjustment_factor, 1.01..=5.0)
+                        .text("Multiplier"),
+                );
+                ui.label("PageUp/PageDown speed factor");
+            });
 
             let mut spec_changed = false;
             ui.horizontal(|ui| {
@@ -605,6 +644,7 @@ fn draw_config_window(
                 spec_changed |= ui
                     .add(egui::DragValue::new(&mut cfg.default_spectator_pos.z))
                     .changed();
+                ui.label("Default spectator spawn");
             });
             if spec_changed {
                 spectator_state.pos = cfg.default_spectator_pos;
@@ -624,6 +664,7 @@ fn draw_config_window(
                 third_changed |= ui
                     .add(egui::DragValue::new(&mut cfg.default_third_person_pos.z))
                     .changed();
+                ui.label("Default third person spawn");
             });
             if third_changed {
                 third_person_state.pos = cfg.default_third_person_pos;
@@ -631,22 +672,13 @@ fn draw_config_window(
                     cam.pos = cfg.default_third_person_pos;
                 }
             }
-            ui.add(
-                egui::Slider::new(&mut cfg.camera_marker_scale, 0.01..=1.0).text("Marker scale"),
-            );
-            ui.separator();
-            CollapsingHeader::new("Configuration Window Controls").show(ui, |ui| {
-                ui.label("Pitch limit – The maximum angle (up or down) the camera can tilt. Keeps you from flipping over when looking too far up or down.");
-                ui.label("FOV deg – Field of view in degrees. Wider values show more of the scene, smaller values zoom in.");
-                ui.label("Near plane – The minimum distance the camera renders objects; anything closer is clipped.");
-                ui.label("Far plane – The maximum distance the camera renders objects; anything farther is clipped.");
-                ui.label("Switch cooldown – Minimum time (seconds) between camera mode switches (e.g., spectator ↔ third-person) to avoid accidental toggles.");
-                ui.label("Speed factor – Multiplier applied when adjusting movement speed with PageUp/PageDown; >1 speeds up, <1 slows down.");
-                ui.label("Spectator pos (x, y, z) – Default spawn coordinates for the spectator camera.");
-                ui.label("Third person pos (x, y, z) – Default spawn coordinates for the third-person camera.");
-                ui.label("Marker scale – Size of the visual marker representing the camera’s position in the scene.");
-                ui.label("Ray thickness – Diameter of the directional \"ray\" used to show where the camera is pointing.");
-                ui.label("Ray length – Length of that directional ray.");
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::Slider::new(&mut cfg.camera_marker_scale, 0.01..=1.0)
+                        .text("Marker scale"),
+                );
+                ui.label("Size of camera markers");
             });
+            ui.separator();
         });
 }
