@@ -4,7 +4,7 @@ use egui::{CollapsingHeader, Grid};
 use egui_plot::{Line, Plot, PlotPoint, Points, Text};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicUsize;
-use three_d::{Srgba, Texture2DRef, CpuTexture};
+use three_d::{CpuTexture, Srgba, Texture2DRef};
 
 struct TreePlotData {
     positions: HashMap<usize, PlotPoint>,
@@ -190,11 +190,8 @@ pub fn draw_left_panel(
                     .add_filter("Image", &["png", "jpg", "jpeg"])
                     .pick_file()
                 {
-                    if let Ok(tex) =
-                        three_d_asset::io::load_and_deserialize::<CpuTexture>(&path)
-                    {
-                        *current_texture =
-                            Some(Texture2DRef::from_cpu_texture(gl, &tex));
+                    if let Ok(tex) = three_d_asset::io::load_and_deserialize::<CpuTexture>(&path) {
+                        *current_texture = Some(Texture2DRef::from_cpu_texture(gl, &tex));
                         *show_texture = true;
                     }
                 }
@@ -420,10 +417,8 @@ pub fn draw_left_panel(
                         *current_cpu_mesh = cpu_mesh;
                         *loaded_file_name = file_name;
                         *file_loading = false;
-                        *current_triangles =
-                            crate::bsp::cpu_mesh_to_triangles(current_cpu_mesh);
-                        *current_texture =
-                            texture.map(|t| Texture2DRef::from_cpu_texture(gl, &t));
+                        *current_triangles = crate::bsp::cpu_mesh_to_triangles(current_cpu_mesh);
+                        *current_texture = texture.map(|t| Texture2DRef::from_cpu_texture(gl, &t));
                         if current_texture.is_some() {
                             *show_texture = true;
                         }
@@ -441,7 +436,14 @@ pub fn draw_left_panel(
         });
     });
     if *config_window_open {
-        draw_config_window(ctx, config_window_open);
+        draw_config_window(
+            ctx,
+            config_window_open,
+            mode,
+            cam,
+            spectator_state,
+            third_person_state,
+        );
     }
     if *selected_node_help_open {
         egui::Window::new("Vysvětlivky - Vybraný uzel")
@@ -465,7 +467,14 @@ pub fn draw_left_panel(
     }
 }
 
-fn draw_config_window(ctx: &egui::Context, open: &mut bool) {
+fn draw_config_window(
+    ctx: &egui::Context,
+    open: &mut bool,
+    mode: crate::camera::CamMode,
+    cam: &mut crate::camera::FreeCamera,
+    spectator_state: &mut crate::camera::CameraState,
+    third_person_state: &mut crate::camera::CameraState,
+) {
     egui::Window::new("Config")
         .open(open)
         .vscroll(true)
@@ -548,42 +557,69 @@ fn draw_config_window(ctx: &egui::Context, open: &mut bool) {
 
             ui.separator();
             ui.heading("Camera");
-            ui.add(
-                egui::Slider::new(&mut cfg.default_camera_speed, 0.1..=20.0).text("Default speed"),
-            );
-            ui.add(egui::Slider::new(&mut cfg.default_look_speed, 0.1..=10.0).text("Look speed"));
-            ui.add(egui::Slider::new(&mut cfg.pitch_limit, 0.1..=3.14).text("Pitch limit"));
+            if ui
+                .add(
+                    egui::Slider::new(&mut cfg.default_camera_speed, 0.1..=20.0)
+                        .text("Default speed"),
+                )
+                .changed()
+            {
+                cam.speed = cfg.default_camera_speed;
+                spectator_state.speed = cfg.default_camera_speed;
+                third_person_state.speed = cfg.default_camera_speed;
+            }
+            if ui
+                .add(egui::Slider::new(&mut cfg.default_look_speed, 0.1..=10.0).text("Look speed"))
+                .changed()
+            {
+                cam.look_speed = cfg.default_look_speed;
+            }
             ui.add(egui::Slider::new(&mut cfg.default_fov_deg, 30.0..=120.0).text("FOV deg"));
-            ui.add(egui::Slider::new(&mut cfg.near_plane, 0.01..=1.0).text("Near plane"));
-            ui.add(egui::Slider::new(&mut cfg.far_plane, 10.0..=5000.0).text("Far plane"));
-            ui.add(
-                egui::Slider::new(&mut cfg.camera_switch_cooldown, 0.1..=10.0)
-                    .text("Switch cooldown"),
-            );
             ui.add(
                 egui::Slider::new(&mut cfg.speed_adjustment_factor, 1.01..=5.0)
                     .text("Speed factor"),
             );
 
+            let mut spec_changed = false;
             ui.horizontal(|ui| {
                 ui.label("Spectator pos");
-                ui.add(egui::DragValue::new(&mut cfg.default_spectator_pos.x));
-                ui.add(egui::DragValue::new(&mut cfg.default_spectator_pos.y));
-                ui.add(egui::DragValue::new(&mut cfg.default_spectator_pos.z));
+                spec_changed |= ui
+                    .add(egui::DragValue::new(&mut cfg.default_spectator_pos.x))
+                    .changed();
+                spec_changed |= ui
+                    .add(egui::DragValue::new(&mut cfg.default_spectator_pos.y))
+                    .changed();
+                spec_changed |= ui
+                    .add(egui::DragValue::new(&mut cfg.default_spectator_pos.z))
+                    .changed();
             });
+            if spec_changed {
+                spectator_state.pos = cfg.default_spectator_pos;
+                if mode == crate::camera::CamMode::Spectator {
+                    cam.pos = cfg.default_spectator_pos;
+                }
+            }
+            let mut third_changed = false;
             ui.horizontal(|ui| {
                 ui.label("Third person pos");
-                ui.add(egui::DragValue::new(&mut cfg.default_third_person_pos.x));
-                ui.add(egui::DragValue::new(&mut cfg.default_third_person_pos.y));
-                ui.add(egui::DragValue::new(&mut cfg.default_third_person_pos.z));
+                third_changed |= ui
+                    .add(egui::DragValue::new(&mut cfg.default_third_person_pos.x))
+                    .changed();
+                third_changed |= ui
+                    .add(egui::DragValue::new(&mut cfg.default_third_person_pos.y))
+                    .changed();
+                third_changed |= ui
+                    .add(egui::DragValue::new(&mut cfg.default_third_person_pos.z))
+                    .changed();
             });
+            if third_changed {
+                third_person_state.pos = cfg.default_third_person_pos;
+                if mode == crate::camera::CamMode::ThirdPerson {
+                    cam.pos = cfg.default_third_person_pos;
+                }
+            }
             ui.add(
                 egui::Slider::new(&mut cfg.camera_marker_scale, 0.01..=1.0).text("Marker scale"),
             );
-            ui.add(
-                egui::Slider::new(&mut cfg.direction_ray_thickness, 0.01..=1.0)
-                    .text("Ray thickness"),
-            );
-            ui.add(egui::Slider::new(&mut cfg.direction_ray_length, 0.1..=10.0).text("Ray length"));
         });
 }
