@@ -439,6 +439,7 @@ pub fn draw_left_panel(
         draw_config_window(
             ctx,
             config_window_open,
+            mode,
             cam,
             spectator_state,
             third_person_state,
@@ -469,6 +470,7 @@ pub fn draw_left_panel(
 fn draw_config_window(
     ctx: &egui::Context,
     open: &mut bool,
+    mode: crate::camera::CamMode,
     cam: &mut crate::camera::FreeCamera,
     spectator_state: &mut crate::camera::CameraState,
     third_person_state: &mut crate::camera::CameraState,
@@ -572,38 +574,52 @@ fn draw_config_window(
             {
                 cam.look_speed = cfg.default_look_speed;
             }
-            ui.add(egui::Slider::new(&mut cfg.pitch_limit, 0.1..=3.14).text("Pitch limit"));
             ui.add(egui::Slider::new(&mut cfg.default_fov_deg, 30.0..=120.0).text("FOV deg"));
-            ui.add(egui::Slider::new(&mut cfg.near_plane, 0.01..=1.0).text("Near plane"));
-            ui.add(egui::Slider::new(&mut cfg.far_plane, 10.0..=5000.0).text("Far plane"));
-            ui.add(
-                egui::Slider::new(&mut cfg.camera_switch_cooldown, 0.1..=10.0)
-                    .text("Switch cooldown"),
-            );
             ui.add(
                 egui::Slider::new(&mut cfg.speed_adjustment_factor, 1.01..=5.0)
                     .text("Speed factor"),
             );
 
+            let mut spec_changed = false;
             ui.horizontal(|ui| {
                 ui.label("Spectator pos");
-                ui.add(egui::DragValue::new(&mut cfg.default_spectator_pos.x));
-                ui.add(egui::DragValue::new(&mut cfg.default_spectator_pos.y));
-                ui.add(egui::DragValue::new(&mut cfg.default_spectator_pos.z));
+                spec_changed |= ui
+                    .add(egui::DragValue::new(&mut cfg.default_spectator_pos.x))
+                    .changed();
+                spec_changed |= ui
+                    .add(egui::DragValue::new(&mut cfg.default_spectator_pos.y))
+                    .changed();
+                spec_changed |= ui
+                    .add(egui::DragValue::new(&mut cfg.default_spectator_pos.z))
+                    .changed();
             });
+            if spec_changed {
+                spectator_state.pos = cfg.default_spectator_pos;
+                if mode == crate::camera::CamMode::Spectator {
+                    cam.pos = cfg.default_spectator_pos;
+                }
+            }
+            let mut third_changed = false;
             ui.horizontal(|ui| {
                 ui.label("Third person pos");
-                ui.add(egui::DragValue::new(&mut cfg.default_third_person_pos.x));
-                ui.add(egui::DragValue::new(&mut cfg.default_third_person_pos.y));
-                ui.add(egui::DragValue::new(&mut cfg.default_third_person_pos.z));
+                third_changed |= ui
+                    .add(egui::DragValue::new(&mut cfg.default_third_person_pos.x))
+                    .changed();
+                third_changed |= ui
+                    .add(egui::DragValue::new(&mut cfg.default_third_person_pos.y))
+                    .changed();
+                third_changed |= ui
+                    .add(egui::DragValue::new(&mut cfg.default_third_person_pos.z))
+                    .changed();
             });
+            if third_changed {
+                third_person_state.pos = cfg.default_third_person_pos;
+                if mode == crate::camera::CamMode::ThirdPerson {
+                    cam.pos = cfg.default_third_person_pos;
+                }
+            }
             ui.add(
                 egui::Slider::new(&mut cfg.camera_marker_scale, 0.01..=1.0).text("Marker scale"),
             );
-            ui.add(
-                egui::Slider::new(&mut cfg.direction_ray_thickness, 0.01..=1.0)
-                    .text("Ray thickness"),
-            );
-            ui.add(egui::Slider::new(&mut cfg.direction_ray_length, 0.1..=10.0).text("Ray length"));
         });
 }
