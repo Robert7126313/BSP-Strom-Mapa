@@ -158,7 +158,11 @@ fn load_gltf_with_gltf_crate(path: &Path) -> Result<(CpuMesh, Option<CpuTexture>
         } else {
             Indices::U32(all_indices)
         },
-        uvs: if all_uvs.is_empty() { None } else { Some(all_uvs) },
+        uvs: if all_uvs.is_empty() {
+            None
+        } else {
+            Some(all_uvs)
+        },
         ..Default::default()
     };
     Ok((mesh, texture))
@@ -303,21 +307,27 @@ fn process_primitive(
     }
 
     if texture.is_none() {
-        if let Some(info) = primitive.material().pbr_metallic_roughness().base_color_texture() {
+        if let Some(info) = primitive
+            .material()
+            .pbr_metallic_roughness()
+            .base_color_texture()
+        {
             let tex = info.texture();
             let image = &images[tex.source().index()];
             let data = match image.format {
-                gltf::image::Format::R8G8B8A8 => {
-                    TextureData::RgbaU8(image.pixels.chunks(4).map(|c| [c[0], c[1], c[2], c[3]]).collect())
-                }
+                gltf::image::Format::R8G8B8A8 => TextureData::RgbaU8(
+                    image
+                        .pixels
+                        .chunks(4)
+                        .map(|c| [c[0], c[1], c[2], c[3]])
+                        .collect(),
+                ),
                 gltf::image::Format::R8G8B8 => {
                     TextureData::RgbU8(image.pixels.chunks(3).map(|c| [c[0], c[1], c[2]]).collect())
                 }
-                _ => {
-                    TextureData::RgbaU8(Vec::new())
-                }
+                _ => TextureData::RgbaU8(Vec::new()),
             };
-              if !matches!(data, TextureData::RgbaU8(ref v) if v.is_empty()) {
+            if !matches!(data, TextureData::RgbaU8(ref v) if v.is_empty()) {
                 *texture = Some(CpuTexture {
                     name: "embedded".into(),
                     data,
@@ -325,7 +335,7 @@ fn process_primitive(
                     height: image.height,
                     ..Default::default()
                 });
-              }
+            }
         }
     }
 
@@ -466,8 +476,7 @@ fn main() -> Result<()> {
     // Add state for file loading
     let mut current_cpu_mesh = cpu_mesh.clone();
     let mut current_triangles = cpu_mesh_to_triangles(&cpu_mesh);
-    let mut current_texture =
-        initial_texture.map(|t| Texture2DRef::from_cpu_texture(&context, &t));
+    let mut current_texture = initial_texture.map(|t| Texture2DRef::from_cpu_texture(&context, &t));
     let mut show_texture = current_texture.is_some();
     let mut file_loading = false;
 
@@ -650,8 +659,7 @@ fn main() -> Result<()> {
                     loaded_file_name = file_name;
                     file_loading = false;
                     current_triangles = cpu_mesh_to_triangles(&current_cpu_mesh);
-                    current_texture =
-                        new_tex.map(|t| Texture2DRef::from_cpu_texture(&context, &t));
+                    current_texture = new_tex.map(|t| Texture2DRef::from_cpu_texture(&context, &t));
                     if current_texture.is_some() {
                         show_texture = true;
                     }
@@ -662,8 +670,7 @@ fn main() -> Result<()> {
                         cfg.max_bsp_depth,
                         &next_id,
                     ));
-                    total_stats.total_nodes =
-                        bsp_root_full.as_ref().unwrap().count_nodes();
+                    total_stats.total_nodes = bsp_root_full.as_ref().unwrap().count_nodes();
                     let next_id = AtomicUsize::new(0);
                     bsp_root_preview =
                         Some(build_bsp(&current_triangles, 0, branch_limit, &next_id));
@@ -871,7 +878,11 @@ fn main() -> Result<()> {
             Some(create_visible_mesh(
                 &normal_tris,
                 &context,
-                if show_texture { current_texture.as_ref() } else { None },
+                if show_texture {
+                    current_texture.as_ref()
+                } else {
+                    None
+                },
             ))
         } else {
             None
@@ -945,16 +956,17 @@ fn main() -> Result<()> {
         }
 
         // Zpracování změny rychlosti pomocí PageUp/PageDown přes InputManager
+        const SPEED_STEP: f32 = 0.5;
         if input_manager.is_key_pressed(KeyCode::PageUp) {
-            cam.speed *= cfg.speed_adjustment_factor;
+            cam.speed += SPEED_STEP;
             // Keep configuration in sync with runtime speed adjustments
-            CONFIG.lock().unwrap().default_camera_speed = cam.speed;
+            CONFIG.lock().unwrap().camera_speed = cam.speed;
             println!("Rychlost zvýšena na: {:.1}", cam.speed);
         }
         if input_manager.is_key_pressed(KeyCode::PageDown) {
-            cam.speed /= cfg.speed_adjustment_factor;
+            cam.speed = (cam.speed - SPEED_STEP).max(0.1);
             // Keep configuration in sync with runtime speed adjustments
-            CONFIG.lock().unwrap().default_camera_speed = cam.speed;
+            CONFIG.lock().unwrap().camera_speed = cam.speed;
             println!("Rychlost snížena na: {:.1}", cam.speed);
         }
 

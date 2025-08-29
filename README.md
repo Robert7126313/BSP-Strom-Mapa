@@ -58,4 +58,5 @@ and lighting can be customized by editing the constants in this file, e.g.:
   direction indicator.
 - `AMBIENT_LIGHT_INTENSITY` and `AMBIENT_LIGHT_COLOR` – ambient light settings.
 - `DEFAULT_FOV_DEG` – default field of view for the camera.
+- `camera_speed` and `look_speed` – movement speed and turning sensitivity.
 
