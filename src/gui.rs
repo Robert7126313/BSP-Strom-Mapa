@@ -495,8 +495,15 @@ fn draw_config_window(
             );
             ui.horizontal(|ui| {
                 ui.label("Model");
-                if ui.color_edit_button_srgba(&mut color).changed() {
-                    cfg.model_color = Srgba::new(color.r(), color.g(), color.b(), color.a());
+                if egui::color_picker::color_edit_button_srgba(
+                    ui,
+                    &mut color,
+                    egui::color_picker::Alpha::Opaque,
+                )
+                .changed()
+                {
+                    cfg.model_color =
+                        Srgba::new(color.r(), color.g(), color.b(), color.a());
                 }
             });
 
@@ -508,8 +515,15 @@ fn draw_config_window(
             );
             ui.horizontal(|ui| {
                 ui.label("Highlight");
-                if ui.color_edit_button_srgba(&mut hcol).changed() {
-                    cfg.highlight_color = Srgba::new(hcol.r(), hcol.g(), hcol.b(), hcol.a());
+                if egui::color_picker::color_edit_button_srgba(
+                    ui,
+                    &mut hcol,
+                    egui::color_picker::Alpha::Opaque,
+                )
+                .changed()
+                {
+                    cfg.highlight_color =
+                        Srgba::new(hcol.r(), hcol.g(), hcol.b(), hcol.a());
                 }
             });
 
@@ -521,8 +535,15 @@ fn draw_config_window(
             );
             ui.horizontal(|ui| {
                 ui.label("Marker");
-                if ui.color_edit_button_srgba(&mut mcol).changed() {
-                    cfg.marker_color = Srgba::new(mcol.r(), mcol.g(), mcol.b(), mcol.a());
+                if egui::color_picker::color_edit_button_srgba(
+                    ui,
+                    &mut mcol,
+                    egui::color_picker::Alpha::Opaque,
+                )
+                .changed()
+                {
+                    cfg.marker_color =
+                        Srgba::new(mcol.r(), mcol.g(), mcol.b(), mcol.a());
                 }
             });
 
@@ -534,8 +555,15 @@ fn draw_config_window(
             );
             ui.horizontal(|ui| {
                 ui.label("Arrow");
-                if ui.color_edit_button_srgba(&mut dircol).changed() {
-                    cfg.arrow_color = Srgba::new(dircol.r(), dircol.g(), dircol.b(), dircol.a());
+                if egui::color_picker::color_edit_button_srgba(
+                    ui,
+                    &mut dircol,
+                    egui::color_picker::Alpha::Opaque,
+                )
+                .changed()
+                {
+                    cfg.arrow_color =
+                        Srgba::new(dircol.r(), dircol.g(), dircol.b(), dircol.a());
                 }
             });
 
@@ -551,8 +579,15 @@ fn draw_config_window(
             );
             ui.horizontal(|ui| {
                 ui.label("Ambient color");
-                if ui.color_edit_button_srgba(&mut acol).changed() {
-                    cfg.ambient_light_color = Srgba::new(acol.r(), acol.g(), acol.b(), acol.a());
+                if egui::color_picker::color_edit_button_srgba(
+                    ui,
+                    &mut acol,
+                    egui::color_picker::Alpha::Opaque,
+                )
+                .changed()
+                {
+                    cfg.ambient_light_color =
+                        Srgba::new(acol.r(), acol.g(), acol.b(), acol.a());
                 }
             });
 
@@ -561,11 +596,19 @@ fn draw_config_window(
             ui.add(egui::Slider::new(&mut cfg.bsp_tree_text_size, 8.0..=32.0).text("Text size"));
             ui.horizontal(|ui| {
                 ui.label("Path color");
-                ui.color_edit_button_srgba(&mut cfg.bsp_tree_path_color);
+                egui::color_picker::color_edit_button_srgba(
+                    ui,
+                    &mut cfg.bsp_tree_path_color,
+                    egui::color_picker::Alpha::Opaque,
+                );
             });
             ui.horizontal(|ui| {
                 ui.label("Selected color");
-                ui.color_edit_button_srgba(&mut cfg.bsp_tree_selected_color);
+                egui::color_picker::color_edit_button_srgba(
+                    ui,
+                    &mut cfg.bsp_tree_selected_color,
+                    egui::color_picker::Alpha::Opaque,
+                );
             });
 
             ui.separator();
