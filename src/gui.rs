@@ -498,12 +498,11 @@ fn draw_config_window(
                 if egui::color_picker::color_edit_button_srgba(
                     ui,
                     &mut color,
-                    egui::color_picker::Alpha::Opaque,
+                    egui::color_picker::Alpha::OnlyBlend,
                 )
                 .changed()
                 {
-                    cfg.model_color =
-                        Srgba::new(color.r(), color.g(), color.b(), color.a());
+                    cfg.model_color = Srgba::new(color.r(), color.g(), color.b(), color.a());
                 }
             });
 
@@ -522,8 +521,7 @@ fn draw_config_window(
                 )
                 .changed()
                 {
-                    cfg.highlight_color =
-                        Srgba::new(hcol.r(), hcol.g(), hcol.b(), hcol.a());
+                    cfg.highlight_color = Srgba::new(hcol.r(), hcol.g(), hcol.b(), hcol.a());
                 }
             });
 
@@ -542,8 +540,7 @@ fn draw_config_window(
                 )
                 .changed()
                 {
-                    cfg.marker_color =
-                        Srgba::new(mcol.r(), mcol.g(), mcol.b(), mcol.a());
+                    cfg.marker_color = Srgba::new(mcol.r(), mcol.g(), mcol.b(), mcol.a());
                 }
             });
 
@@ -562,8 +559,7 @@ fn draw_config_window(
                 )
                 .changed()
                 {
-                    cfg.arrow_color =
-                        Srgba::new(dircol.r(), dircol.g(), dircol.b(), dircol.a());
+                    cfg.arrow_color = Srgba::new(dircol.r(), dircol.g(), dircol.b(), dircol.a());
                 }
             });
 
@@ -586,8 +582,7 @@ fn draw_config_window(
                 )
                 .changed()
                 {
-                    cfg.ambient_light_color =
-                        Srgba::new(acol.r(), acol.g(), acol.b(), acol.a());
+                    cfg.ambient_light_color = Srgba::new(acol.r(), acol.g(), acol.b(), acol.a());
                 }
             });
 

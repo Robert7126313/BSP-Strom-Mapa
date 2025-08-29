@@ -381,13 +381,15 @@ fn create_visible_mesh_old(triangles: &[Triangle], context: &Context) -> Gm<Mesh
 
     // Vytvoření materiálu a modelu
     let model_color = CONFIG.lock().unwrap().model_color;
-    let material = ColorMaterial::new_opaque(
-        context,
-        &CpuMaterial {
-            albedo: model_color,
-            ..Default::default()
-        },
-    );
+    let cpu_material = CpuMaterial {
+        albedo: model_color,
+        ..Default::default()
+    };
+    let material = if model_color.a < 255 {
+        ColorMaterial::new_transparent(context, &cpu_material)
+    } else {
+        ColorMaterial::new_opaque(context, &cpu_material)
+    };
 
     Gm::new(Mesh::new(context, &visible_mesh), material)
 }
@@ -430,11 +432,20 @@ fn create_visible_mesh(
         ..Default::default()
     };
     let model_color = CONFIG.lock().unwrap().model_color;
+    let is_transparent = model_color.a < 255;
+    let render_states = if is_transparent {
+        RenderStates {
+            blend: Blend::TRANSPARENCY,
+            ..Default::default()
+        }
+    } else {
+        RenderStates::default()
+    };
     let material = ColorMaterial {
         color: model_color,
         texture: texture.cloned(),
-        render_states: RenderStates::default(),
-        is_transparent: false,
+        render_states,
+        is_transparent,
     };
     Gm::new(Mesh::new(context, &visible_mesh), material)
 }
@@ -524,43 +535,51 @@ fn main() -> Result<()> {
 
     // stav pro vykreslovaný mesh
     let _glb_path: Option<PathBuf> = None;
-    let material = ColorMaterial::new_opaque(
-        &context,
-        &CpuMaterial {
-            albedo: cfg.model_color,
-            ..Default::default()
-        },
-    );
+    let cpu_material = CpuMaterial {
+        albedo: cfg.model_color,
+        ..Default::default()
+    };
+    let material = if cfg.model_color.a < 255 {
+        ColorMaterial::new_transparent(&context, &cpu_material)
+    } else {
+        ColorMaterial::new_opaque(&context, &cpu_material)
+    };
     let _model = Gm::new(Mesh::new(&context, &cpu_mesh), material.clone());
 
     // Glow efekty pro pozice kamer
     let glow_mesh = CpuMesh::sphere(16);
 
     // Materiály pro glow efekty
-    let spectator_glow_material = ColorMaterial::new_opaque(
-        &context,
-        &CpuMaterial {
-            albedo: cfg.marker_color,
-            ..Default::default()
-        },
-    );
+    let spectator_cpu_material = CpuMaterial {
+        albedo: cfg.marker_color,
+        ..Default::default()
+    };
+    let spectator_glow_material = if cfg.marker_color.a < 255 {
+        ColorMaterial::new_transparent(&context, &spectator_cpu_material)
+    } else {
+        ColorMaterial::new_opaque(&context, &spectator_cpu_material)
+    };
 
-    let third_person_glow_material = ColorMaterial::new_opaque(
-        &context,
-        &CpuMaterial {
-            albedo: cfg.marker_color,
-            ..Default::default()
-        },
-    );
+    let third_person_cpu_material = CpuMaterial {
+        albedo: cfg.marker_color,
+        ..Default::default()
+    };
+    let third_person_glow_material = if cfg.marker_color.a < 255 {
+        ColorMaterial::new_transparent(&context, &third_person_cpu_material)
+    } else {
+        ColorMaterial::new_opaque(&context, &third_person_cpu_material)
+    };
 
     // Materiál pro směrový paprsek kamery
-    let direction_material = ColorMaterial::new_opaque(
-        &context,
-        &CpuMaterial {
-            albedo: cfg.arrow_color,
-            ..Default::default()
-        },
-    );
+    let direction_cpu_material = CpuMaterial {
+        albedo: cfg.arrow_color,
+        ..Default::default()
+    };
+    let direction_material = if cfg.arrow_color.a < 255 {
+        ColorMaterial::new_transparent(&context, &direction_cpu_material)
+    } else {
+        ColorMaterial::new_opaque(&context, &direction_cpu_material)
+    };
 
     let mut spectator_glow = Gm::new(Mesh::new(&context, &glow_mesh), spectator_glow_material);
     let mut third_person_glow =
