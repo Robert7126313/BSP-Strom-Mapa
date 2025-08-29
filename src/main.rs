@@ -947,10 +947,14 @@ fn main() -> Result<()> {
         // Zpracování změny rychlosti pomocí PageUp/PageDown přes InputManager
         if input_manager.is_key_pressed(KeyCode::PageUp) {
             cam.speed *= cfg.speed_adjustment_factor;
+            // Keep configuration in sync with runtime speed adjustments
+            CONFIG.lock().unwrap().default_camera_speed = cam.speed;
             println!("Rychlost zvýšena na: {:.1}", cam.speed);
         }
         if input_manager.is_key_pressed(KeyCode::PageDown) {
             cam.speed /= cfg.speed_adjustment_factor;
+            // Keep configuration in sync with runtime speed adjustments
+            CONFIG.lock().unwrap().default_camera_speed = cam.speed;
             println!("Rychlost snížena na: {:.1}", cam.speed);
         }
 
