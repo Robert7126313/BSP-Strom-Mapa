@@ -473,64 +473,64 @@ fn draw_config_window(ctx: &egui::Context, open: &mut bool) {
             let mut cfg = CONFIG.lock().unwrap();
 
             ui.heading("Colors & Lighting");
-            ui.horizontal(|ui| {
+            Grid::new("color_settings").num_columns(2).show(ui, |ui| {
                 ui.label("Background");
                 ui.color_edit_button_rgb(&mut cfg.bg_color);
-            });
+                ui.end_row();
 
-            let mut color = egui::Color32::from_rgba_unmultiplied(
-                cfg.model_color.r,
-                cfg.model_color.g,
-                cfg.model_color.b,
-                cfg.model_color.a,
-            );
-            ui.horizontal(|ui| {
+                let mut color = egui::Color32::from_rgba_unmultiplied(
+                    cfg.model_color.r,
+                    cfg.model_color.g,
+                    cfg.model_color.b,
+                    cfg.model_color.a,
+                );
                 ui.label("Model");
                 if ui.color_edit_button_srgba(&mut color).changed() {
                     cfg.model_color = Srgba::new(color.r(), color.g(), color.b(), color.a());
                 }
-            });
+                ui.end_row();
 
-            let mut hcol = egui::Color32::from_rgba_unmultiplied(
-                cfg.highlight_color.r,
-                cfg.highlight_color.g,
-                cfg.highlight_color.b,
-                cfg.highlight_color.a,
-            );
-            ui.horizontal(|ui| {
+                let mut hcol = egui::Color32::from_rgba_unmultiplied(
+                    cfg.highlight_color.r,
+                    cfg.highlight_color.g,
+                    cfg.highlight_color.b,
+                    cfg.highlight_color.a,
+                );
                 ui.label("Highlight");
                 if ui.color_edit_button_srgba(&mut hcol).changed() {
                     cfg.highlight_color = Srgba::new(hcol.r(), hcol.g(), hcol.b(), hcol.a());
                 }
+                ui.end_row();
+
+                ui.label("Ambient color");
+                let mut acol = egui::Color32::from_rgba_unmultiplied(
+                    cfg.ambient_light_color.r,
+                    cfg.ambient_light_color.g,
+                    cfg.ambient_light_color.b,
+                    cfg.ambient_light_color.a,
+                );
+                if ui.color_edit_button_srgba(&mut acol).changed() {
+                    cfg.ambient_light_color = Srgba::new(acol.r(), acol.g(), acol.b(), acol.a());
+                }
+                ui.end_row();
             });
 
             ui.add(
                 egui::Slider::new(&mut cfg.ambient_light_intensity, 0.0..=5.0)
                     .text("Ambient intensity"),
             );
-            let mut acol = egui::Color32::from_rgba_unmultiplied(
-                cfg.ambient_light_color.r,
-                cfg.ambient_light_color.g,
-                cfg.ambient_light_color.b,
-                cfg.ambient_light_color.a,
-            );
-            ui.horizontal(|ui| {
-                ui.label("Ambient color");
-                if ui.color_edit_button_srgba(&mut acol).changed() {
-                    cfg.ambient_light_color = Srgba::new(acol.r(), acol.g(), acol.b(), acol.a());
-                }
-            });
 
             ui.separator();
             ui.heading("BSP Tree");
             ui.add(egui::Slider::new(&mut cfg.bsp_tree_text_size, 8.0..=32.0).text("Text size"));
-            ui.horizontal(|ui| {
+            Grid::new("bsp_tree_colors").num_columns(2).show(ui, |ui| {
                 ui.label("Path color");
                 ui.color_edit_button_srgba(&mut cfg.bsp_tree_path_color);
-            });
-            ui.horizontal(|ui| {
+                ui.end_row();
+
                 ui.label("Selected color");
                 ui.color_edit_button_srgba(&mut cfg.bsp_tree_selected_color);
+                ui.end_row();
             });
 
             ui.separator();
