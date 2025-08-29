@@ -510,6 +510,7 @@ fn main() -> Result<()> {
     let mut config_window_open = false;
     let mut branch_limit = cfg.default_branch_limit;
     let mut last_branch_limit = branch_limit;
+    let mut last_default_branch_limit = cfg.default_branch_limit;
     let mut limit_culling = false;
 
     // stav pro vykreslovaný mesh
@@ -619,6 +620,15 @@ fn main() -> Result<()> {
         spectator_glow.material.color = cfg.highlight_color;
         third_person_glow.material.color = cfg.highlight_color;
         camera_direction_ray.material.color = cfg.highlight_color;
+
+        // Synchronize branch limit with configuration changes
+        if branch_limit > cfg.max_bsp_depth {
+            branch_limit = cfg.max_bsp_depth;
+        }
+        if cfg.default_branch_limit != last_default_branch_limit {
+            branch_limit = cfg.default_branch_limit.min(cfg.max_bsp_depth);
+            last_default_branch_limit = cfg.default_branch_limit;
+        }
 
         // Zkontroluj, zda background thread dokončil stavbu BSP stromu
         if let Ok(message) = rx.try_recv() {
