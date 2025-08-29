@@ -436,7 +436,14 @@ pub fn draw_left_panel(
         });
     });
     if *config_window_open {
-        draw_config_window(ctx, cam, config_window_open);
+        draw_config_window(
+            ctx,
+            cam,
+            spectator_state,
+            third_person_state,
+            mode,
+            config_window_open,
+        );
     }
     if *selected_node_help_open {
         egui::Window::new("Vysvětlivky - Vybraný uzel")
@@ -460,7 +467,14 @@ pub fn draw_left_panel(
     }
 }
 
-fn draw_config_window(ctx: &egui::Context, cam: &mut crate::camera::FreeCamera, open: &mut bool) {
+fn draw_config_window(
+    ctx: &egui::Context,
+    cam: &mut crate::camera::FreeCamera,
+    spectator_state: &mut crate::camera::CameraState,
+    third_person_state: &mut crate::camera::CameraState,
+    mode: crate::camera::CamMode,
+    open: &mut bool,
+) {
     egui::Window::new("Config")
         .open(open)
         .vscroll(true)
@@ -496,6 +510,32 @@ fn draw_config_window(ctx: &egui::Context, cam: &mut crate::camera::FreeCamera, 
                 ui.label("Highlight");
                 if ui.color_edit_button_srgba(&mut hcol).changed() {
                     cfg.highlight_color = Srgba::new(hcol.r(), hcol.g(), hcol.b(), hcol.a());
+                }
+            });
+
+            let mut mcol = egui::Color32::from_rgba_unmultiplied(
+                cfg.marker_color.r,
+                cfg.marker_color.g,
+                cfg.marker_color.b,
+                cfg.marker_color.a,
+            );
+            ui.horizontal(|ui| {
+                ui.label("Marker");
+                if ui.color_edit_button_srgba(&mut mcol).changed() {
+                    cfg.marker_color = Srgba::new(mcol.r(), mcol.g(), mcol.b(), mcol.a());
+                }
+            });
+
+            let mut dircol = egui::Color32::from_rgba_unmultiplied(
+                cfg.arrow_color.r,
+                cfg.arrow_color.g,
+                cfg.arrow_color.b,
+                cfg.arrow_color.a,
+            );
+            ui.horizontal(|ui| {
+                ui.label("Arrow");
+                if ui.color_edit_button_srgba(&mut dircol).changed() {
+                    cfg.arrow_color = Srgba::new(dircol.r(), dircol.g(), dircol.b(), dircol.a());
                 }
             });
 
@@ -555,9 +595,8 @@ fn draw_config_window(ctx: &egui::Context, cam: &mut crate::camera::FreeCamera, 
             {
                 cfg.look_speed = cam.look_speed;
             }
-            ui.add(egui::Slider::new(&mut cfg.pitch_limit, 0.1..=3.14).text("Pitch limit"));
             ui.add(egui::Slider::new(&mut cfg.default_fov_deg, 30.0..=120.0).text("FOV deg"));
-            ui.add(egui::Slider::new(&mut cfg.near_plane, 0.01..=1.0).text("Near plane"));
+            ui.add(egui::Slider::new(&mut cfg.near_plane, 0.01..=10.0).text("Near plane"));
             ui.add(egui::Slider::new(&mut cfg.far_plane, 10.0..=5000.0).text("Far plane"));
             ui.add(
                 egui::Slider::new(&mut cfg.camera_switch_cooldown, 0.1..=10.0)
@@ -566,15 +605,41 @@ fn draw_config_window(ctx: &egui::Context, cam: &mut crate::camera::FreeCamera, 
 
             ui.horizontal(|ui| {
                 ui.label("Spectator pos");
-                ui.add(egui::DragValue::new(&mut cfg.default_spectator_pos.x));
-                ui.add(egui::DragValue::new(&mut cfg.default_spectator_pos.y));
-                ui.add(egui::DragValue::new(&mut cfg.default_spectator_pos.z));
+                let mut changed = false;
+                changed |= ui
+                    .add(egui::DragValue::new(&mut spectator_state.pos.x))
+                    .changed();
+                changed |= ui
+                    .add(egui::DragValue::new(&mut spectator_state.pos.y))
+                    .changed();
+                changed |= ui
+                    .add(egui::DragValue::new(&mut spectator_state.pos.z))
+                    .changed();
+                if changed {
+                    cfg.default_spectator_pos = spectator_state.pos;
+                    if mode == crate::camera::CamMode::Spectator {
+                        cam.pos = spectator_state.pos;
+                    }
+                }
             });
             ui.horizontal(|ui| {
                 ui.label("Third person pos");
-                ui.add(egui::DragValue::new(&mut cfg.default_third_person_pos.x));
-                ui.add(egui::DragValue::new(&mut cfg.default_third_person_pos.y));
-                ui.add(egui::DragValue::new(&mut cfg.default_third_person_pos.z));
+                let mut changed = false;
+                changed |= ui
+                    .add(egui::DragValue::new(&mut third_person_state.pos.x))
+                    .changed();
+                changed |= ui
+                    .add(egui::DragValue::new(&mut third_person_state.pos.y))
+                    .changed();
+                changed |= ui
+                    .add(egui::DragValue::new(&mut third_person_state.pos.z))
+                    .changed();
+                if changed {
+                    cfg.default_third_person_pos = third_person_state.pos;
+                    if mode == crate::camera::CamMode::ThirdPerson {
+                        cam.pos = third_person_state.pos;
+                    }
+                }
             });
             ui.add(
                 egui::Slider::new(&mut cfg.camera_marker_scale, 0.01..=1.0).text("Marker scale"),

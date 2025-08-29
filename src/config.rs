@@ -16,6 +16,8 @@ pub struct Config {
     pub bg_color: [f32; 3],
     pub model_color: Srgba,
     pub highlight_color: Srgba,
+    pub marker_color: Srgba,
+    pub arrow_color: Srgba,
     pub ambient_light_intensity: f32,
     pub ambient_light_color: Srgba,
 
@@ -38,7 +40,6 @@ pub struct Config {
     // ---------------------------------------------------------------------
     pub camera_speed: f32,
     pub look_speed: f32,
-    pub pitch_limit: f32,
     pub default_fov_deg: f32,
     pub near_plane: f32,
     pub far_plane: f32,
@@ -56,6 +57,8 @@ impl Default for Config {
             bg_color: [0.1, 0.1, 0.1],
             model_color: Srgba::new(100, 150, 255, 255),
             highlight_color: Srgba::new(255, 50, 50, 150),
+            marker_color: Srgba::new(50, 255, 50, 150),
+            arrow_color: Srgba::new(255, 255, 50, 150),
             ambient_light_intensity: 1.0,
             ambient_light_color: Srgba::WHITE,
             bsp_tree_text_size: 16.0,
@@ -66,7 +69,6 @@ impl Default for Config {
             min_triangles_per_leaf: 20,
             camera_speed: 4.0,
             look_speed: 2.0,
-            pitch_limit: 1.5,
             default_fov_deg: 60.0,
             near_plane: 0.1,
             far_plane: 1000.0,
