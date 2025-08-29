@@ -158,7 +158,11 @@ fn load_gltf_with_gltf_crate(path: &Path) -> Result<(CpuMesh, Option<CpuTexture>
         } else {
             Indices::U32(all_indices)
         },
-        uvs: if all_uvs.is_empty() { None } else { Some(all_uvs) },
+        uvs: if all_uvs.is_empty() {
+            None
+        } else {
+            Some(all_uvs)
+        },
         ..Default::default()
     };
     Ok((mesh, texture))
@@ -303,21 +307,27 @@ fn process_primitive(
     }
 
     if texture.is_none() {
-        if let Some(info) = primitive.material().pbr_metallic_roughness().base_color_texture() {
+        if let Some(info) = primitive
+            .material()
+            .pbr_metallic_roughness()
+            .base_color_texture()
+        {
             let tex = info.texture();
             let image = &images[tex.source().index()];
             let data = match image.format {
-                gltf::image::Format::R8G8B8A8 => {
-                    TextureData::RgbaU8(image.pixels.chunks(4).map(|c| [c[0], c[1], c[2], c[3]]).collect())
-                }
+                gltf::image::Format::R8G8B8A8 => TextureData::RgbaU8(
+                    image
+                        .pixels
+                        .chunks(4)
+                        .map(|c| [c[0], c[1], c[2], c[3]])
+                        .collect(),
+                ),
                 gltf::image::Format::R8G8B8 => {
                     TextureData::RgbU8(image.pixels.chunks(3).map(|c| [c[0], c[1], c[2]]).collect())
                 }
-                _ => {
-                    TextureData::RgbaU8(Vec::new())
-                }
+                _ => TextureData::RgbaU8(Vec::new()),
             };
-              if !matches!(data, TextureData::RgbaU8(ref v) if v.is_empty()) {
+            if !matches!(data, TextureData::RgbaU8(ref v) if v.is_empty()) {
                 *texture = Some(CpuTexture {
                     name: "embedded".into(),
                     data,
@@ -325,7 +335,7 @@ fn process_primitive(
                     height: image.height,
                     ..Default::default()
                 });
-              }
+            }
         }
     }
 
@@ -334,7 +344,10 @@ fn process_primitive(
 
 // Funkce pro vytvoření meshe z viditelných trojúhelníků
 #[allow(dead_code)]
-fn create_visible_mesh_old(triangles: &[Triangle], context: &Context) -> Gm<Mesh, ColorMaterial> {
+fn create_visible_mesh_old(
+    triangles: &[Triangle],
+    context: &Context,
+) -> Gm<Mesh, PhysicalMaterial> {
     // Paralelní zpracování pozic a indexů
     let triangles_count = triangles.len();
 
@@ -371,10 +384,12 @@ fn create_visible_mesh_old(triangles: &[Triangle], context: &Context) -> Gm<Mesh
 
     // Vytvoření materiálu a modelu
     let model_color = CONFIG.lock().unwrap().model_color;
-    let material = ColorMaterial::new_opaque(
+    let material = PhysicalMaterial::new_opaque(
         context,
         &CpuMaterial {
             albedo: model_color,
+            roughness: 0.8,
+            metallic: 0.0,
             ..Default::default()
         },
     );
@@ -386,7 +401,7 @@ fn create_visible_mesh(
     triangles: &[Triangle],
     context: &Context,
     texture: Option<&Texture2DRef>,
-) -> Gm<Mesh, ColorMaterial> {
+) -> Gm<Mesh, PhysicalMaterial> {
     let triangles_count = triangles.len();
     let mut positions = vec![vec3(0.0, 0.0, 0.0); triangles_count * 3];
     let mut uvs = vec![vec2(0.0, 0.0); triangles_count * 3];
@@ -420,12 +435,16 @@ fn create_visible_mesh(
         ..Default::default()
     };
     let model_color = CONFIG.lock().unwrap().model_color;
-    let material = ColorMaterial {
-        color: model_color,
-        texture: texture.cloned(),
-        render_states: RenderStates::default(),
-        is_transparent: false,
-    };
+    let mut material = PhysicalMaterial::new_opaque(
+        context,
+        &CpuMaterial {
+            albedo: model_color,
+            roughness: 0.8,
+            metallic: 0.0,
+            ..Default::default()
+        },
+    );
+    material.albedo_texture = texture.cloned();
     Gm::new(Mesh::new(context, &visible_mesh), material)
 }
 
@@ -466,8 +485,7 @@ fn main() -> Result<()> {
     // Add state for file loading
     let mut current_cpu_mesh = cpu_mesh.clone();
     let mut current_triangles = cpu_mesh_to_triangles(&cpu_mesh);
-    let mut current_texture =
-        initial_texture.map(|t| Texture2DRef::from_cpu_texture(&context, &t));
+    let mut current_texture = initial_texture.map(|t| Texture2DRef::from_cpu_texture(&context, &t));
     let mut show_texture = current_texture.is_some();
     let mut file_loading = false;
 
@@ -515,10 +533,12 @@ fn main() -> Result<()> {
 
     // stav pro vykreslovaný mesh
     let _glb_path: Option<PathBuf> = None;
-    let material = ColorMaterial::new_opaque(
+    let material = PhysicalMaterial::new_opaque(
         &context,
         &CpuMaterial {
             albedo: cfg.model_color,
+            roughness: 0.8,
+            metallic: 0.0,
             ..Default::default()
         },
     );
@@ -528,27 +548,33 @@ fn main() -> Result<()> {
     let glow_mesh = CpuMesh::sphere(16);
 
     // Materiály pro glow efekty
-    let spectator_glow_material = ColorMaterial::new_opaque(
+    let spectator_glow_material = PhysicalMaterial::new_opaque(
         &context,
         &CpuMaterial {
             albedo: cfg.highlight_color,
+            roughness: 0.3,
+            metallic: 0.0,
             ..Default::default()
         },
     );
 
-    let third_person_glow_material = ColorMaterial::new_opaque(
+    let third_person_glow_material = PhysicalMaterial::new_opaque(
         &context,
         &CpuMaterial {
             albedo: cfg.highlight_color,
+            roughness: 0.3,
+            metallic: 0.0,
             ..Default::default()
         },
     );
 
     // Materiál pro směrový paprsek kamery
-    let direction_material = ColorMaterial::new_opaque(
+    let direction_material = PhysicalMaterial::new_opaque(
         &context,
         &CpuMaterial {
             albedo: cfg.highlight_color,
+            roughness: 0.3,
+            metallic: 0.0,
             ..Default::default()
         },
     );
@@ -617,9 +643,9 @@ fn main() -> Result<()> {
         // Apply dynamic configuration updates
         ambient_light.intensity = cfg.ambient_light_intensity;
         ambient_light.color = cfg.ambient_light_color;
-        spectator_glow.material.color = cfg.highlight_color;
-        third_person_glow.material.color = cfg.highlight_color;
-        camera_direction_ray.material.color = cfg.highlight_color;
+        spectator_glow.material.albedo = cfg.highlight_color;
+        third_person_glow.material.albedo = cfg.highlight_color;
+        camera_direction_ray.material.albedo = cfg.highlight_color;
 
         // Synchronize branch limit with configuration changes
         if branch_limit > cfg.max_bsp_depth {
@@ -650,8 +676,7 @@ fn main() -> Result<()> {
                     loaded_file_name = file_name;
                     file_loading = false;
                     current_triangles = cpu_mesh_to_triangles(&current_cpu_mesh);
-                    current_texture =
-                        new_tex.map(|t| Texture2DRef::from_cpu_texture(&context, &t));
+                    current_texture = new_tex.map(|t| Texture2DRef::from_cpu_texture(&context, &t));
                     if current_texture.is_some() {
                         show_texture = true;
                     }
@@ -662,8 +687,7 @@ fn main() -> Result<()> {
                         cfg.max_bsp_depth,
                         &next_id,
                     ));
-                    total_stats.total_nodes =
-                        bsp_root_full.as_ref().unwrap().count_nodes();
+                    total_stats.total_nodes = bsp_root_full.as_ref().unwrap().count_nodes();
                     let next_id = AtomicUsize::new(0);
                     bsp_root_preview =
                         Some(build_bsp(&current_triangles, 0, branch_limit, &next_id));
@@ -868,7 +892,11 @@ fn main() -> Result<()> {
             Some(create_visible_mesh(
                 &normal_tris,
                 &context,
-                if show_texture { current_texture.as_ref() } else { None },
+                if show_texture {
+                    current_texture.as_ref()
+                } else {
+                    None
+                },
             ))
         } else {
             None
