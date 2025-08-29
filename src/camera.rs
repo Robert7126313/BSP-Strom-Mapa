@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 // Camera utilities
 
+use crate::config::CONFIG;
+use crate::input::{InputManager, KeyCode};
 use cgmath::{Deg, Vector3};
 use std::f32::consts::FRAC_PI_2;
 use three_d::*;
-use crate::config::CONFIG;
-use crate::input::{InputManager, KeyCode};
 
 #[derive(Clone)]
 pub struct FreeCamera {
@@ -23,8 +23,8 @@ impl FreeCamera {
             pos,
             yaw: -FRAC_PI_2,
             pitch: 0.0,
-            speed: cfg.default_camera_speed,
-            look_speed: cfg.default_look_speed,
+            speed: cfg.camera_speed,
+            look_speed: cfg.look_speed,
         }
     }
 
@@ -98,7 +98,10 @@ pub struct SwitchDelay {
 
 impl SwitchDelay {
     pub fn new(cooldown: f64) -> Self {
-        Self { last_switch_time: 0.0, cooldown }
+        Self {
+            last_switch_time: 0.0,
+            cooldown,
+        }
     }
     pub fn can_switch(&self, current_time: f64) -> bool {
         current_time - self.last_switch_time >= self.cooldown
@@ -118,19 +121,28 @@ pub struct CameraState {
 
 impl CameraState {
     pub fn new(pos: Vector3<f32>) -> Self {
-        let speed = CONFIG.lock().unwrap().default_camera_speed;
-        Self { pos, yaw: -FRAC_PI_2, pitch: 0.0, speed }
+        let speed = CONFIG.lock().unwrap().camera_speed;
+        Self {
+            pos,
+            yaw: -FRAC_PI_2,
+            pitch: 0.0,
+            speed,
+        }
     }
 
     pub fn from_camera(camera: &FreeCamera) -> Self {
-        Self { pos: camera.pos, yaw: camera.yaw, pitch: camera.pitch, speed: camera.speed }
+        Self {
+            pos: camera.pos,
+            yaw: camera.yaw,
+            pitch: camera.pitch,
+            speed: camera.speed,
+        }
     }
 
     pub fn apply_to_camera(&self, camera: &mut FreeCamera) {
         camera.pos = self.pos;
-       camera.yaw = self.yaw;
-       camera.pitch = self.pitch;
-       camera.speed = self.speed;
+        camera.yaw = self.yaw;
+        camera.pitch = self.pitch;
+        camera.speed = self.speed;
     }
 }
-
