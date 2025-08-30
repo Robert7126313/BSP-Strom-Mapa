@@ -17,7 +17,7 @@ pub struct FreeCamera {
 
 impl FreeCamera {
     pub fn new(pos: Vector3<f32>) -> Self {
-        let cfg = CONFIG.lock().unwrap().clone();
+        let cfg = CONFIG.read().unwrap();
         Self {
             pos,
             yaw: cfg.default_spectator_yaw,
@@ -72,7 +72,7 @@ impl FreeCamera {
     }
 
     pub fn cam(&self, vp: Viewport) -> Camera {
-        let cfg = CONFIG.lock().unwrap().clone();
+        let cfg = CONFIG.read().unwrap();
         Camera::new_perspective(
             vp,
             self.pos,
@@ -101,7 +101,7 @@ pub struct CameraState {
 
 impl CameraState {
     pub fn new(pos: Vector3<f32>, yaw: f32, pitch: f32) -> Self {
-        let speed = CONFIG.lock().unwrap().camera_speed;
+        let speed = CONFIG.read().unwrap().camera_speed;
         Self {
             pos,
             yaw,

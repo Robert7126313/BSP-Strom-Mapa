@@ -32,16 +32,21 @@ use three_d::*; // Add Rayon prelude for parallelization
 use crate::bsp::{
     build_bsp, collect_triangles_in_subtree, cpu_mesh_to_triangles, create_highlight_mesh,
     create_plane_mesh, find_deepest_node_containing_point, find_node, traverse_bsp_with_frustum,
-    triangle_center, BspNode, BspStats, Frustum, Triangle,
+    BspNode, BspStats, Frustum, Triangle,
 };
+use crate::geometry::triangle_center;
 use crate::camera::{CamMode, CameraState, FreeCamera};
 use crate::config::CONFIG;
 use crate::input::{InputManager, KeyCode};
+use crate::loader::load_cpu_mesh;
+use log::info;
 
 mod bsp;
 mod camera;
 mod config; // global constants
 mod gui;
+mod geometry;
+mod loader;
 mod input;
 // Message types for the channel
 #[derive(Debug)]
@@ -52,294 +57,6 @@ enum Message {
         texture: Option<CpuTexture>,
         file_name: String,
     },
-}
-
-// helper: načte CpuMesh z .glb/.gltf pomocí gltf crate
-fn load_cpu_mesh(path: &Path) -> (CpuMesh, Option<CpuTexture>, String) {
-    println!("Pokouším se načíst: {}", path.display());
-
-    if !path.exists() {
-        println!("Soubor neexistuje: {}", path.display());
-        return (
-            CpuMesh::sphere(32),
-            None,
-            format!("Soubor neexistuje: {}", path.display()),
-        );
-    }
-
-    match std::fs::metadata(path) {
-        Ok(metadata) => {
-            println!("Velikost souboru: {} bytes", metadata.len());
-            if metadata.len() == 0 {
-                return (CpuMesh::sphere(32), None, "Soubor je prázdný".to_string());
-            }
-            if metadata.len() > 100_000_000 {
-                // 100MB limit
-                return (
-                    CpuMesh::sphere(32),
-                    None,
-                    "Soubor je příliš velký (>100MB)".to_string(),
-                );
-            }
-        }
-        Err(e) => {
-            println!("Nelze přečíst metadata souboru: {}", e);
-            return (CpuMesh::sphere(32), None, format!("Chyba metadata: {}", e));
-        }
-    }
-
-    // Pokus načtení pomocí gltf crate
-    match load_gltf_with_gltf_crate(path) {
-        Ok((mesh, texture)) => {
-            println!("✓ GLTF úspěšně načten pomocí gltf crate");
-            return (mesh, texture, "GLTF soubor úspěšně načten".to_string());
-        }
-        Err(e) => {
-            println!("Chyba při načítání pomocí gltf crate: {}", e);
-            return (
-                CpuMesh::sphere(32),
-                None,
-                format!("Nepodařilo se načíst GLTF: {}", e),
-            );
-        }
-    }
-}
-
-fn load_gltf_with_gltf_crate(path: &Path) -> Result<(CpuMesh, Option<CpuTexture>)> {
-    println!("Načítám GLTF pomocí gltf crate...");
-
-    let (document, buffers, images) = gltf::import(path)?;
-
-    println!("GLTF dokument načten:");
-    println!("- Scény: {}", document.scenes().count());
-    println!("- Uzly: {}", document.nodes().count());
-    println!("- Meshe: {}", document.meshes().count());
-    println!("- Materiály: {}", document.materials().count());
-
-    let mut all_positions = Vec::new();
-    let mut all_indices = Vec::new();
-    let mut all_uvs = Vec::new();
-    let mut vertex_offset = 0u32;
-    let mut texture: Option<CpuTexture> = None;
-
-    // Projdi všechny meshe ve scéně
-    for scene in document.scenes() {
-        println!("Zpracovávám scénu: {:?}", scene.name());
-
-        for node in scene.nodes() {
-            process_node(
-                &node,
-                &buffers,
-                &images,
-                &mut all_positions,
-                &mut all_indices,
-                &mut all_uvs,
-                &mut vertex_offset,
-                &mut texture,
-                cgmath::Matrix4::identity(),
-            )?;
-        }
-    }
-
-    if all_positions.is_empty() {
-        anyhow::bail!("Žádné pozice nenalezeny v GLTF souboru");
-    }
-
-    println!(
-        "Celkem načteno {} vrcholů a {} indexů",
-        all_positions.len(),
-        all_indices.len()
-    );
-
-    let mesh = CpuMesh {
-        positions: Positions::F32(all_positions),
-        indices: if all_indices.is_empty() {
-            Indices::None
-        } else {
-            Indices::U32(all_indices)
-        },
-        uvs: if all_uvs.is_empty() {
-            None
-        } else {
-            Some(all_uvs)
-        },
-        ..Default::default()
-    };
-    Ok((mesh, texture))
-}
-
-fn process_node(
-    node: &gltf::Node,
-    buffers: &[gltf::buffer::Data],
-    images: &[gltf::image::Data],
-    all_positions: &mut Vec<Vec3>,
-    all_indices: &mut Vec<u32>,
-    all_uvs: &mut Vec<Vec2>,
-    vertex_offset: &mut u32,
-    texture: &mut Option<CpuTexture>,
-    parent_transform: cgmath::Matrix4<f32>,
-) -> Result<()> {
-    // Získej transformaci uzlu
-    let transform_matrix = cgmath::Matrix4::from(node.transform().matrix());
-    let current_transform = parent_transform * transform_matrix;
-
-    println!("Zpracovávám uzel: {:?}", node.name());
-
-    // Zpracuj mesh pokud existuje
-    if let Some(mesh) = node.mesh() {
-        println!(
-            "Zpracovávám mesh: {:?} s {} primitivy",
-            mesh.name(),
-            mesh.primitives().count()
-        );
-
-        for primitive in mesh.primitives() {
-            process_primitive(
-                &primitive,
-                buffers,
-                images,
-                all_positions,
-                all_indices,
-                all_uvs,
-                vertex_offset,
-                texture,
-                current_transform,
-            )?;
-        }
-    }
-
-    // Rekurzivně zpracuj potomky
-    for child in node.children() {
-        process_node(
-            &child,
-            buffers,
-            images,
-            all_positions,
-            all_indices,
-            all_uvs,
-            vertex_offset,
-            texture,
-            current_transform,
-        )?;
-    }
-
-    Ok(())
-}
-
-fn process_primitive(
-    primitive: &gltf::Primitive,
-    buffers: &[gltf::buffer::Data],
-    images: &[gltf::image::Data],
-    all_positions: &mut Vec<Vec3>,
-    all_indices: &mut Vec<u32>,
-    all_uvs: &mut Vec<Vec2>,
-    vertex_offset: &mut u32,
-    texture: &mut Option<CpuTexture>,
-    transform: cgmath::Matrix4<f32>,
-) -> Result<()> {
-    println!("Zpracovávám primitiv s modem: {:?}", primitive.mode());
-
-    // Pouze trojúhelníky
-    if primitive.mode() != gltf::mesh::Mode::Triangles {
-        println!("Přeskakuji primitiv - není trojúhelníkový");
-        return Ok(());
-    }
-
-    // Získej pozice vrcholů
-    let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
-
-    if let Some(positions) = reader.read_positions() {
-        let start_vertex_count = all_positions.len();
-
-        // Přidej pozice s transformací
-        for position in positions {
-            let pos = cgmath::Vector4::new(position[0], position[1], position[2], 1.0);
-            let transformed = transform * pos;
-            all_positions.push(Vec3::new(transformed.x, transformed.y, transformed.z));
-        }
-
-        let vertex_count = all_positions.len() - start_vertex_count;
-        println!("Přidáno {} vrcholů", vertex_count);
-
-        if let Some(tex) = reader.read_tex_coords(0) {
-            for tc in tex.into_f32() {
-                all_uvs.push(vec2(tc[0], 1.0 - tc[1]));
-            }
-        } else {
-            all_uvs.extend(std::iter::repeat(vec2(0.0, 0.0)).take(vertex_count));
-        }
-
-        // Získej indexy
-        if let Some(indices) = reader.read_indices() {
-            match indices {
-                gltf::mesh::util::ReadIndices::U8(iter) => {
-                    for idx in iter {
-                        all_indices.push(idx as u32 + *vertex_offset);
-                    }
-                }
-                gltf::mesh::util::ReadIndices::U16(iter) => {
-                    for idx in iter {
-                        all_indices.push(idx as u32 + *vertex_offset);
-                    }
-                }
-                gltf::mesh::util::ReadIndices::U32(iter) => {
-                    for idx in iter {
-                        all_indices.push(idx + *vertex_offset);
-                    }
-                }
-            }
-            println!("Přidáno {} indexů", all_indices.len());
-        } else {
-            // Bez indexů - vytvoř sekvenčn��
-            for i in (0..vertex_count).step_by(3) {
-                if i + 2 < vertex_count {
-                    all_indices.push(*vertex_offset + i as u32);
-                    all_indices.push(*vertex_offset + i as u32 + 1);
-                    all_indices.push(*vertex_offset + i as u32 + 2);
-                }
-            }
-            println!("Vytvořeno {} sekvenčních indexů", (vertex_count / 3) * 3);
-        }
-
-        *vertex_offset += vertex_count as u32;
-    } else {
-        println!("Primitiv nemá pozice vrcholů");
-    }
-
-    if texture.is_none() {
-        if let Some(info) = primitive
-            .material()
-            .pbr_metallic_roughness()
-            .base_color_texture()
-        {
-            let tex = info.texture();
-            let image = &images[tex.source().index()];
-            let data = match image.format {
-                gltf::image::Format::R8G8B8A8 => TextureData::RgbaU8(
-                    image
-                        .pixels
-                        .chunks(4)
-                        .map(|c| [c[0], c[1], c[2], c[3]])
-                        .collect(),
-                ),
-                gltf::image::Format::R8G8B8 => {
-                    TextureData::RgbU8(image.pixels.chunks(3).map(|c| [c[0], c[1], c[2]]).collect())
-                }
-                _ => TextureData::RgbaU8(Vec::new()),
-            };
-            if !matches!(data, TextureData::RgbaU8(ref v) if v.is_empty()) {
-                *texture = Some(CpuTexture {
-                    name: "embedded".into(),
-                    data,
-                    width: image.width,
-                    height: image.height,
-                    ..Default::default()
-                });
-            }
-        }
-    }
-
-    Ok(())
 }
 
 // Funkce pro vytvoření meshe z viditelných trojúhelníků
@@ -383,7 +100,7 @@ fn create_visible_mesh_old(
     };
 
     // Vytvoření materiálu a modelu
-    let model_color = CONFIG.lock().unwrap().model_color;
+    let model_color = CONFIG.read().unwrap().model_color;
     let cpu_material = CpuMaterial {
         albedo: model_color,
         ..Default::default()
@@ -434,7 +151,7 @@ fn create_visible_mesh(
         uvs: Some(uvs),
         ..Default::default()
     };
-    let model_color = CONFIG.lock().unwrap().model_color;
+    let model_color = CONFIG.read().unwrap().model_color;
     let is_transparent = model_color.a < 255;
     let render_states = if is_transparent {
         RenderStates {
@@ -457,26 +174,29 @@ fn create_visible_mesh(
 // ---------------- Main --------------------------------------------------- //
 
 fn main() -> Result<()> {
-    println!("🚀 Spouštím BSP Viewer...");
+    env_logger::init();
+    info!("🚀 Launching BSP Viewer...");
 
-    // okno + GL
+    // window + GL
     let window = Window::new(WindowSettings {
         title: "BSP Viewer (three‑d 0.18)".into(),
         ..Default::default()
     })?;
-    println!("✓ Okno vytvořeno");
+    info!("✓ Window created");
 
     let context = window.gl();
     let mut gui = GUI::new(&context);
-    println!("✓ GUI inicializováno");
+    info!("✓ GUI initialized");
 
-    let cfg = CONFIG.lock().unwrap().clone();
+    // Clone configuration so we don't hold a read lock for the entire program,
+    // which would block the settings window from acquiring a write lock.
+    let cfg = CONFIG.read().unwrap().clone();
 
-    // stavová proměnná: název aktuálního souboru a úspěšnost načtení
+    // state variable: name of current file and load status
     let initial_path = Path::new("assets/model.glb");
-    println!("📁 Načítám model z: {}", initial_path.display());
+    info!("📁 Loading model from: {}", initial_path.display());
     let (cpu_mesh, initial_texture, _load_status) = load_cpu_mesh(initial_path);
-    println!("✓ Model načten");
+    info!("✓ Model loaded");
 
     let mut loaded_file_name = if initial_path.exists() {
         initial_path
@@ -495,13 +215,13 @@ fn main() -> Result<()> {
     let mut show_texture = current_texture.is_some();
     let mut file_loading = false;
 
-    // Vytvoření triangles z CPU meshe
-    println!("🔺 Převádím mesh na trojúhelníky...");
+    // Create triangles from CPU mesh
+    info!("🔺 Converting mesh to triangles...");
     let triangles = cpu_mesh_to_triangles(&cpu_mesh);
-    println!("✓ Převedeno {} trojúhelníků", triangles.len());
+    info!("✓ Converted {} triangles", triangles.len());
 
-    // Asynchronní stavba BSP stromu na pozadí
-    println!("🌳 Spouštím stavbu BSP stromu na pozadí...");
+    // Asynchronous BSP tree build on background thread
+    info!("🌳 Building BSP tree in background...");
     let mut bsp_root_full: Option<BspNode> = None;
     let mut bsp_root_preview: Option<BspNode> = None;
     let triangles_clone = triangles.clone();
@@ -515,7 +235,7 @@ fn main() -> Result<()> {
     thread::spawn(move || {
         let next_id = AtomicUsize::new(0);
         let tree = build_bsp(&triangles_clone, 0, branch_limit_clone, &next_id);
-        println!("✓ BSP strom sestaven s {} uzly", tree.count_nodes());
+        info!("✓ BSP tree built with {} nodes", tree.count_nodes());
         tx.send(Message::InitialTree(tree)).unwrap();
     });
 
@@ -658,7 +378,7 @@ fn main() -> Result<()> {
     window.render_loop(move |mut frame_input| {
         let dt = frame_input.elapsed_time as f32 / 1000.0;
         let events = &mut frame_input.events;
-        let cfg = CONFIG.lock().unwrap().clone();
+        let cfg = CONFIG.read().unwrap().clone();
         let mut arrow_tip_position: Option<Vector3<f32>> = None;
 
         // Apply dynamic configuration updates
@@ -687,7 +407,7 @@ fn main() -> Result<()> {
                     let next_id = AtomicUsize::new(0);
                     bsp_root_preview =
                         Some(build_bsp(&current_triangles, 0, branch_limit, &next_id));
-                    println!("✅ BSP strom úspěšně načten do GUI!");
+                    info!("✅ BSP tree loaded into GUI");
                 }
                 Message::NewFile {
                     cpu_mesh: new_cpu_mesh,
@@ -714,7 +434,7 @@ fn main() -> Result<()> {
                     bsp_root_preview =
                         Some(build_bsp(&current_triangles, 0, branch_limit, &next_id));
                     total_stats.total_triangles = current_triangles.len() as u32;
-                    println!("✅ Nový model a BSP strom načteny!");
+                    info!("✅ New model and BSP tree loaded");
                 }
             }
         }
@@ -838,7 +558,7 @@ fn main() -> Result<()> {
         }
 
         // Reload configuration so input handling reflects any changes made in the GUI
-        let cfg = CONFIG.lock().unwrap().clone();
+        let cfg = CONFIG.read().unwrap().clone();
 
         // Aktualizuj stav kláves v InputManageru
         input_manager.update_key_states(events);
@@ -962,7 +682,7 @@ fn main() -> Result<()> {
                         mode = CamMode::Spectator;
                         spectator_state.apply_to_camera(&mut cam);
 
-                        println!("Přepnuto na režim: Spectator");
+                        info!("Switched to Spectator mode");
                     }
                     CamMode::ThirdPerson => {
                         // Ulož aktuální pozici do Spectator stavu
@@ -972,7 +692,7 @@ fn main() -> Result<()> {
                         mode = CamMode::ThirdPerson;
                         third_person_state.apply_to_camera(&mut cam);
 
-                        println!("Přepnuto na režim: ThirdPerson");
+                        info!("Switched to ThirdPerson mode");
                     }
                 }
 
@@ -1010,14 +730,14 @@ fn main() -> Result<()> {
         if input_manager.is_key_pressed(KeyCode::PageUp) {
             cam.speed += SPEED_STEP;
             // Keep configuration in sync with runtime speed adjustments
-            CONFIG.lock().unwrap().camera_speed = cam.speed;
-            println!("Rychlost zvýšena na: {:.1}", cam.speed);
+            CONFIG.write().unwrap().camera_speed = cam.speed;
+            info!("Speed increased to: {:.1}", cam.speed);
         }
         if input_manager.is_key_pressed(KeyCode::PageDown) {
             cam.speed = (cam.speed - SPEED_STEP).max(0.1);
             // Keep configuration in sync with runtime speed adjustments
-            CONFIG.lock().unwrap().camera_speed = cam.speed;
-            println!("Rychlost snížena na: {:.1}", cam.speed);
+            CONFIG.write().unwrap().camera_speed = cam.speed;
+            info!("Speed decreased to: {:.1}", cam.speed);
         }
 
         // Obsluha klávesy Home - návrat na výchozí pozici pro aktuální režim
@@ -1031,7 +751,7 @@ fn main() -> Result<()> {
                 );
                 reset_state.speed = cam.speed; // Zachová aktuální rychlost
                 reset_state.apply_to_camera(&mut cam);
-                println!("Kamera resetována na výchozí spectator pozici");
+                info!("Camera reset to default spectator position");
             } else {
                 // ThirdPerson
                 // Vytvoření nového stavu kamery s výchozí pozicí, ale aktuální rychlostí kamery
@@ -1042,7 +762,7 @@ fn main() -> Result<()> {
                 );
                 reset_state.speed = cam.speed; // Zachová aktuální rychlost
                 reset_state.apply_to_camera(&mut cam);
-                println!("Kamera resetována na výchozí third person pozici");
+                info!("Camera reset to default third person position");
             }
         }
 
