@@ -517,7 +517,7 @@ fn draw_config_window(
                 if egui::color_picker::color_edit_button_srgba(
                     ui,
                     &mut hcol,
-                    egui::color_picker::Alpha::Opaque,
+                    egui::color_picker::Alpha::OnlyBlend,
                 )
                 .changed()
                 {
@@ -536,7 +536,7 @@ fn draw_config_window(
                 if egui::color_picker::color_edit_button_srgba(
                     ui,
                     &mut mcol,
-                    egui::color_picker::Alpha::Opaque,
+                    egui::color_picker::Alpha::OnlyBlend,
                 )
                 .changed()
                 {
@@ -555,7 +555,7 @@ fn draw_config_window(
                 if egui::color_picker::color_edit_button_srgba(
                     ui,
                     &mut dircol,
-                    egui::color_picker::Alpha::Opaque,
+                    egui::color_picker::Alpha::OnlyBlend,
                 )
                 .changed()
                 {
@@ -578,7 +578,7 @@ fn draw_config_window(
                 if egui::color_picker::color_edit_button_srgba(
                     ui,
                     &mut acol,
-                    egui::color_picker::Alpha::Opaque,
+                    egui::color_picker::Alpha::OnlyBlend,
                 )
                 .changed()
                 {
@@ -594,7 +594,7 @@ fn draw_config_window(
                 egui::color_picker::color_edit_button_srgba(
                     ui,
                     &mut cfg.bsp_tree_path_color,
-                    egui::color_picker::Alpha::Opaque,
+                    egui::color_picker::Alpha::OnlyBlend,
                 );
             });
             ui.horizontal(|ui| {
@@ -602,7 +602,7 @@ fn draw_config_window(
                 egui::color_picker::color_edit_button_srgba(
                     ui,
                     &mut cfg.bsp_tree_selected_color,
-                    egui::color_picker::Alpha::Opaque,
+                    egui::color_picker::Alpha::OnlyBlend,
                 );
             });
 
