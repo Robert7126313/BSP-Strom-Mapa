@@ -22,7 +22,7 @@
 // -----------------------------------------------------------------------------
 
 use anyhow::Result;
-use cgmath::{Deg, InnerSpace, Vector3};
+use cgmath::{Deg, InnerSpace, Vector3, Vector4};
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use std::sync::{atomic::AtomicUsize, mpsc};
@@ -344,7 +344,10 @@ fn process_primitive(
 
 // Funkce pro vytvoření meshe z viditelných trojúhelníků
 #[allow(dead_code)]
-fn create_visible_mesh_old(triangles: &[Triangle], context: &Context) -> Gm<Mesh, PhysicalMaterial> {
+fn create_visible_mesh_old(
+    triangles: &[Triangle],
+    context: &Context,
+) -> Gm<Mesh, PhysicalMaterial> {
     // Paralelní zpracování pozic a indexů
     let triangles_count = triangles.len();
 
@@ -571,25 +574,38 @@ fn main() -> Result<()> {
         ColorMaterial::new_opaque(&context, &third_person_cpu_material)
     };
 
-    // Materiál pro směrový paprsek kamery
+    // Materiály pro směrový indikátor kamery
     let direction_cpu_material = CpuMaterial {
         albedo: cfg.arrow_color,
         ..Default::default()
     };
-    let direction_material = if cfg.arrow_color.a < 255 {
+    let shaft_material = if cfg.arrow_color.a < 255 {
         ColorMaterial::new_transparent(&context, &direction_cpu_material)
     } else {
         ColorMaterial::new_opaque(&context, &direction_cpu_material)
     };
+    let head_material = if cfg.arrow_color.a < 255 {
+        ColorMaterial::new_transparent(&context, &direction_cpu_material)
+    } else {
+        ColorMaterial::new_opaque(&context, &direction_cpu_material)
+    };
+    let tip_cpu_material = CpuMaterial {
+        albedo: Srgba::new(255, 255, 80, 255),
+        ..Default::default()
+    };
+    let tip_material = ColorMaterial::new_opaque(&context, &tip_cpu_material);
 
     let mut spectator_glow = Gm::new(Mesh::new(&context, &glow_mesh), spectator_glow_material);
     let mut third_person_glow =
         Gm::new(Mesh::new(&context, &glow_mesh), third_person_glow_material);
 
-    // Vytvoření kuželu (cone) pro směrový indikátor kamery místo cylindru
-    let direction_mesh = CpuMesh::cone(16);
-    let mut camera_direction_ray =
-        Gm::new(Mesh::new(&context, &direction_mesh), direction_material);
+    // Vytvoření směrové šipky kamery: válec (tělo), kužel (hlava) a koule (špička)
+    let shaft_mesh = CpuMesh::cylinder(16);
+    let head_mesh = CpuMesh::cone(24);
+    let tip_mesh = CpuMesh::sphere(10);
+    let mut camera_arrow_shaft = Gm::new(Mesh::new(&context, &shaft_mesh), shaft_material);
+    let mut camera_arrow_head = Gm::new(Mesh::new(&context, &head_mesh), head_material);
+    let mut camera_arrow_tip = Gm::new(Mesh::new(&context, &tip_mesh), tip_material);
 
     let mut ambient_light = AmbientLight::new(
         &context,
@@ -642,13 +658,15 @@ fn main() -> Result<()> {
         let dt = frame_input.elapsed_time as f32 / 1000.0;
         let events = &mut frame_input.events;
         let cfg = CONFIG.lock().unwrap().clone();
+        let mut arrow_tip_position: Option<Vector3<f32>> = None;
 
         // Apply dynamic configuration updates
         ambient_light.intensity = cfg.ambient_light_intensity;
         ambient_light.color = cfg.ambient_light_color;
         spectator_glow.material.color = cfg.marker_color;
         third_person_glow.material.color = cfg.marker_color;
-        camera_direction_ray.material.color = cfg.arrow_color;
+        camera_arrow_shaft.material.color = cfg.arrow_color;
+        camera_arrow_head.material.color = cfg.arrow_color;
 
         // Synchronize branch limit with configuration changes
         if branch_limit > cfg.max_bsp_depth {
@@ -876,6 +894,21 @@ fn main() -> Result<()> {
             )
         }
 
+        fn world_to_screen(cam: &Camera, p: Vector3<f32>, viewport: Viewport) -> Option<[f32; 2]> {
+            let clip: Vector4<f32> =
+                cam.projection() * cam.view() * Vector4::new(p.x, p.y, p.z, 1.0);
+            if clip.w.abs() < 1e-6 {
+                return None;
+            }
+            let ndc = clip.truncate() / clip.w;
+            if ndc.z < -1.0 || ndc.z > 1.0 {
+                return None;
+            }
+            let x = (ndc.x * 0.5 + 0.5) * viewport.width as f32;
+            let y = (1.0 - (ndc.y * 0.5 + 0.5)) * viewport.height as f32;
+            Some([x, y])
+        }
+
         use std::collections::HashSet;
         let picked_centers: HashSet<_> = picked_tris.iter().map(|t| quantized_center(t)).collect();
 
@@ -1025,56 +1058,54 @@ fn main() -> Result<()> {
                 )) * Mat4::from_scale(cfg.camera_marker_scale),
             );
 
-            // Aktualizuj směrový paprsek pro spectator kameru
+            // Aktualizuj směrovou šipku pro spectator kameru
             if show_spectator_marker {
-                // Získáme směrový vektor kamery a nastavíme transformaci paprsku
-                let dir = cam.dir();
+                let dir = cam.dir().normalize();
+                let base_pos = spectator_state.pos;
+                let length = cfg.direction_ray_length;
+                let head_len = length * 0.25;
+                let shaft_len = length - head_len;
+                let shaft_radius = cfg.direction_ray_thickness;
+                let head_radius = shaft_radius * 2.0;
+                let tip_radius = shaft_radius * 1.5;
 
-                // Vytvoříme rotační matici, která natočí válec (který je standardně podél osy Y)
-                // ve směru pohledu kamery
-
-                // 1. Vypočítáme úhel mezi osou Y a směrovým vektorem kamery
-                let y_axis = Vector3::unit_y();
-                let angle = y_axis.dot(dir).acos();
-
-                // 2. Vypočítáme osu rotace (kolmou na rovinu obsahující osu Y a směrový vektor)
-                let rotation_axis = y_axis.cross(dir).normalize();
-
-                // Vytvoření transformační matice pro válec
-                let scale = cfg.direction_ray_thickness; // tenký válec
-                let length = cfg.direction_ray_length; // délka paprsku
-
-                // Vytvoření matice transformace
-                let translation = Mat4::from_translation(vec3(
-                    spectator_state.pos.x,
-                    spectator_state.pos.y,
-                    spectator_state.pos.z,
-                ));
-
-                // Pokud je směrový vektor téměř rovnoběžný s osou Y, použijeme speciální zacházení
+                // Rotace z osy X do směru dir
+                let x_axis = Vector3::unit_x();
+                let angle = x_axis.dot(dir).acos();
+                let rotation_axis = x_axis.cross(dir).normalize();
                 let rotation = if angle.abs() < 0.01 || (std::f32::consts::PI - angle).abs() < 0.01
                 {
-                    // Pro případ kdy je vektor téměř rovnoběžný s osou Y
-                    if dir.y > 0.0 {
-                        Mat4::identity() // směr už je podél osy Y
+                    if dir.x > 0.0 {
+                        Mat4::identity()
                     } else {
-                        // Rotace o 180° kolem osy X
-                        Mat4::from_angle_x(Rad(std::f32::consts::PI))
+                        Mat4::from_angle_y(Rad(std::f32::consts::PI))
                     }
                 } else {
-                    // Normální případ - rotace kolem vypočtené osy
                     Mat4::from_axis_angle(
                         vec3(rotation_axis.x, rotation_axis.y, rotation_axis.z),
                         Rad(angle),
                     )
                 };
 
-                // Měřítko - válec je standardně výšky 2.0, chceme jej natáhnout na délku `length`
-                // a zúžit na šířku `scale`
-                let scaling = Mat4::from_nonuniform_scale(scale, length / 2.0, scale);
+                // Tělo šipky
+                let shaft_tr = Mat4::from_translation(vec3(base_pos.x, base_pos.y, base_pos.z));
+                let shaft_scale =
+                    Mat4::from_nonuniform_scale(shaft_len, shaft_radius, shaft_radius);
+                camera_arrow_shaft.set_transformation(shaft_tr * rotation * shaft_scale);
 
-                // Aplikujeme transformace v pořadí: měřítko, rotace, posun
-                camera_direction_ray.set_transformation(translation * rotation * scaling);
+                // Hlava šipky
+                let head_pos = base_pos + dir * shaft_len;
+                let head_tr = Mat4::from_translation(vec3(head_pos.x, head_pos.y, head_pos.z));
+                let head_scale = Mat4::from_nonuniform_scale(head_len, head_radius, head_radius);
+                camera_arrow_head.set_transformation(head_tr * rotation * head_scale);
+
+                // Špička
+                let tip_pos = base_pos + dir * length;
+                let tip_tr = Mat4::from_translation(vec3(tip_pos.x, tip_pos.y, tip_pos.z));
+                let tip_scale = Mat4::from_scale(tip_radius);
+                camera_arrow_tip.set_transformation(tip_tr * tip_scale);
+
+                arrow_tip_position = Some(tip_pos);
             }
         } else {
             // Aktualizuj stav aktuální kamery (ThirdPerson)
@@ -1089,10 +1120,8 @@ fn main() -> Result<()> {
                 )) * Mat4::from_scale(cfg.camera_marker_scale),
             );
 
-            // Když jsme v third person mode, zobrazíme směrový paprsek pro spectator kameru
+            // Když jsme v third person mode, zobrazíme směrovou šipku pro spectator kameru
             if show_spectator_marker {
-                // Získáme směrový vektor kamery a nastavíme transformaci paprsku
-                // Tentokrát použijeme směr spectator kamery
                 let dir = Vector3::new(
                     spectator_state.yaw.cos() * spectator_state.pitch.cos(),
                     spectator_state.pitch.sin(),
@@ -1100,47 +1129,81 @@ fn main() -> Result<()> {
                 )
                 .normalize();
 
-                // 1. Vypočítáme úhel mezi osou Y a směrovým vektorem kamery
-                let y_axis = Vector3::unit_y();
-                let angle = y_axis.dot(dir).acos();
+                let base_pos = spectator_state.pos;
+                let length = cfg.direction_ray_length;
+                let head_len = length * 0.25;
+                let shaft_len = length - head_len;
+                let shaft_radius = cfg.direction_ray_thickness;
+                let head_radius = shaft_radius * 2.0;
+                let tip_radius = shaft_radius * 1.5;
 
-                // 2. Vypočítáme osu rotace (kolmou na rovinu obsahující osu Y a směrový vektor)
-                let rotation_axis = y_axis.cross(dir).normalize();
-
-                // Vytvoření transformační matice pro válec
-                let scale = cfg.direction_ray_thickness; // tenký válec
-                let length = cfg.direction_ray_length; // délka paprsku
-                                                       // Vytvoření matice transformace
-                let translation = Mat4::from_translation(vec3(
-                    spectator_state.pos.x,
-                    spectator_state.pos.y,
-                    spectator_state.pos.z,
-                ));
-
-                // Pokud je směrový vektor téměř rovnoběžný s osou Y, použijeme speciální zacházení
+                // Rotace z osy X do směru dir
+                let x_axis = Vector3::unit_x();
+                let angle = x_axis.dot(dir).acos();
+                let rotation_axis = x_axis.cross(dir).normalize();
                 let rotation = if angle.abs() < 0.01 || (std::f32::consts::PI - angle).abs() < 0.01
                 {
-                    // Pro případ kdy je vektor téměř rovnoběžný s osou Y
-                    if dir.y > 0.0 {
-                        Mat4::identity() // směr už je podél osy Y
+                    if dir.x > 0.0 {
+                        Mat4::identity()
                     } else {
-                        // Rotace o 180° kolem osy X
-                        Mat4::from_angle_x(Rad(std::f32::consts::PI))
+                        Mat4::from_angle_y(Rad(std::f32::consts::PI))
                     }
                 } else {
-                    // Normální případ - rotace kolem vypočtené osy
                     Mat4::from_axis_angle(
                         vec3(rotation_axis.x, rotation_axis.y, rotation_axis.z),
                         Rad(angle),
                     )
                 };
 
-                // Měřítko - válec - válec je standardně výšky 2.0, chceme jej natáhnout na délku `length`
-                // a zúžit na šířku `scale`
-                let scaling = Mat4::from_nonuniform_scale(scale, length / 2.0, scale);
+                // Tělo šipky
+                let shaft_tr = Mat4::from_translation(vec3(base_pos.x, base_pos.y, base_pos.z));
+                let shaft_scale =
+                    Mat4::from_nonuniform_scale(shaft_len, shaft_radius, shaft_radius);
+                camera_arrow_shaft.set_transformation(shaft_tr * rotation * shaft_scale);
 
-                // Aplikujeme transformace v pořadí: měřítko, rotace, posun
-                camera_direction_ray.set_transformation(translation * rotation * scaling);
+                // Hlava
+                let head_pos = base_pos + dir * shaft_len;
+                let head_tr = Mat4::from_translation(vec3(head_pos.x, head_pos.y, head_pos.z));
+                let head_scale = Mat4::from_nonuniform_scale(head_len, head_radius, head_radius);
+                camera_arrow_head.set_transformation(head_tr * rotation * head_scale);
+
+                // Špička
+                let tip_pos = base_pos + dir * length;
+                let tip_tr = Mat4::from_translation(vec3(tip_pos.x, tip_pos.y, tip_pos.z));
+                let tip_scale = Mat4::from_scale(tip_radius);
+                camera_arrow_tip.set_transformation(tip_tr * tip_scale);
+
+                arrow_tip_position = Some(tip_pos);
+            }
+        }
+
+        // Vykreslení labelu s pozicí špičky šipky
+        let render_cam = cam.cam(frame_input.viewport);
+        if show_spectator_marker && mode == CamMode::ThirdPerson {
+            if let Some(tip_pos) = arrow_tip_position {
+                if let Some([sx, sy]) = world_to_screen(&render_cam, tip_pos, frame_input.viewport)
+                {
+                    let txt = format!("({:.2}, {:.2}, {:.2})", tip_pos.x, tip_pos.y, tip_pos.z);
+                    let painter = gui.context().layer_painter(egui::LayerId::new(
+                        egui::Order::Foreground,
+                        egui::Id::new("arrow_label"),
+                    ));
+                    painter.rect_filled(
+                        egui::Rect::from_min_size(
+                            egui::pos2(sx + 8.0, sy - 18.0),
+                            egui::vec2(120.0, 18.0),
+                        ),
+                        6.0,
+                        egui::Color32::from_black_alpha(160),
+                    );
+                    painter.text(
+                        egui::pos2(sx + 14.0, sy - 14.0),
+                        egui::Align2::LEFT_CENTER,
+                        txt,
+                        egui::FontId::monospace(13.0),
+                        egui::Color32::WHITE,
+                    );
+                }
             }
         }
 
@@ -1181,14 +1244,12 @@ fn main() -> Result<()> {
         }
         if show_spectator_marker && mode == CamMode::ThirdPerson {
             objects_to_render.push(&spectator_glow);
-            objects_to_render.push(&camera_direction_ray);
+            objects_to_render.push(&camera_arrow_shaft);
+            objects_to_render.push(&camera_arrow_head);
+            objects_to_render.push(&camera_arrow_tip);
         }
         // ... další objekty ...
-        screen.render(
-            &cam.cam(frame_input.viewport),
-            &objects_to_render,
-            &[&ambient_light],
-        );
+        screen.render(&render_cam, &objects_to_render, &[&ambient_light]);
         let _ = gui.render();
         FrameOutput::default()
     });
