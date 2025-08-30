@@ -102,7 +102,7 @@ fn draw_bsp_tree_window(
                 plot_ui.pointer_coordinate()
             });
 
-            if plot_resp.response.clicked() {
+            if plot_resp.response.hovered() {
                 if let Some(pointer) = plot_resp.inner {
                     let mut best = None;
                     let mut best_dist = f64::INFINITY;
