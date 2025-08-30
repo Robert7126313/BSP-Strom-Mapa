@@ -12,6 +12,7 @@ with `egui` for the user interface.
 - CPU-based frustum culling of triangles.
 - Two camera modes – *Spectator* and *ThirdPerson* – with smooth controls.
 - Interactive UI for exploring the BSP structure and basic statistics.
+- Switchable UI language (English and Czech).
 
 ## Building
 

@@ -8,9 +8,16 @@ use std::f32::consts::FRAC_PI_2;
 use std::sync::RwLock;
 use three_d::Srgba;
 
+use crate::lang::Language;
+
 /// Collection of runtime configuration options.
 #[derive(Clone)]
 pub struct Config {
+    // ---------------------------------------------------------------------
+    // General
+    // ---------------------------------------------------------------------
+    pub language: Language,
+
     // ---------------------------------------------------------------------
     // Colors & lighting
     // ---------------------------------------------------------------------
@@ -59,6 +66,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            language: Language::English,
             bg_color: [0.1, 0.1, 0.1],
             model_color: Srgba::new(100, 150, 255, 255),
             highlight_color: Srgba::new(255, 50, 50, 150),

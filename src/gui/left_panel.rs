@@ -5,6 +5,8 @@ use log::error;
 use std::sync::atomic::AtomicUsize;
 use three_d::{CpuTexture, Texture2DRef};
 
+use crate::lang::tr;
+
 use super::{config::draw_config_window, tree::draw_bsp_tree_window};
 
 pub fn draw_left_panel(
@@ -36,20 +38,21 @@ pub fn draw_left_panel(
     limit_culling: &mut bool,
     selected_node_help_open: &mut bool,
 ) {
+    let lang = { CONFIG.read().unwrap().language };
     egui::SidePanel::left("tree").show(ctx, |side_ui| {
         egui::ScrollArea::vertical().show(side_ui, |ui| {
-            ui.heading("BSP Tree");
-            if ui.button("⚙️ Settings").clicked() {
+            ui.heading(tr(lang, "BSP Tree", "BSP Strom"));
+            if ui.button(tr(lang, "⚙️ Settings", "⚙️ Nastavení")).clicked() {
                 *config_window_open = true;
             }
-            ui.label(format!("Mode: {:?}", mode));
+            ui.label(format!("{}: {:?}", tr(lang, "Mode", "Režim"), mode));
 
             ui.separator();
-            ui.heading("Load Model");
-            ui.label("Current model:");
+            ui.heading(tr(lang, "Load Model", "Načíst model"));
+            ui.label(tr(lang, "Current model:", "Aktuální model:"));
             ui.label(loaded_file_name.as_str());
 
-            if ui.button("📁 Load new model").clicked() {
+            if ui.button(tr(lang, "📁 Load new model", "📁 Načíst nový model")).clicked() {
                 if let Some(path) = rfd::FileDialog::new()
                     .add_filter("GLTF/GLB files", &["gltf", "glb"])
                     .pick_file()
@@ -69,7 +72,7 @@ pub fn draw_left_panel(
                     });
                 }
             }
-            if ui.button("📷 Load texture").clicked() {
+            if ui.button(tr(lang, "📷 Load texture", "📷 Načíst texturu")).clicked() {
                 if let Some(path) = rfd::FileDialog::new()
                     .add_filter("Image", &["png", "jpg", "jpeg"])
                     .pick_file()
@@ -92,20 +95,20 @@ pub fn draw_left_panel(
                     }
                 }
             }
-            ui.checkbox(show_texture, "Show texture");
+            ui.checkbox(show_texture, tr(lang, "Show texture", "Zobrazit texturu"));
 
             if *file_loading {
                 ui.add(
                     egui::ProgressBar::new(0.0)
                         .desired_width(ui.available_width())
-                        .text("Loading model and building BSP tree...")
+                        .text(tr(lang, "Loading model and building BSP tree...", "Načítání modelu a stavba BSP stromu..."))
                         .animate(true),
                 );
             }
 
             if bsp_root_preview.is_none() {
                 ui.separator();
-                ui.label("Building tree…");
+                ui.label(tr(lang, "Building tree…", "Stavba stromu…"));
                 ui.add(
                     egui::ProgressBar::new(0.0)
                         .desired_width(ui.available_width())
@@ -115,12 +118,12 @@ pub fn draw_left_panel(
             }
 
             ui.separator();
-            ui.heading("BSP Tree Structure");
+            ui.heading(tr(lang, "BSP Tree Structure", "Struktura BSP stromu"));
             let max_depth = CONFIG.read().unwrap().max_bsp_depth;
-            ui.add(egui::Slider::new(branch_limit, 1..=max_depth).text("Branch limit"));
-            ui.checkbox(limit_culling, "Limit culling by slider");
-            ui.checkbox(show_splitting_plane, "Show splitting plane");
-            if ui.button("Open visualization").clicked() {
+            ui.add(egui::Slider::new(branch_limit, 1..=max_depth).text(tr(lang, "Branch limit", "Limit větví")));
+            ui.checkbox(limit_culling, tr(lang, "Limit culling by slider", "Omezit culling posuvníkem"));
+            ui.checkbox(show_splitting_plane, tr(lang, "Show splitting plane", "Zobrazit dělící rovinu"));
+            if ui.button(tr(lang, "Open visualization", "Otevřít vizualizaci")).clicked() {
                 *tree_window_open = true;
             }
 
@@ -129,35 +132,41 @@ pub fn draw_left_panel(
                     if let Some(node) = crate::bsp::find_node(root, node_id) {
                         ui.separator();
                         ui.horizontal(|ui| {
-                            ui.heading("Selected node");
-                            if ui.button("❓").on_hover_text("Help").clicked() {
+                            ui.heading(tr(lang, "Selected node", "Vybraný uzel"));
+                            if ui
+                                .button("❓")
+                                .on_hover_text(tr(lang, "Help", "Nápověda"))
+                                .clicked()
+                            {
                                 *selected_node_help_open = true;
                             }
                         });
-                        ui.label(format!("ID: {}", node.id));
-                        ui.label(format!("Triangles: {}", node.subtree_triangles()));
+                        ui.label(format!("{}: {}", tr(lang, "ID", "ID"), node.id));
+                        ui.label(format!("{}: {}", tr(lang, "Triangles", "Trojúhelníky"), node.subtree_triangles()));
                         let mut path = Vec::new();
                         let depth = if crate::bsp::find_node_path(root, node.id, &mut path) {
                             path.len().saturating_sub(1)
                         } else {
                             0
                         };
-                        ui.label(format!("Depth: {}", depth));
+                        ui.label(format!("{}: {}", tr(lang, "Depth", "Hloubka"), depth));
                         ui.label(format!(
-                            "Nodes visited to select: {}",
+                            "{}: {}",
+                            tr(lang, "Nodes visited to select", "Navštívené uzly při výběru"),
                             current_stats.nodes_to_selected
                         ));
                         if let Some(ref plane) = node.plane {
-                            ui.label("Splitting plane:");
+                            ui.label(tr(lang, "Splitting plane:", "Dělící rovina:"));
                             ui.label(format!(
-                                "Normal: ({:.2}, {:.2}, {:.2})",
+                                "{}: ({:.2}, {:.2}, {:.2})",
+                                tr(lang, "Normal", "Normála"),
                                 plane.n.x, plane.n.y, plane.n.z
                             ));
-                            ui.label(format!("Distance: {:.2}", plane.d));
+                            ui.label(format!("{}: {:.2}", tr(lang, "Distance", "Vzdálenost"), plane.d));
                         } else {
-                            ui.label("Leaf (no plane)");
+                            ui.label(tr(lang, "Leaf (no plane)", "List (bez roviny)"));
                         }
-                        if ui.button("Clear selection").clicked() {
+                        if ui.button(tr(lang, "Clear selection", "Zrušit výběr")).clicked() {
                             *selected_node = None;
                         }
                     }
@@ -165,34 +174,30 @@ pub fn draw_left_panel(
             }
 
             ui.separator();
-            ui.heading("Display Settings");
-            ui.checkbox(disable_culling, "Disable culling");
-            ui.checkbox(show_loaded_model, "Show loaded model");
-            ui.checkbox(show_selected_model, "Show selected area");
+            ui.heading(tr(lang, "Display Settings", "Zobrazovací nastavení"));
+            ui.checkbox(disable_culling, tr(lang, "Disable culling", "Zakázat culling"));
+            ui.checkbox(show_loaded_model, tr(lang, "Show loaded model", "Zobrazit načtený model"));
+            ui.checkbox(show_selected_model, tr(lang, "Show selected area", "Zobrazit vybranou oblast"));
 
             ui.separator();
-            ui.heading("BSP Stats");
+            ui.heading(tr(lang, "BSP Stats", "Statistiky BSP"));
             Grid::new("bsp_stats_grid")
                 .num_columns(2)
                 .striped(true)
                 .show(ui, |ui| {
-                    ui.label("Total nodes");
+                    ui.label(tr(lang, "Total nodes", "Celkem uzlů"));
                     ui.label(format!("{}", current_stats.total_nodes));
                     ui.end_row();
-
-                    ui.label("Total triangles");
+                    ui.label(tr(lang, "Total triangles", "Celkem trojúhelníků"));
                     ui.label(format!("{}", current_stats.total_triangles));
                     ui.end_row();
-
-                    ui.label("Nodes visited");
+                    ui.label(tr(lang, "Nodes visited", "Navštívené uzly"));
                     ui.label(format!("{}", current_stats.nodes_visited));
                     ui.end_row();
-
-                    ui.label("Triangles rendered");
+                    ui.label(tr(lang, "Triangles rendered", "Vykreslené trojúhelníky"));
                     ui.label(format!("{}", current_stats.triangles_rendered));
                     ui.end_row();
-
-                    ui.label("Traversal efficiency");
+                    ui.label(tr(lang, "Traversal efficiency", "Efektivita průchodu"));
                     let efficiency = if current_stats.total_nodes > 0 {
                         (current_stats.nodes_visited as f32 / current_stats.total_nodes as f32)
                             * 100.0
@@ -202,15 +207,14 @@ pub fn draw_left_panel(
                     ui.label(format!("{:.1}%", efficiency));
                     ui.end_row();
                 });
-
             ui.separator();
-            ui.heading("Mesh Info");
+            ui.heading(tr(lang, "Mesh Info", "Informace o meshi"));
             Grid::new("mesh_info_grid").num_columns(2).show(ui, |ui| {
-                ui.label("Vertices");
+                ui.label(tr(lang, "Vertices", "Vrcholy"));
                 ui.label(format!("{}", current_cpu_mesh.positions.len()));
                 ui.end_row();
 
-                ui.label("Indices");
+                ui.label(tr(lang, "Indices", "Indexy"));
                 match &current_cpu_mesh.indices {
                     three_d_asset::Indices::U32(idx) => {
                         ui.label(format!("U32: {}", idx.len()));
@@ -219,83 +223,94 @@ pub fn draw_left_panel(
                         ui.label(format!("U16: {}", idx.len()));
                     }
                     _ => {
-                        ui.label("none");
+                        ui.label(tr(lang, "none", "žádné"));
                     }
                 }
                 ui.end_row();
             });
 
             ui.separator();
-            ui.heading("Controls");
-            CollapsingHeader::new("Movement").show(ui, |ui| {
-                ui.label("W - Forward");
-                ui.label("S - Backward");
-                ui.label("A - Left");
-                ui.label("D - Right");
-                ui.label("Space - Up");
-                ui.label("C - Down");
-                ui.label(format!("Speed: {:.1}", cam.speed));
+            ui.heading(tr(lang, "Controls", "Ovládání"));
+            CollapsingHeader::new(tr(lang, "Movement", "Pohyb")).show(ui, |ui| {
+                ui.label(tr(lang, "W - Forward", "W - vpřed"));
+                ui.label(tr(lang, "S - Backward", "S - vzad"));
+                ui.label(tr(lang, "A - Left", "A - doleva"));
+                ui.label(tr(lang, "D - Right", "D - doprava"));
+                ui.label(tr(lang, "Space - Up", "Mezerník - nahoru"));
+                ui.label(tr(lang, "C - Down", "C - dolů"));
+                ui.label(format!("{}: {:.1}", tr(lang, "Speed", "Rychlost"), cam.speed));
             });
-            CollapsingHeader::new("Looking around").show(ui, |ui| {
-                ui.label("↑ - Look up");
-                ui.label("↓ - Look down");
-                ui.label("← - Turn left");
-                ui.label("→ - Turn right");
-                ui.label(format!(
-                    "Look speed: {:.1}°/s",
-                    cam.look_speed * 180.0 / std::f32::consts::PI
-                ));
-                ui.add(
-                    egui::Slider::new(&mut cam.look_speed, 0.5..=5.0).text("Look speed"),
-                );
-            });
-            CollapsingHeader::new("Misc").show(ui, |ui| {
-                ui.label("F - Switch to Spectator mode");
-                ui.label("G - Switch to ThirdPerson mode");
-                ui.label("Home - Reset to default position");
-                ui.label("PageUp/PageDown - Adjust speed");
+            CollapsingHeader::new(tr(lang, "Looking around", "Rozhlížení"))
+                .show(ui, |ui| {
+                    ui.label(tr(lang, "↑ - Look up", "↑ - dívat se nahoru"));
+                    ui.label(tr(lang, "↓ - Look down", "↓ - dívat se dolů"));
+                    ui.label(tr(lang, "← - Turn left", "← - otočit doleva"));
+                    ui.label(tr(lang, "→ - Turn right", "→ - otočit doprava"));
+                    ui.label(format!(
+                        "{}: {:.1}°/s",
+                        tr(lang, "Look speed", "Rychlost otáčení"),
+                        cam.look_speed * 180.0 / std::f32::consts::PI
+                    ));
+                    ui.add(
+                        egui::Slider::new(&mut cam.look_speed, 0.5..=5.0)
+                            .text(tr(lang, "Look speed", "Rychlost otáčení")),
+                    );
+                });
+            CollapsingHeader::new(tr(lang, "Misc", "Různé")).show(ui, |ui| {
+                ui.label(tr(lang, "F - Switch to Spectator mode", "F - přepnout na režim diváka"));
+                ui.label(tr(lang, "G - Switch to ThirdPerson mode", "G - přepnout na režim třetí osoby"));
+                ui.label(tr(lang, "Home - Reset to default position", "Home - reset na výchozí pozici"));
+                ui.label(tr(lang, "PageUp/PageDown - Adjust speed", "PageUp/PageDown - upravit rychlost"));
             });
 
             ui.separator();
-            ui.heading("Camera Info");
-            ui.label(format!("Active mode: {:?}", mode));
-            ui.collapsing("Spectator camera", |ui| {
+            ui.heading(tr(lang, "Camera Info", "Informace o kameře"));
+            ui.label(format!("{}: {:?}", tr(lang, "Active mode", "Aktivní režim"), mode));
+            ui.collapsing(tr(lang, "Spectator camera", "Kamera diváka"), |ui| {
                 ui.label(format!(
-                    "Position: ({:.1}, {:.1}, {:.1})",
+                    "{}: ({:.1}, {:.1}, {:.1})",
+                    tr(lang, "Position", "Pozice"),
                     spectator_state.pos.x, spectator_state.pos.y, spectator_state.pos.z
                 ));
                 ui.label(format!(
-                    "Yaw: {:.1}°",
+                    "{}: {:.1}°",
+                    tr(lang, "Yaw", "Yaw"),
                     spectator_state.yaw * 180.0 / std::f32::consts::PI
                 ));
                 ui.label(format!(
-                    "Pitch: {:.1}°",
+                    "{}: {:.1}°",
+                    tr(lang, "Pitch", "Pitch"),
                     spectator_state.pitch * 180.0 / std::f32::consts::PI
                 ));
-                ui.label(format!("Speed: {:.1}", spectator_state.speed));
+                ui.label(format!("{}: {:.1}", tr(lang, "Speed", "Rychlost"), spectator_state.speed));
             });
-            ui.collapsing("Third-person camera", |ui| {
+            ui.collapsing(tr(lang, "Third-person camera", "Kamera třetí osoby"), |ui| {
                 ui.label(format!(
-                    "Position: ({:.1}, {:.1}, {:.1})",
+                    "{}: ({:.1}, {:.1}, {:.1})",
+                    tr(lang, "Position", "Pozice"),
                     third_person_state.pos.x, third_person_state.pos.y, third_person_state.pos.z
                 ));
                 ui.label(format!(
-                    "Yaw: {:.1}°",
+                    "{}: {:.1}°",
+                    tr(lang, "Yaw", "Yaw"),
                     third_person_state.yaw * 180.0 / std::f32::consts::PI
                 ));
                 ui.label(format!(
-                    "Pitch: {:.1}°",
+                    "{}: {:.1}°",
+                    tr(lang, "Pitch", "Pitch"),
                     third_person_state.pitch * 180.0 / std::f32::consts::PI
                 ));
-                ui.label(format!("Speed: {:.1}", third_person_state.speed));
+                ui.label(format!("{}: {:.1}", tr(lang, "Speed", "Rychlost"), third_person_state.speed));
             });
 
             ui.label(format!(
-                "Current camera position: ({:.1}, {:.1}, {:.1})",
+                "{}: ({:.1}, {:.1}, {:.1})",
+                tr(lang, "Current camera position", "Aktuální pozice kamery"),
                 cam.pos.x, cam.pos.y, cam.pos.z
             ));
             ui.label(format!(
-                "Distance between cameras: {:.1}",
+                "{}: {:.1}",
+                tr(lang, "Distance between cameras", "Vzdálenost mezi kamerami"),
                 (spectator_state.pos - third_person_state.pos).magnitude()
             ));
 
@@ -339,16 +354,32 @@ pub fn draw_left_panel(
         );
     }
     if *selected_node_help_open {
-        egui::Window::new("Help - Selected node")
+        egui::Window::new(tr(lang, "Help - Selected node", "Nápověda - Vybraný uzel"))
             .open(selected_node_help_open)
             .show(ctx, |ui| {
-                ui.label("This section shows details about the currently selected node in the BSP tree.");
+                ui.label(tr(
+                    lang,
+                    "This section shows details about the currently selected node in the BSP tree.",
+                    "Tato část ukazuje detaily o aktuálně vybraném uzlu v BSP stromu.",
+                ));
                 ui.separator();
-                ui.label("• Depth indicates how many edges lead from the root to this node. The root has depth 0 and each level increases it by 1.");
-                ui.label("• Nodes visited to select is the number of nodes the algorithm examined before finding this node. The number can be higher than the depth because other branches are checked.");
+                ui.label(tr(
+                    lang,
+                    "• Depth indicates how many edges lead from the root to this node. The root has depth 0 and each level increases it by 1.",
+                    "• Hloubka udává, kolik hran vede od kořene k tomuto uzlu. Kořen má hloubku 0 a každá úroveň ji zvýší o 1.",
+                ));
+                ui.label(tr(
+                    lang,
+                    "• Nodes visited to select is the number of nodes the algorithm examined before finding this node. The number can be higher than the depth because other branches are checked.",
+                    "• Navštívené uzly při výběru je počet uzlů, které algoritmus prohlédl před nalezením tohoto uzlu. Číslo může být větší než hloubka, protože se kontrolují i jiné větve.",
+                ));
                 ui.separator();
-                ui.label("Example:");
-                ui.label("A node at depth 3 means path root → A → B → C. If the algorithm checks two side branches, the total visited nodes may be 5.");
+                ui.label(tr(lang, "Example:", "Příklad:"));
+                ui.label(tr(
+                    lang,
+                    "A node at depth 3 means path root → A → B → C. If the algorithm checks two side branches, the total visited nodes may be 5.",
+                    "Uzel v hloubce 3 znamená cestu kořen → A → B → C. Pokud algoritmus zkontroluje dvě vedlejší větve, může být počet navštívených uzlů 5.",
+                ));
             });
     }
     if *tree_window_open {

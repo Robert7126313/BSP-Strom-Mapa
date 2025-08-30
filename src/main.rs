@@ -48,6 +48,7 @@ mod gui;
 mod geometry;
 mod loader;
 mod input;
+mod lang;
 // Message types for the channel
 #[derive(Debug)]
 enum Message {
