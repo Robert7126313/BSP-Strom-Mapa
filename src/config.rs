@@ -5,7 +5,7 @@ use cgmath::Vector3;
 use egui::Color32;
 use once_cell::sync::Lazy;
 use std::f32::consts::FRAC_PI_2;
-use std::sync::Mutex;
+use std::sync::RwLock;
 use three_d::Srgba;
 
 /// Collection of runtime configuration options.
@@ -92,4 +92,4 @@ impl Default for Config {
 }
 
 /// Global mutable configuration accessible across modules.
-pub static CONFIG: Lazy<Mutex<Config>> = Lazy::new(|| Mutex::new(Config::default()));
+pub static CONFIG: Lazy<RwLock<Config>> = Lazy::new(|| RwLock::new(Config::default()));

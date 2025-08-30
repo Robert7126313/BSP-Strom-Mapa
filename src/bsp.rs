@@ -7,46 +7,10 @@ use three_d::*;
 
 // Configuration values (colors and tree limits)
 use crate::config::CONFIG;
+pub use crate::geometry::{BoundingBox, Frustum, Plane, Triangle};
+use crate::geometry::triangle_center;
 
 // ---------------- BSP Implementation -------------------------------------- //
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Triangle {
-    pub a: Vector3<f32>,
-    pub b: Vector3<f32>,
-    pub c: Vector3<f32>,
-    pub uv_a: Vector2<f32>,
-    pub uv_b: Vector2<f32>,
-    pub uv_c: Vector2<f32>,
-}
-
-#[derive(Clone, Debug)]
-pub struct Plane {
-    pub n: Vector3<f32>, // normála
-    pub d: f32,          // vzdálenost od počátku (ax+by+cz+d=0)
-}
-
-impl Plane {
-    fn new(n: Vector3<f32>, point: Vector3<f32>) -> Self {
-        let n = n.normalize();
-        let d = -n.dot(point);
-        Self { n, d }
-    }
-
-    fn side(&self, point: Vector3<f32>) -> f32 {
-        self.n.dot(point) + self.d
-    }
-
-    fn classify(&self, point: Vector3<f32>) -> i32 {
-        let dist = self.side(point);
-        const EPSILON: f32 = 1e-6;
-        match dist {
-            d if d > EPSILON => 1,   // front
-            d if d < -EPSILON => -1, // back
-            _ => 0,                  // on plane
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct BspNode {
@@ -128,10 +92,6 @@ impl Vector3Ext<f32> for Vector3<f32> {
     {
         Vector3::new(f(self.x, other.x), f(self.y, other.y), f(self.z, other.z))
     }
-}
-
-pub fn triangle_center(tri: &Triangle) -> Vector3<f32> {
-    (tri.a + tri.b + tri.c) / 3.0
 }
 
 /// Bucketovaná SAH pro O(n + K) split - mnohem rychlejší než původní O(n²) SAH
@@ -288,7 +248,7 @@ pub fn build_bsp(
 ) -> BspNode {
     let my_id = next_id.fetch_add(1, Ordering::SeqCst);
 
-    let min_tris = CONFIG.lock().unwrap().min_triangles_per_leaf;
+    let min_tris = CONFIG.read().unwrap().min_triangles_per_leaf;
     if depth >= max_depth || triangles.len() <= min_tris {
         return BspNode::new_leaf(triangles.to_vec(), my_id);
     }
@@ -420,7 +380,7 @@ pub fn create_highlight_mesh(triangles: &[Triangle], context: &Context) -> Gm<Me
         ..Default::default()
     };
 
-    let highlight_color = CONFIG.lock().unwrap().highlight_color;
+    let highlight_color = CONFIG.read().unwrap().highlight_color;
     let material = PhysicalMaterial::new_transparent(
         context,
         &CpuMaterial {
@@ -483,7 +443,7 @@ pub fn create_plane_mesh(
         ..Default::default()
     };
 
-    let plane_color = CONFIG.lock().unwrap().splitting_plane_color;
+    let plane_color = CONFIG.read().unwrap().splitting_plane_color;
     let material = PhysicalMaterial::new_transparent(
         context,
         &CpuMaterial {
@@ -745,193 +705,11 @@ pub fn traverse_bsp_with_frustum(
 }
 
 #[derive(Clone, Debug)]
-pub struct BoundingBox {
-    pub min: Vector3<f32>,
-    pub max: Vector3<f32>,
-}
-
-impl BoundingBox {
-    fn new_empty() -> Self {
-        Self {
-            min: Vector3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY),
-            max: Vector3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY),
-        }
-    }
-
-    pub fn contains(&self, point: Vector3<f32>) -> bool {
-        point.x >= self.min.x
-            && point.x <= self.max.x
-            && point.y >= self.min.y
-            && point.y <= self.max.y
-            && point.z >= self.min.z
-            && point.z <= self.max.z
-    }
-
-    fn from_triangle(tri: &Triangle) -> Self {
-        let min = Vector3::new(
-            tri.a.x.min(tri.b.x).min(tri.c.x),
-            tri.a.y.min(tri.b.y).min(tri.c.y),
-            tri.a.z.min(tri.b.z).min(tri.c.z),
-        );
-        let max = Vector3::new(
-            tri.a.x.max(tri.b.x).max(tri.c.x),
-            tri.a.y.max(tri.b.y).max(tri.c.y),
-            tri.a.z.max(tri.b.z).max(tri.c.z),
-        );
-        BoundingBox { min, max }
-    }
-
-    fn from_triangles(triangles: &[Triangle]) -> Self {
-        if triangles.is_empty() {
-            return Self::new_empty();
-        }
-        let mut min = Vector3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
-        let mut max = Vector3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
-        for tri in triangles {
-            for v in [&tri.a, &tri.b, &tri.c] {
-                min.x = min.x.min(v.x);
-                min.y = min.y.min(v.y);
-                min.z = min.z.min(v.z);
-                max.x = max.x.max(v.x);
-                max.y = max.y.max(v.y);
-                max.z = max.z.max(v.z);
-            }
-        }
-        BoundingBox { min, max }
-    }
-
-    fn encompass(box1: &Self, box2: &Self) -> Self {
-        BoundingBox {
-            min: Vector3::new(
-                box1.min.x.min(box2.min.x),
-                box1.min.y.min(box2.min.y),
-                box1.min.z.min(box2.min.z),
-            ),
-            max: Vector3::new(
-                box1.max.x.max(box2.max.x),
-                box1.max.y.max(box2.max.y),
-                box1.max.z.max(box2.max.z),
-            ),
-        }
-    }
-
-    /// Test against a single plane: return true if any part of the box is in front of the plane.
-    fn intersects_plane(&self, plane: &Plane) -> bool {
-        // compute the "positive vertex" for this plane's normal
-        let p = Vector3::new(
-            if plane.n.x >= 0.0 {
-                self.max.x
-            } else {
-                self.min.x
-            },
-            if plane.n.y >= 0.0 {
-                self.max.y
-            } else {
-                self.min.y
-            },
-            if plane.n.z >= 0.0 {
-                self.max.z
-            } else {
-                self.min.z
-            },
-        );
-        // if this farthest point is in front, the box may intersect or be in front
-        plane.side(p) >= 0.0
-    }
-
-    /// Výpočet povrchové plochy bounding boxu pro SAH
-    fn surface_area(&self) -> f32 {
-        let d = self.max - self.min;
-        if d.x < 0.0 || d.y < 0.0 || d.z < 0.0 {
-            return 0.0; // prázdný nebo neplatný box
-        }
-        2.0 * (d.x * d.y + d.y * d.z + d.z * d.x)
-    }
-}
-
-// Struktura pro reprezentaci frustumu kamery
-pub struct Frustum {
-    planes: [Plane; 6],
-}
-
-impl Frustum {
-    pub fn from_camera(camera: &Camera) -> Self {
-        // Získáme view-projection matici
-        let vp_matrix = camera.projection() * camera.view();
-
-        // Převedeme na pole - Matrix4 nemá as_slice(), musíme použít jiný přístup
-        let mat = [
-            vp_matrix.x.x,
-            vp_matrix.x.y,
-            vp_matrix.x.z,
-            vp_matrix.x.w,
-            vp_matrix.y.x,
-            vp_matrix.y.y,
-            vp_matrix.y.z,
-            vp_matrix.y.w,
-            vp_matrix.z.x,
-            vp_matrix.z.y,
-            vp_matrix.z.z,
-            vp_matrix.z.w,
-            vp_matrix.w.x,
-            vp_matrix.w.y,
-            vp_matrix.w.z,
-            vp_matrix.w.w,
-        ];
-
-        // Extrahujeme 6 rovin frustumu
-        // Levá rovina
-        let left = Plane {
-            n: Vector3::new(mat[3] + mat[0], mat[7] + mat[4], mat[11] + mat[8]).normalize(),
-            d: (mat[15] + mat[12])
-                / (mat[3] + mat[0]).hypot((mat[7] + mat[4]).hypot(mat[11] + mat[8])),
-        };
-
-        // Pravá rovina
-        let right = Plane {
-            n: Vector3::new(mat[3] - mat[0], mat[7] - mat[4], mat[11] - mat[8]).normalize(),
-            d: (mat[15] - mat[12])
-                / (mat[3] - mat[0]).hypot((mat[7] - mat[4]).hypot(mat[11] - mat[8])),
-        };
-
-        // Spodní rovina
-        let bottom = Plane {
-            n: Vector3::new(mat[3] + mat[1], mat[7] + mat[5], mat[11] + mat[9]).normalize(),
-            d: (mat[15] + mat[13])
-                / (mat[3] + mat[1]).hypot((mat[7] + mat[5]).hypot(mat[11] + mat[9])),
-        };
-
-        // Horní rovina
-        let top = Plane {
-            n: Vector3::new(mat[3] - mat[1], mat[7] - mat[5], mat[11] - mat[9]).normalize(),
-            d: (mat[15] - mat[13])
-                / (mat[3] - mat[1]).hypot((mat[7] - mat[5]).hypot(mat[11] - mat[9])),
-        };
-
-        // Blízká rovina
-        let near = Plane {
-            n: Vector3::new(mat[3] + mat[2], mat[7] + mat[6], mat[11] + mat[10]).normalize(),
-            d: (mat[15] + mat[14])
-                / (mat[3] + mat[2]).hypot((mat[7] + mat[6]).hypot(mat[11] + mat[10])),
-        };
-
-        // Vzdálená rovina
-        let far = Plane {
-            n: Vector3::new(mat[3] - mat[2], mat[7] - mat[6], mat[11] - mat[10]).normalize(),
-            d: (mat[15] - mat[14])
-                / (mat[3] - mat[2]).hypot((mat[7] - mat[6]).hypot(mat[11] - mat[10])),
-        };
-
-        Frustum {
-            planes: [left, right, bottom, top, near, far],
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cgmath::Vector3;
+    use cgmath::{Vector2, Vector3};
 
     fn test_frustum() -> Frustum {
         Frustum {
