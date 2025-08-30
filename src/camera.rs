@@ -92,26 +92,6 @@ pub enum CamMode {
     ThirdPerson,
 }
 
-pub struct SwitchDelay {
-    last_switch_time: f64,
-    cooldown: f64,
-}
-
-impl SwitchDelay {
-    pub fn new(cooldown: f64) -> Self {
-        Self {
-            last_switch_time: 0.0,
-            cooldown,
-        }
-    }
-    pub fn can_switch(&self, current_time: f64) -> bool {
-        current_time - self.last_switch_time >= self.cooldown
-    }
-    pub fn record_switch(&mut self, current_time: f64) {
-        self.last_switch_time = current_time;
-    }
-}
-
 #[derive(Clone)]
 pub struct CameraState {
     pub pos: Vector3<f32>,

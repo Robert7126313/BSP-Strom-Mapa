@@ -1,4 +1,4 @@
-use crate::config::CONFIG;
+use crate::config::{Config, CONFIG};
 use cgmath::InnerSpace;
 use egui::{CollapsingHeader, Grid};
 use egui_plot::{Line, Plot, PlotPoint, Points, Text};
@@ -405,7 +405,6 @@ pub fn draw_left_panel(
                 "Vzdálenost mezi kamerami: {:.1}",
                 (spectator_state.pos - third_person_state.pos).magnitude()
             ));
-            ui.checkbox(show_spectator_marker, "Zobrazit pozici a směr spectatoru");
 
             if let Ok(msg) = rx.try_recv() {
                 match msg {
@@ -442,6 +441,7 @@ pub fn draw_left_panel(
             spectator_state,
             third_person_state,
             mode,
+            show_spectator_marker,
             config_window_open,
         );
     }
@@ -473,6 +473,7 @@ fn draw_config_window(
     spectator_state: &mut crate::camera::CameraState,
     third_person_state: &mut crate::camera::CameraState,
     mode: crate::camera::CamMode,
+    show_spectator_marker: &mut bool,
     open: &mut bool,
 ) {
     egui::Window::new("Config")
@@ -480,6 +481,21 @@ fn draw_config_window(
         .vscroll(true)
         .show(ctx, |ui| {
             let mut cfg = CONFIG.lock().unwrap();
+
+            if ui.button("Load default").clicked() {
+                let defaults = Config::default();
+                cam.speed = defaults.camera_speed;
+                cam.look_speed = defaults.look_speed;
+                spectator_state.pos = defaults.default_spectator_pos;
+                third_person_state.pos = defaults.default_third_person_pos;
+                if mode == crate::camera::CamMode::Spectator {
+                    cam.pos = spectator_state.pos;
+                } else if mode == crate::camera::CamMode::ThirdPerson {
+                    cam.pos = third_person_state.pos;
+                }
+                *show_spectator_marker = false;
+                *cfg = defaults;
+            }
 
             ui.heading("Colors & Lighting");
             ui.horizontal(|ui| {
@@ -625,10 +641,10 @@ fn draw_config_window(
             ui.add(egui::Slider::new(&mut cfg.default_fov_deg, 30.0..=120.0).text("FOV deg"));
             ui.add(egui::Slider::new(&mut cfg.near_plane, 0.01..=10.0).text("Near plane"));
             ui.add(egui::Slider::new(&mut cfg.far_plane, 10.0..=5000.0).text("Far plane"));
-            ui.add(
-                egui::Slider::new(&mut cfg.camera_switch_cooldown, 0.1..=10.0)
-                    .text("Switch cooldown"),
-            );
+
+            ui.separator();
+            ui.heading("Spectator");
+            ui.checkbox(show_spectator_marker, "Zobrazit pozici a směr spectatoru");
 
             ui.horizontal(|ui| {
                 ui.label("Spectator pos");

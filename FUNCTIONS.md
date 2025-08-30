@@ -4,15 +4,13 @@ Quick index of key functions and methods in the project. Each entry links to the
 source code so you can jump directly to the implementation.
 
 ## `src/camera.rs`
-- [`FreeCamera::new`](src/camera.rs#L22-L29) – initialize a free camera with
+- [`FreeCamera::new`](src/camera.rs#L20-L29) – initialize a free camera with
   default parameters.
-- [`FreeCamera::update_smooth`](src/camera.rs#L45-L71) – update position and
+- [`FreeCamera::update_smooth`](src/camera.rs#L44-L72) – update position and
   orientation based on keyboard input.
-- [`FreeCamera::cam`](src/camera.rs#L73-L83) – construct a `three_d` camera from
+- [`FreeCamera::cam`](src/camera.rs#L75-L86) – construct a `three_d` camera from
   the current state.
-- [`SwitchDelay::can_switch`](src/camera.rs#L101-L103) – check if camera mode
-  can be toggled.
-- [`CameraState::new`](src/camera.rs#L117-L120) – snapshot of camera parameters.
+- [`CameraState::new`](src/camera.rs#L104-L112) – snapshot of camera parameters.
 
 ## `src/bsp.rs`
 - [`build_bsp`](src/bsp.rs#L293-L331) – construct the BSP tree and assign node
