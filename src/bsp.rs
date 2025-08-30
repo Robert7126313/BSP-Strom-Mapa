@@ -7,8 +7,8 @@ use three_d::*;
 
 // Configuration values (colors and tree limits)
 use crate::config::CONFIG;
-pub use crate::geometry::{BoundingBox, Frustum, Plane, Triangle};
 use crate::geometry::triangle_center;
+pub use crate::geometry::{BoundingBox, Frustum, Plane, Triangle};
 
 // ---------------- BSP Implementation -------------------------------------- //
 
@@ -25,11 +25,18 @@ pub struct BspNode {
 }
 
 #[derive(Default)]
-pub struct BspStats {
+pub struct CameraStats {
     pub nodes_visited: u32,
     pub triangles_rendered: u32,
+    pub vertices_rendered: u32,
+}
+
+#[derive(Default)]
+pub struct BspStats {
     pub total_nodes: u32,
     pub total_triangles: u32,
+    /// Statistiky vázané na aktuální kameru
+    pub camera: CameraStats,
     /// Počet uzlů navštívených při posledním výběru uzlu
     pub nodes_to_selected: u32,
 }
@@ -355,7 +362,10 @@ pub fn collect_triangles_in_subtree(node: &BspNode, triangles: &mut Vec<Triangle
 }
 
 // Funkce pro vytvoření zvýrazněného meshe
-pub fn create_highlight_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, PhysicalMaterial> {
+pub fn create_highlight_mesh(
+    triangles: &[Triangle],
+    context: &Context,
+) -> Gm<Mesh, PhysicalMaterial> {
     let positions: Vec<Vec3> = triangles
         .iter()
         .flat_map(|tri| {
@@ -553,7 +563,7 @@ pub fn traverse_bsp_with_frustum(
     node: &BspNode,
     observer_position: Vector3<f32>,
     frustum: &Frustum,
-    stats: &mut BspStats,
+    stats: &mut CameraStats,
     visible_triangles: &mut Vec<Triangle>,
 ) {
     stats.nodes_visited += 1;
@@ -581,7 +591,9 @@ pub fn traverse_bsp_with_frustum(
     // Přidáme trojúhelníky z tohoto uzlu do viditelných
     if !node.triangles.is_empty() {
         visible_triangles.extend(node.triangles.iter().cloned());
-        stats.triangles_rendered += node.triangles.len() as u32;
+        let tris = node.triangles.len() as u32;
+        stats.triangles_rendered += tris;
+        stats.vertices_rendered += tris * 3;
     }
 
     // Pokud uzel není list, traverzujeme podstromy v závislosti na pozici pozorovatele
@@ -593,9 +605,9 @@ pub fn traverse_bsp_with_frustum(
             match (node.front.as_ref(), node.back.as_ref()) {
                 (Some(front), Some(back)) => {
                     let (mut front_stats, mut front_tris, mut back_stats, mut back_tris) = (
-                        BspStats::default(),
+                        CameraStats::default(),
                         Vec::new(),
-                        BspStats::default(),
+                        CameraStats::default(),
                         Vec::new(),
                     );
                     rayon::join(
@@ -621,6 +633,8 @@ pub fn traverse_bsp_with_frustum(
                     stats.nodes_visited += front_stats.nodes_visited + back_stats.nodes_visited;
                     stats.triangles_rendered +=
                         front_stats.triangles_rendered + back_stats.triangles_rendered;
+                    stats.vertices_rendered +=
+                        front_stats.vertices_rendered + back_stats.vertices_rendered;
                     visible_triangles.extend(front_tris);
                     visible_triangles.extend(back_tris);
                 }
@@ -649,9 +663,9 @@ pub fn traverse_bsp_with_frustum(
             match (node.back.as_ref(), node.front.as_ref()) {
                 (Some(back), Some(front)) => {
                     let (mut back_stats, mut back_tris, mut front_stats, mut front_tris) = (
-                        BspStats::default(),
+                        CameraStats::default(),
                         Vec::new(),
-                        BspStats::default(),
+                        CameraStats::default(),
                         Vec::new(),
                     );
                     rayon::join(
@@ -677,6 +691,8 @@ pub fn traverse_bsp_with_frustum(
                     stats.nodes_visited += back_stats.nodes_visited + front_stats.nodes_visited;
                     stats.triangles_rendered +=
                         back_stats.triangles_rendered + front_stats.triangles_rendered;
+                    stats.vertices_rendered +=
+                        back_stats.vertices_rendered + front_stats.vertices_rendered;
                     visible_triangles.extend(back_tris);
                     visible_triangles.extend(front_tris);
                 }
@@ -752,7 +768,7 @@ mod tests {
         );
 
         let frustum = test_frustum();
-        let mut stats = BspStats::default();
+        let mut stats = CameraStats::default();
         let mut visible = Vec::new();
 
         traverse_bsp_with_frustum(

@@ -34,9 +34,9 @@ use crate::bsp::{
     create_plane_mesh, find_deepest_node_containing_point, find_node, traverse_bsp_with_frustum,
     BspNode, BspStats, Frustum, Triangle,
 };
-use crate::geometry::triangle_center;
 use crate::camera::{CamMode, CameraState, FreeCamera};
 use crate::config::CONFIG;
+use crate::geometry::triangle_center;
 use crate::input::{InputManager, KeyCode};
 use crate::loader::load_cpu_mesh;
 use log::info;
@@ -44,11 +44,11 @@ use log::info;
 mod bsp;
 mod camera;
 mod config; // global constants
-mod gui;
 mod geometry;
-mod loader;
+mod gui;
 mod input;
 mod lang;
+mod loader;
 // Message types for the channel
 #[derive(Debug)]
 enum Message {
@@ -488,8 +488,9 @@ fn main() -> Result<()> {
         };
 
         let visible_triangles = if disable_culling {
-            current_stats.nodes_visited = current_stats.total_nodes;
-            current_stats.triangles_rendered = current_triangles.len() as u32;
+            current_stats.camera.nodes_visited = current_stats.total_nodes;
+            current_stats.camera.triangles_rendered = current_triangles.len() as u32;
+            current_stats.camera.vertices_rendered = current_triangles.len() as u32 * 3;
             current_triangles.clone()
         } else {
             let mut tris = Vec::new();
@@ -503,7 +504,7 @@ fn main() -> Result<()> {
                     r,
                     observer_position,
                     &frustum,
-                    &mut current_stats,
+                    &mut current_stats.camera,
                     &mut tris,
                 );
             }
