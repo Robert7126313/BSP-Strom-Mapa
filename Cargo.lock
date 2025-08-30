@@ -2191,6 +2191,7 @@ checksum = "95c40cd76bbe3751f6a286dd09c9971766d37b3a9c222e926f622d098bdcc424"
 dependencies = [
  "cgmath",
  "half",
+ "image",
  "thiserror 2.0.12",
  "web-sys",
 ]

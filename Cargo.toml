@@ -8,7 +8,7 @@ anyhow          = "1"
 cgmath          = "0.18"
 egui            = "0.29"
 three-d         = { version = "0.18", features = ["window", "egui-gui"] }
-three-d-asset   = "0.9"
+three-d-asset   = { version = "0.9", features = ["png", "jpeg"] }
 rfd             = { version = "0.9", default-features = false, features = ["xdg-portal"] }
 gltf            = { version = "1.4", features = ["extras", "names"] }
 rayon           = "1.10.0"
