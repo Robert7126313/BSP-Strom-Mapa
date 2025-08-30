@@ -487,79 +487,61 @@ fn draw_config_window(
                 ui.color_edit_button_rgb(&mut cfg.bg_color);
             });
 
-            let mut color = egui::Color32::from_rgba_unmultiplied(
+            let mut color = [
                 cfg.model_color.r,
                 cfg.model_color.g,
                 cfg.model_color.b,
                 cfg.model_color.a,
-            );
+            ];
             ui.horizontal(|ui| {
                 ui.label("Model");
-                if egui::color_picker::color_edit_button_srgba(
-                    ui,
-                    &mut color,
-                    egui::color_picker::Alpha::OnlyBlend,
-                )
-                .changed()
+                if ui
+                    .color_edit_button_srgba_unmultiplied(&mut color)
+                    .changed()
                 {
-                    cfg.model_color = Srgba::new(color.r(), color.g(), color.b(), color.a());
+                    cfg.model_color = Srgba::new(color[0], color[1], color[2], color[3]);
                 }
             });
 
-            let mut hcol = egui::Color32::from_rgba_unmultiplied(
+            let mut hcol = [
                 cfg.highlight_color.r,
                 cfg.highlight_color.g,
                 cfg.highlight_color.b,
                 cfg.highlight_color.a,
-            );
+            ];
             ui.horizontal(|ui| {
                 ui.label("Highlight");
-                if egui::color_picker::color_edit_button_srgba(
-                    ui,
-                    &mut hcol,
-                    egui::color_picker::Alpha::OnlyBlend,
-                )
-                .changed()
-                {
-                    cfg.highlight_color = Srgba::new(hcol.r(), hcol.g(), hcol.b(), hcol.a());
+                if ui.color_edit_button_srgba_unmultiplied(&mut hcol).changed() {
+                    cfg.highlight_color = Srgba::new(hcol[0], hcol[1], hcol[2], hcol[3]);
                 }
             });
 
-            let mut mcol = egui::Color32::from_rgba_unmultiplied(
+            let mut mcol = [
                 cfg.marker_color.r,
                 cfg.marker_color.g,
                 cfg.marker_color.b,
                 cfg.marker_color.a,
-            );
+            ];
             ui.horizontal(|ui| {
                 ui.label("Marker");
-                if egui::color_picker::color_edit_button_srgba(
-                    ui,
-                    &mut mcol,
-                    egui::color_picker::Alpha::OnlyBlend,
-                )
-                .changed()
-                {
-                    cfg.marker_color = Srgba::new(mcol.r(), mcol.g(), mcol.b(), mcol.a());
+                if ui.color_edit_button_srgba_unmultiplied(&mut mcol).changed() {
+                    cfg.marker_color = Srgba::new(mcol[0], mcol[1], mcol[2], mcol[3]);
                 }
             });
 
-            let mut dircol = egui::Color32::from_rgba_unmultiplied(
+            let mut dircol = [
                 cfg.arrow_color.r,
                 cfg.arrow_color.g,
                 cfg.arrow_color.b,
                 cfg.arrow_color.a,
-            );
+            ];
             ui.horizontal(|ui| {
                 ui.label("Arrow");
-                if egui::color_picker::color_edit_button_srgba(
-                    ui,
-                    &mut dircol,
-                    egui::color_picker::Alpha::OnlyBlend,
-                )
-                .changed()
+                if ui
+                    .color_edit_button_srgba_unmultiplied(&mut dircol)
+                    .changed()
                 {
-                    cfg.arrow_color = Srgba::new(dircol.r(), dircol.g(), dircol.b(), dircol.a());
+                    cfg.arrow_color = Srgba::new(dircol[0], dircol[1], dircol[2], dircol[3]);
                 }
             });
 
@@ -567,22 +549,16 @@ fn draw_config_window(
                 egui::Slider::new(&mut cfg.ambient_light_intensity, 0.0..=5.0)
                     .text("Ambient intensity"),
             );
-            let mut acol = egui::Color32::from_rgba_unmultiplied(
+            let mut acol = [
                 cfg.ambient_light_color.r,
                 cfg.ambient_light_color.g,
                 cfg.ambient_light_color.b,
                 cfg.ambient_light_color.a,
-            );
+            ];
             ui.horizontal(|ui| {
                 ui.label("Ambient color");
-                if egui::color_picker::color_edit_button_srgba(
-                    ui,
-                    &mut acol,
-                    egui::color_picker::Alpha::OnlyBlend,
-                )
-                .changed()
-                {
-                    cfg.ambient_light_color = Srgba::new(acol.r(), acol.g(), acol.b(), acol.a());
+                if ui.color_edit_button_srgba_unmultiplied(&mut acol).changed() {
+                    cfg.ambient_light_color = Srgba::new(acol[0], acol[1], acol[2], acol[3]);
                 }
             });
 
