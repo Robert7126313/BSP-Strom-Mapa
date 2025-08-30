@@ -704,8 +704,6 @@ pub fn traverse_bsp_with_frustum(
     }
 }
 
-#[derive(Clone, Debug)]
-
 #[cfg(test)]
 mod tests {
     use super::*;

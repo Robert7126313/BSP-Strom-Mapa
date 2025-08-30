@@ -1,6 +1,7 @@
 use crate::config::CONFIG;
 use cgmath::InnerSpace;
 use egui::{CollapsingHeader, Grid};
+use log::error;
 use std::sync::atomic::AtomicUsize;
 use three_d::{CpuTexture, Texture2DRef};
 
@@ -73,9 +74,21 @@ pub fn draw_left_panel(
                     .add_filter("Image", &["png", "jpg", "jpeg"])
                     .pick_file()
                 {
-                    if let Ok(tex) = three_d_asset::io::load_and_deserialize::<CpuTexture>(&path) {
-                        *current_texture = Some(Texture2DRef::from_cpu_texture(gl, &tex));
-                        *show_texture = true;
+                    match three_d_asset::io::load_and_deserialize::<CpuTexture>(&path) {
+                        Ok(tex) => {
+                            // Drop the previous texture (if any) so the new one is always used
+                            *current_texture = None;
+                            *current_texture =
+                                Some(Texture2DRef::from_cpu_texture(gl, &tex));
+                            *show_texture = true;
+                        }
+                        Err(e) => {
+                            error!(
+                                "Failed to load texture {}: {}",
+                                path.display(),
+                                e
+                            );
+                        }
                     }
                 }
             }
