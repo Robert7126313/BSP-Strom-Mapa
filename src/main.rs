@@ -1122,6 +1122,14 @@ fn main() -> Result<()> {
 
             // Když jsme v third person mode, zobrazíme směrovou šipku pro spectator kameru
             if show_spectator_marker {
+                spectator_glow.set_transformation(
+                    Mat4::from_translation(vec3(
+                        spectator_state.pos.x,
+                        spectator_state.pos.y,
+                        spectator_state.pos.z,
+                    )) * Mat4::from_scale(cfg.camera_marker_scale),
+                );
+
                 let dir = Vector3::new(
                     spectator_state.yaw.cos() * spectator_state.pitch.cos(),
                     spectator_state.pitch.sin(),
