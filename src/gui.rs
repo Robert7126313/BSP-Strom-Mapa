@@ -516,6 +516,19 @@ fn draw_config_window(
                 }
             });
 
+            let mut pcol = [
+                cfg.splitting_plane_color.r,
+                cfg.splitting_plane_color.g,
+                cfg.splitting_plane_color.b,
+                cfg.splitting_plane_color.a,
+            ];
+            ui.horizontal(|ui| {
+                ui.label("Splitting plane");
+                if ui.color_edit_button_srgba_unmultiplied(&mut pcol).changed() {
+                    cfg.splitting_plane_color = Srgba::new(pcol[0], pcol[1], pcol[2], pcol[3]);
+                }
+            });
+
             let mut mcol = [
                 cfg.marker_color.r,
                 cfg.marker_color.g,

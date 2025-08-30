@@ -22,15 +22,15 @@ source code so you can jump directly to the implementation.
   specific node.
 - [`find_deepest_node_containing_point`](src/bsp.rs#L369-L389) – find the deepest
   node that contains a given point.
-- [`collect_triangles_in_subtree`](src/bsp.rs#L465-L477) – gather triangles from
+- [`collect_triangles_in_subtree`](src/bsp.rs#L382-L395) – gather triangles from
   a subtree.
-- [`create_highlight_mesh`](src/bsp.rs#L480-L514) – build a colored mesh for the
+- [`create_highlight_mesh`](src/bsp.rs#L397-L433) – build a colored mesh for the
   selected triangles.
-- [`create_plane_mesh`](src/bsp.rs#L517-L573) – generate a mesh representing the
+- [`create_plane_mesh`](src/bsp.rs#L435-L495) – generate a mesh representing the
   splitting plane of a node.
-- [`cpu_mesh_to_triangles`](src/bsp.rs#L579-L686) – convert a `CpuMesh` to a
+- [`cpu_mesh_to_triangles`](src/bsp.rs#L498-L589) – convert a `CpuMesh` to a
   triangle list.
-- [`traverse_bsp_with_frustum`](src/bsp.rs#L689-L750) – traverse the BSP tree
+- [`traverse_bsp_with_frustum`](src/bsp.rs#L592-L745) – traverse the BSP tree
   while performing frustum culling.
 
 ## `src/gui.rs`

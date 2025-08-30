@@ -483,7 +483,7 @@ pub fn create_plane_mesh(
         ..Default::default()
     };
 
-    let plane_color = CONFIG.lock().unwrap().highlight_color;
+    let plane_color = CONFIG.lock().unwrap().splitting_plane_color;
     let material = ColorMaterial::new_transparent(
         context,
         &CpuMaterial {
@@ -563,20 +563,25 @@ pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
             let tri_count = positions.len() / 3;
             let mut tris = Vec::with_capacity(tri_count);
             let default_uv = Vector2::new(0.0, 0.0);
-            tris.par_extend(positions.par_chunks(3).enumerate().filter_map(|(i, chunk)| {
-                if chunk.len() < 3 {
-                    return None;
-                }
-                let base = i * 3;
-                Some(Triangle {
-                    a: Vector3::new(chunk[0].x, chunk[0].y, chunk[0].z),
-                    b: Vector3::new(chunk[1].x, chunk[1].y, chunk[1].z),
-                    c: Vector3::new(chunk[2].x, chunk[2].y, chunk[2].z),
-                    uv_a: uvs.map_or(default_uv, |u| u[base]),
-                    uv_b: uvs.map_or(default_uv, |u| u[base + 1]),
-                    uv_c: uvs.map_or(default_uv, |u| u[base + 2]),
-                })
-            }));
+            tris.par_extend(
+                positions
+                    .par_chunks(3)
+                    .enumerate()
+                    .filter_map(|(i, chunk)| {
+                        if chunk.len() < 3 {
+                            return None;
+                        }
+                        let base = i * 3;
+                        Some(Triangle {
+                            a: Vector3::new(chunk[0].x, chunk[0].y, chunk[0].z),
+                            b: Vector3::new(chunk[1].x, chunk[1].y, chunk[1].z),
+                            c: Vector3::new(chunk[2].x, chunk[2].y, chunk[2].z),
+                            uv_a: uvs.map_or(default_uv, |u| u[base]),
+                            uv_b: uvs.map_or(default_uv, |u| u[base + 1]),
+                            uv_c: uvs.map_or(default_uv, |u| u[base + 2]),
+                        })
+                    }),
+            );
             tris
         }
         _ => Vec::new(), // Přidáno pro pokrytí všech případů
