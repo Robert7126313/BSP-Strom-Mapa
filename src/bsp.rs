@@ -395,7 +395,7 @@ pub fn collect_triangles_in_subtree(node: &BspNode, triangles: &mut Vec<Triangle
 }
 
 // Funkce pro vytvoření zvýrazněného meshe
-pub fn create_highlight_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, ColorMaterial> {
+pub fn create_highlight_mesh(triangles: &[Triangle], context: &Context) -> Gm<Mesh, PhysicalMaterial> {
     let positions: Vec<Vec3> = triangles
         .iter()
         .flat_map(|tri| {
@@ -421,7 +421,7 @@ pub fn create_highlight_mesh(triangles: &[Triangle], context: &Context) -> Gm<Me
     };
 
     let highlight_color = CONFIG.lock().unwrap().highlight_color;
-    let material = ColorMaterial::new_transparent(
+    let material = PhysicalMaterial::new_transparent(
         context,
         &CpuMaterial {
             albedo: highlight_color,
@@ -437,7 +437,7 @@ pub fn create_plane_mesh(
     plane: &Plane,
     bounds: &BoundingBox,
     context: &Context,
-) -> Gm<Mesh, ColorMaterial> {
+) -> Gm<Mesh, PhysicalMaterial> {
     // Vypočítáme střed obalového objemu
     let center = (bounds.min + bounds.max) * 0.5;
 
@@ -484,7 +484,7 @@ pub fn create_plane_mesh(
     };
 
     let plane_color = CONFIG.lock().unwrap().splitting_plane_color;
-    let material = ColorMaterial::new_transparent(
+    let material = PhysicalMaterial::new_transparent(
         context,
         &CpuMaterial {
             albedo: plane_color,
