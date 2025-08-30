@@ -344,7 +344,7 @@ fn process_primitive(
 
 // Funkce pro vytvoření meshe z viditelných trojúhelníků
 #[allow(dead_code)]
-fn create_visible_mesh_old(triangles: &[Triangle], context: &Context) -> Gm<Mesh, ColorMaterial> {
+fn create_visible_mesh_old(triangles: &[Triangle], context: &Context) -> Gm<Mesh, PhysicalMaterial> {
     // Paralelní zpracování pozic a indexů
     let triangles_count = triangles.len();
 
@@ -386,9 +386,9 @@ fn create_visible_mesh_old(triangles: &[Triangle], context: &Context) -> Gm<Mesh
         ..Default::default()
     };
     let material = if model_color.a < 255 {
-        ColorMaterial::new_transparent(context, &cpu_material)
+        PhysicalMaterial::new_transparent(context, &cpu_material)
     } else {
-        ColorMaterial::new_opaque(context, &cpu_material)
+        PhysicalMaterial::new_opaque(context, &cpu_material)
     };
 
     Gm::new(Mesh::new(context, &visible_mesh), material)
@@ -398,7 +398,7 @@ fn create_visible_mesh(
     triangles: &[Triangle],
     context: &Context,
     texture: Option<&Texture2DRef>,
-) -> Gm<Mesh, ColorMaterial> {
+) -> Gm<Mesh, PhysicalMaterial> {
     let triangles_count = triangles.len();
     let mut positions = vec![vec3(0.0, 0.0, 0.0); triangles_count * 3];
     let mut uvs = vec![vec2(0.0, 0.0); triangles_count * 3];
@@ -441,11 +441,12 @@ fn create_visible_mesh(
     } else {
         RenderStates::default()
     };
-    let material = ColorMaterial {
-        color: model_color,
-        texture: texture.cloned(),
+    let material = PhysicalMaterial {
+        albedo: model_color,
+        albedo_texture: texture.cloned(),
         render_states,
         is_transparent,
+        ..Default::default()
     };
     Gm::new(Mesh::new(context, &visible_mesh), material)
 }
