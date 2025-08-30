@@ -10,7 +10,8 @@ source code so you can jump directly to the implementation.
   orientation based on keyboard input.
 - [`FreeCamera::cam`](src/camera.rs#L75-L86) – construct a `three_d` camera from
   the current state.
-- [`CameraState::new`](src/camera.rs#L104-L112) – snapshot of camera parameters.
+- [`CameraState::new`](src/camera.rs#L104-L107) – create a camera state from
+  position and orientation.
 
 ## `src/bsp.rs`
 - [`build_bsp`](src/bsp.rs#L293-L331) – construct the BSP tree and assign node
@@ -46,7 +47,7 @@ source code so you can jump directly to the implementation.
   tilt from arrow keys.
 
 ## `src/main.rs`
-- [`load_cpu_mesh`](src/main.rs#L61-L109) – load a GLTF/GLB file into a CPU
+- [`load_cpu_mesh`](src/main.rs#L58-L106) – load a GLTF/GLB file into a CPU
   mesh and optional texture with basic validation.
-- [`load_gltf_with_gltf_crate`](src/main.rs#L111-L168) – helper using the
+- [`load_gltf_with_gltf_crate`](src/main.rs#L108-L169) – helper using the
   `gltf` crate to parse meshes and textures.

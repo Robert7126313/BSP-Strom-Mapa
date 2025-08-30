@@ -4,6 +4,7 @@
 use cgmath::Vector3;
 use egui::Color32;
 use once_cell::sync::Lazy;
+use std::f32::consts::FRAC_PI_2;
 use std::sync::Mutex;
 use three_d::Srgba;
 
@@ -46,6 +47,10 @@ pub struct Config {
     pub far_plane: f32,
     pub default_spectator_pos: Vector3<f32>,
     pub default_third_person_pos: Vector3<f32>,
+    pub default_spectator_yaw: f32,
+    pub default_spectator_pitch: f32,
+    pub default_third_person_yaw: f32,
+    pub default_third_person_pitch: f32,
     pub camera_marker_scale: f32,
     pub direction_ray_thickness: f32,
     pub direction_ray_length: f32,
@@ -75,6 +80,10 @@ impl Default for Config {
             far_plane: 1000.0,
             default_spectator_pos: Vector3::new(0.0, 2.0, 8.0),
             default_third_person_pos: Vector3::new(5.0, 2.0, 8.0),
+            default_spectator_yaw: -FRAC_PI_2,
+            default_spectator_pitch: 0.0,
+            default_third_person_yaw: -FRAC_PI_2,
+            default_third_person_pitch: 0.0,
             camera_marker_scale: 0.2,
             direction_ray_thickness: 0.05,
             direction_ray_length: 3.0,

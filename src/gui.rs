@@ -487,11 +487,19 @@ fn draw_config_window(
                 cam.speed = defaults.camera_speed;
                 cam.look_speed = defaults.look_speed;
                 spectator_state.pos = defaults.default_spectator_pos;
+                spectator_state.yaw = defaults.default_spectator_yaw;
+                spectator_state.pitch = defaults.default_spectator_pitch;
                 third_person_state.pos = defaults.default_third_person_pos;
+                third_person_state.yaw = defaults.default_third_person_yaw;
+                third_person_state.pitch = defaults.default_third_person_pitch;
                 if mode == crate::camera::CamMode::Spectator {
                     cam.pos = spectator_state.pos;
+                    cam.yaw = spectator_state.yaw;
+                    cam.pitch = spectator_state.pitch;
                 } else if mode == crate::camera::CamMode::ThirdPerson {
                     cam.pos = third_person_state.pos;
+                    cam.yaw = third_person_state.yaw;
+                    cam.pitch = third_person_state.pitch;
                 }
                 *show_spectator_marker = false;
                 *cfg = defaults;
@@ -666,6 +674,28 @@ fn draw_config_window(
                 }
             });
             ui.horizontal(|ui| {
+                ui.label("Spectator angle");
+                let mut yaw_deg = spectator_state.yaw.to_degrees();
+                let mut pitch_deg = spectator_state.pitch.to_degrees();
+                let mut changed = false;
+                changed |= ui
+                    .add(egui::DragValue::new(&mut yaw_deg).suffix("°"))
+                    .changed();
+                changed |= ui
+                    .add(egui::DragValue::new(&mut pitch_deg).suffix("°"))
+                    .changed();
+                if changed {
+                    spectator_state.yaw = yaw_deg.to_radians();
+                    spectator_state.pitch = pitch_deg.to_radians();
+                    cfg.default_spectator_yaw = spectator_state.yaw;
+                    cfg.default_spectator_pitch = spectator_state.pitch;
+                    if mode == crate::camera::CamMode::Spectator {
+                        cam.yaw = spectator_state.yaw;
+                        cam.pitch = spectator_state.pitch;
+                    }
+                }
+            });
+            ui.horizontal(|ui| {
                 ui.label("Third person pos");
                 let mut changed = false;
                 changed |= ui
@@ -681,6 +711,28 @@ fn draw_config_window(
                     cfg.default_third_person_pos = third_person_state.pos;
                     if mode == crate::camera::CamMode::ThirdPerson {
                         cam.pos = third_person_state.pos;
+                    }
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("Third person angle");
+                let mut yaw_deg = third_person_state.yaw.to_degrees();
+                let mut pitch_deg = third_person_state.pitch.to_degrees();
+                let mut changed = false;
+                changed |= ui
+                    .add(egui::DragValue::new(&mut yaw_deg).suffix("°"))
+                    .changed();
+                changed |= ui
+                    .add(egui::DragValue::new(&mut pitch_deg).suffix("°"))
+                    .changed();
+                if changed {
+                    third_person_state.yaw = yaw_deg.to_radians();
+                    third_person_state.pitch = pitch_deg.to_radians();
+                    cfg.default_third_person_yaw = third_person_state.yaw;
+                    cfg.default_third_person_pitch = third_person_state.pitch;
+                    if mode == crate::camera::CamMode::ThirdPerson {
+                        cam.yaw = third_person_state.yaw;
+                        cam.pitch = third_person_state.pitch;
                     }
                 }
             });

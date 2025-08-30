@@ -617,7 +617,11 @@ fn main() -> Result<()> {
     // před inicializací kamery přidáme mutable proměnné pro stavy kamer obou režimů
     let mut cam = FreeCamera::new(cfg.default_spectator_pos);
     let mut spectator_state = CameraState::from_camera(&cam);
-    let mut third_person_state = CameraState::new(cfg.default_third_person_pos); // Jiná pozice pro lepší vizualizaci
+    let mut third_person_state = CameraState::new(
+        cfg.default_third_person_pos,
+        cfg.default_third_person_yaw,
+        cfg.default_third_person_pitch,
+    ); // Jiná pozice pro lepší vizualizaci
     let mut mode = CamMode::Spectator;
 
     // Proměnná pro zobrazení značky spectator kamery
@@ -1020,14 +1024,22 @@ fn main() -> Result<()> {
         if input_manager.is_key_pressed(KeyCode::Home) {
             if mode == CamMode::Spectator {
                 // Vytvoření nového stavu kamery s výchozí pozicí, ale aktuální rychlostí kamery
-                let mut reset_state = CameraState::new(cfg.default_spectator_pos);
+                let mut reset_state = CameraState::new(
+                    cfg.default_spectator_pos,
+                    cfg.default_spectator_yaw,
+                    cfg.default_spectator_pitch,
+                );
                 reset_state.speed = cam.speed; // Zachová aktuální rychlost
                 reset_state.apply_to_camera(&mut cam);
                 println!("Kamera resetována na výchozí spectator pozici");
             } else {
                 // ThirdPerson
                 // Vytvoření nového stavu kamery s výchozí pozicí, ale aktuální rychlostí kamery
-                let mut reset_state = CameraState::new(cfg.default_third_person_pos);
+                let mut reset_state = CameraState::new(
+                    cfg.default_third_person_pos,
+                    cfg.default_third_person_yaw,
+                    cfg.default_third_person_pitch,
+                );
                 reset_state.speed = cam.speed; // Zachová aktuální rychlost
                 reset_state.apply_to_camera(&mut cam);
                 println!("Kamera resetována na výchozí third person pozici");

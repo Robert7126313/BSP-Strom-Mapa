@@ -4,7 +4,6 @@
 use crate::config::CONFIG;
 use crate::input::{InputManager, KeyCode};
 use cgmath::{Deg, Vector3};
-use std::f32::consts::FRAC_PI_2;
 use three_d::*;
 
 #[derive(Clone)]
@@ -21,8 +20,8 @@ impl FreeCamera {
         let cfg = CONFIG.lock().unwrap().clone();
         Self {
             pos,
-            yaw: -FRAC_PI_2,
-            pitch: 0.0,
+            yaw: cfg.default_spectator_yaw,
+            pitch: cfg.default_spectator_pitch,
             speed: cfg.camera_speed,
             look_speed: cfg.look_speed,
         }
@@ -101,12 +100,12 @@ pub struct CameraState {
 }
 
 impl CameraState {
-    pub fn new(pos: Vector3<f32>) -> Self {
+    pub fn new(pos: Vector3<f32>, yaw: f32, pitch: f32) -> Self {
         let speed = CONFIG.lock().unwrap().camera_speed;
         Self {
             pos,
-            yaw: -FRAC_PI_2,
-            pitch: 0.0,
+            yaw,
+            pitch,
             speed,
         }
     }
