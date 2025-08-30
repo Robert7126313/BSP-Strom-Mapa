@@ -1,6 +1,8 @@
 use crate::config::{Config, CONFIG};
 use three_d::Srgba;
 
+use crate::lang::{Language, tr};
+
 pub fn draw_config_window(
     ctx: &egui::Context,
     cam: &mut crate::camera::FreeCamera,
@@ -10,13 +12,28 @@ pub fn draw_config_window(
     show_spectator_marker: &mut bool,
     open: &mut bool,
 ) {
-    egui::Window::new("Config")
+    let lang = { CONFIG.read().unwrap().language };
+    egui::Window::new(tr(lang, "Config", "Nastavení"))
         .open(open)
         .vscroll(true)
         .show(ctx, |ui| {
             let mut cfg = CONFIG.write().unwrap();
+            let lang = cfg.language;
 
-            if ui.button("Load default").clicked() {
+            ui.horizontal(|ui| {
+                ui.label(tr(lang, "Language", "Jazyk"));
+                egui::ComboBox::from_id_source("language_select")
+                    .selected_text(match cfg.language {
+                        Language::English => "English",
+                        Language::Czech => "Čeština",
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut cfg.language, Language::English, "English");
+                        ui.selectable_value(&mut cfg.language, Language::Czech, "Čeština");
+                    });
+            });
+
+            if ui.button(tr(lang, "Load default", "Načíst výchozí")).clicked() {
                 let defaults = Config::default();
                 cam.speed = defaults.camera_speed;
                 cam.look_speed = defaults.look_speed;
@@ -39,9 +56,9 @@ pub fn draw_config_window(
                 *cfg = defaults;
             }
 
-            ui.heading("Colors & Lighting");
+            ui.heading(tr(lang, "Colors & Lighting", "Barvy a osvětlení"));
             ui.horizontal(|ui| {
-                ui.label("Background");
+                ui.label(tr(lang, "Background", "Pozadí"));
                 ui.color_edit_button_rgb(&mut cfg.bg_color);
             });
 
@@ -52,7 +69,7 @@ pub fn draw_config_window(
                 cfg.model_color.a,
             ];
             ui.horizontal(|ui| {
-                ui.label("Model");
+                ui.label(tr(lang, "Model", "Model"));
                 if ui.color_edit_button_srgba_unmultiplied(&mut color).changed() {
                     cfg.model_color = Srgba::new(color[0], color[1], color[2], color[3]);
                 }
@@ -65,7 +82,7 @@ pub fn draw_config_window(
                 cfg.highlight_color.a,
             ];
             ui.horizontal(|ui| {
-                ui.label("Highlight");
+                ui.label(tr(lang, "Highlight", "Zvýraznění"));
                 if ui.color_edit_button_srgba_unmultiplied(&mut hcol).changed() {
                     cfg.highlight_color = Srgba::new(hcol[0], hcol[1], hcol[2], hcol[3]);
                 }
@@ -78,7 +95,7 @@ pub fn draw_config_window(
                 cfg.splitting_plane_color.a,
             ];
             ui.horizontal(|ui| {
-                ui.label("Splitting plane");
+                ui.label(tr(lang, "Splitting plane", "Dělící rovina"));
                 if ui.color_edit_button_srgba_unmultiplied(&mut pcol).changed() {
                     cfg.splitting_plane_color = Srgba::new(pcol[0], pcol[1], pcol[2], pcol[3]);
                 }
@@ -91,7 +108,7 @@ pub fn draw_config_window(
                 cfg.marker_color.a,
             ];
             ui.horizontal(|ui| {
-                ui.label("Marker");
+                ui.label(tr(lang, "Marker", "Značka"));
                 if ui.color_edit_button_srgba_unmultiplied(&mut mcol).changed() {
                     cfg.marker_color = Srgba::new(mcol[0], mcol[1], mcol[2], mcol[3]);
                 }
@@ -104,7 +121,7 @@ pub fn draw_config_window(
                 cfg.arrow_color.a,
             ];
             ui.horizontal(|ui| {
-                ui.label("Arrow");
+                ui.label(tr(lang, "Arrow", "Šipka"));
                 if ui
                     .color_edit_button_srgba_unmultiplied(&mut dircol)
                     .changed()
@@ -115,7 +132,7 @@ pub fn draw_config_window(
 
             ui.add(
                 egui::Slider::new(&mut cfg.ambient_light_intensity, 0.0..=5.0)
-                    .text("Ambient intensity"),
+                    .text(tr(lang, "Ambient intensity", "Intenzita ambientního osvětlení")),
             );
             let mut acol = [
                 cfg.ambient_light_color.r,
@@ -124,17 +141,17 @@ pub fn draw_config_window(
                 cfg.ambient_light_color.a,
             ];
             ui.horizontal(|ui| {
-                ui.label("Ambient color");
+                ui.label(tr(lang, "Ambient color", "Barva ambientního světla"));
                 if ui.color_edit_button_srgba_unmultiplied(&mut acol).changed() {
                     cfg.ambient_light_color = Srgba::new(acol[0], acol[1], acol[2], acol[3]);
                 }
             });
 
             ui.separator();
-            ui.heading("BSP Tree");
-            ui.add(egui::Slider::new(&mut cfg.bsp_tree_text_size, 8.0..=32.0).text("Text size"));
+            ui.heading(tr(lang, "BSP Tree", "BSP Strom"));
+            ui.add(egui::Slider::new(&mut cfg.bsp_tree_text_size, 8.0..=32.0).text(tr(lang, "Text size", "Velikost textu")));
             ui.horizontal(|ui| {
-                ui.label("Path color");
+                ui.label(tr(lang, "Path color", "Barva cesty"));
                 egui::color_picker::color_edit_button_srgba(
                     ui,
                     &mut cfg.bsp_tree_path_color,
@@ -142,7 +159,7 @@ pub fn draw_config_window(
                 );
             });
             ui.horizontal(|ui| {
-                ui.label("Selected color");
+                ui.label(tr(lang, "Selected color", "Barva vybraného"));
                 egui::color_picker::color_edit_button_srgba(
                     ui,
                     &mut cfg.bsp_tree_selected_color,
@@ -151,42 +168,45 @@ pub fn draw_config_window(
             });
 
             ui.separator();
-            ui.heading("BSP Limits");
-            ui.add(egui::Slider::new(&mut cfg.max_bsp_depth, 1..=64).text("Max depth"));
+            ui.heading(tr(lang, "BSP Limits", "Limity BSP"));
+            ui.add(egui::Slider::new(&mut cfg.max_bsp_depth, 1..=64).text(tr(lang, "Max depth", "Maximální hloubka")));
             let max_depth = cfg.max_bsp_depth;
             ui.add(
                 egui::Slider::new(&mut cfg.default_branch_limit, 1..=max_depth)
-                    .text("Default branch limit"),
+                    .text(tr(lang, "Default branch limit", "Výchozí limit větví")),
             );
             ui.add(
                 egui::Slider::new(&mut cfg.min_triangles_per_leaf, 1..=100)
-                    .text("Min triangles per leaf"),
+                    .text(tr(lang, "Min triangles per leaf", "Min trojúhelníků na list")),
             );
 
             ui.separator();
-            ui.heading("Camera");
+            ui.heading(tr(lang, "Camera", "Kamera"));
             if ui
-                .add(egui::Slider::new(&mut cam.speed, 0.1..=20.0).text("Speed"))
+                .add(egui::Slider::new(&mut cam.speed, 0.1..=20.0).text(tr(lang, "Speed", "Rychlost")))
                 .changed()
             {
                 cfg.camera_speed = cam.speed;
             }
             if ui
-                .add(egui::Slider::new(&mut cam.look_speed, 0.1..=10.0).text("Look speed"))
+                .add(egui::Slider::new(&mut cam.look_speed, 0.1..=10.0).text(tr(lang, "Look speed", "Rychlost otáčení")))
                 .changed()
             {
                 cfg.look_speed = cam.look_speed;
             }
-            ui.add(egui::Slider::new(&mut cfg.default_fov_deg, 30.0..=120.0).text("FOV deg"));
-            ui.add(egui::Slider::new(&mut cfg.near_plane, 0.01..=10.0).text("Near plane"));
-            ui.add(egui::Slider::new(&mut cfg.far_plane, 10.0..=5000.0).text("Far plane"));
+            ui.add(egui::Slider::new(&mut cfg.default_fov_deg, 30.0..=120.0).text(tr(lang, "FOV deg", "FOV stupně")));
+            ui.add(egui::Slider::new(&mut cfg.near_plane, 0.01..=10.0).text(tr(lang, "Near plane", "Blízká rovina")));
+            ui.add(egui::Slider::new(&mut cfg.far_plane, 10.0..=5000.0).text(tr(lang, "Far plane", "Vzdálená rovina")));
 
             ui.separator();
-            ui.heading("Spectator");
-            ui.checkbox(show_spectator_marker, "Show spectator position and direction");
+            ui.heading(tr(lang, "Spectator", "Divák"));
+            ui.checkbox(
+                show_spectator_marker,
+                tr(lang, "Show spectator position and direction", "Zobrazit pozici a směr diváka"),
+            );
 
             ui.horizontal(|ui| {
-                ui.label("Spectator pos");
+                ui.label(tr(lang, "Spectator pos", "Pozice diváka"));
                 let mut changed = false;
                 changed |= ui
                     .add(egui::DragValue::new(&mut spectator_state.pos.x))
@@ -205,7 +225,7 @@ pub fn draw_config_window(
                 }
             });
             ui.horizontal(|ui| {
-                ui.label("Spectator angle");
+                ui.label(tr(lang, "Spectator angle", "Úhel diváka"));
                 let mut yaw_deg = spectator_state.yaw.to_degrees();
                 let mut pitch_deg = spectator_state.pitch.to_degrees();
                 let mut changed = false;
@@ -227,7 +247,7 @@ pub fn draw_config_window(
                 }
             });
             ui.horizontal(|ui| {
-                ui.label("Third person pos");
+                ui.label(tr(lang, "Third person pos", "Pozice třetí osoby"));
                 let mut changed = false;
                 changed |= ui
                     .add(egui::DragValue::new(&mut third_person_state.pos.x))
@@ -246,7 +266,7 @@ pub fn draw_config_window(
                 }
             });
             ui.horizontal(|ui| {
-                ui.label("Third person angle");
+                ui.label(tr(lang, "Third person angle", "Úhel třetí osoby"));
                 let mut yaw_deg = third_person_state.yaw.to_degrees();
                 let mut pitch_deg = third_person_state.pitch.to_degrees();
                 let mut changed = false;
@@ -268,12 +288,13 @@ pub fn draw_config_window(
                 }
             });
             ui.add(
-                egui::Slider::new(&mut cfg.camera_marker_scale, 0.01..=1.0).text("Marker scale"),
+                egui::Slider::new(&mut cfg.camera_marker_scale, 0.01..=1.0)
+                    .text(tr(lang, "Marker scale", "Měřítko značky")),
             );
             ui.add(
                 egui::Slider::new(&mut cfg.direction_ray_thickness, 0.01..=1.0)
-                    .text("Ray thickness"),
+                    .text(tr(lang, "Ray thickness", "Tloušťka paprsku")),
             );
-            ui.add(egui::Slider::new(&mut cfg.direction_ray_length, 0.1..=10.0).text("Ray length"));
+            ui.add(egui::Slider::new(&mut cfg.direction_ray_length, 0.1..=10.0).text(tr(lang, "Ray length", "Délka paprsku")));
         });
 }

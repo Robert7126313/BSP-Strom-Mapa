@@ -2,6 +2,8 @@ use crate::config::CONFIG;
 use egui_plot::{Line, Plot, PlotPoint, Points, Text};
 use std::collections::{HashMap, HashSet};
 
+use crate::lang::tr;
+
 struct TreePlotData {
     positions: HashMap<usize, PlotPoint>,
     edges: Vec<(usize, usize)>,
@@ -34,7 +36,8 @@ pub fn draw_bsp_tree_window(
     root: &crate::bsp::BspNode,
     selected: &mut Option<usize>,
 ) {
-    egui::Window::new("BSP Tree")
+    let lang = { CONFIG.read().unwrap().language };
+    egui::Window::new(tr(lang, "BSP Tree", "BSP Strom"))
         .open(open)
         .vscroll(true)
         .hscroll(true)
