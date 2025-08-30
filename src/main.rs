@@ -34,7 +34,7 @@ use crate::bsp::{
     create_plane_mesh, find_deepest_node_containing_point, find_node, traverse_bsp_with_frustum,
     triangle_center, BspNode, BspStats, Frustum, Triangle,
 };
-use crate::camera::{CamMode, CameraState, FreeCamera, SwitchDelay};
+use crate::camera::{CamMode, CameraState, FreeCamera};
 use crate::config::CONFIG;
 use crate::input::{InputManager, KeyCode};
 
@@ -617,7 +617,11 @@ fn main() -> Result<()> {
     // před inicializací kamery přidáme mutable proměnné pro stavy kamer obou režimů
     let mut cam = FreeCamera::new(cfg.default_spectator_pos);
     let mut spectator_state = CameraState::from_camera(&cam);
-    let mut third_person_state = CameraState::new(cfg.default_third_person_pos); // Jiná pozice pro lepší vizualizaci
+    let mut third_person_state = CameraState::new(
+        cfg.default_third_person_pos,
+        cfg.default_third_person_yaw,
+        cfg.default_third_person_pitch,
+    ); // Jiná pozice pro lepší vizualizaci
     let mut mode = CamMode::Spectator;
 
     // Proměnná pro zobrazení značky spectator kamery
@@ -642,9 +646,6 @@ fn main() -> Result<()> {
 
     // Inicializace InputManageru pro plynulé ovládání s více klávesami
     let mut input_manager = InputManager::new();
-
-    // Přidání struktury pro sledování času přepnutí režimu
-    let mut switch_delay = SwitchDelay::new(cfg.camera_switch_cooldown); // cooldown mezi přepnutími
 
     // ----------------------------------------------------------------------------
     // Stav pro interaktivní výběr BSP:
@@ -948,11 +949,10 @@ fn main() -> Result<()> {
 
         // --- ovládání ---
         // --- ovládání přepnutí režimu pomocí kláves F a G ---
-        let current_time = frame_input.accumulated_time;
 
         // Pomocná funkce pro přepínání režimů
         let mut switch_camera_mode = |target_mode: CamMode| {
-            if switch_delay.can_switch(current_time) && mode != target_mode {
+            if mode != target_mode {
                 match target_mode {
                     CamMode::Spectator => {
                         // Ulož aktuální pozici do ThirdPerson stavu
@@ -975,9 +975,6 @@ fn main() -> Result<()> {
                         println!("Přepnuto na režim: ThirdPerson");
                     }
                 }
-
-                // Zaznamenej čas posledního přepnutí
-                switch_delay.record_switch(current_time);
 
                 // Aktualizuj pozice glow značek
                 spectator_glow.set_transformation(
@@ -1027,14 +1024,22 @@ fn main() -> Result<()> {
         if input_manager.is_key_pressed(KeyCode::Home) {
             if mode == CamMode::Spectator {
                 // Vytvoření nového stavu kamery s výchozí pozicí, ale aktuální rychlostí kamery
-                let mut reset_state = CameraState::new(cfg.default_spectator_pos);
+                let mut reset_state = CameraState::new(
+                    cfg.default_spectator_pos,
+                    cfg.default_spectator_yaw,
+                    cfg.default_spectator_pitch,
+                );
                 reset_state.speed = cam.speed; // Zachová aktuální rychlost
                 reset_state.apply_to_camera(&mut cam);
                 println!("Kamera resetována na výchozí spectator pozici");
             } else {
                 // ThirdPerson
                 // Vytvoření nového stavu kamery s výchozí pozicí, ale aktuální rychlostí kamery
-                let mut reset_state = CameraState::new(cfg.default_third_person_pos);
+                let mut reset_state = CameraState::new(
+                    cfg.default_third_person_pos,
+                    cfg.default_third_person_yaw,
+                    cfg.default_third_person_pitch,
+                );
                 reset_state.speed = cam.speed; // Zachová aktuální rychlost
                 reset_state.apply_to_camera(&mut cam);
                 println!("Kamera resetována na výchozí third person pozici");
@@ -1122,6 +1127,14 @@ fn main() -> Result<()> {
 
             // Když jsme v third person mode, zobrazíme směrovou šipku pro spectator kameru
             if show_spectator_marker {
+                spectator_glow.set_transformation(
+                    Mat4::from_translation(vec3(
+                        spectator_state.pos.x,
+                        spectator_state.pos.y,
+                        spectator_state.pos.z,
+                    )) * Mat4::from_scale(cfg.camera_marker_scale),
+                );
+
                 let dir = Vector3::new(
                     spectator_state.yaw.cos() * spectator_state.pitch.cos(),
                     spectator_state.pitch.sin(),
