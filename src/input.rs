@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Input handling utilities
 
-use std::collections::HashMap;
-use cgmath::Vector3;
 use cgmath::InnerSpace;
+use cgmath::Vector3;
+use std::collections::HashMap;
 use three_d::*;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -64,7 +64,9 @@ pub struct InputManager {
 
 impl Default for InputManager {
     fn default() -> Self {
-        Self { key_states: HashMap::new() }
+        Self {
+            key_states: HashMap::new(),
+        }
     }
 }
 
@@ -139,4 +141,3 @@ impl InputManager {
         tilt
     }
 }
-
