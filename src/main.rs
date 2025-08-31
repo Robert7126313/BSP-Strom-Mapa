@@ -554,8 +554,15 @@ fn main() -> Result<()> {
         );
 
         if branch_limit != last_branch_limit {
+            // Update the default branch limit in the global configuration so that
+            // the slider in the configuration window stays in sync with the one in
+            // the left control panel.
+            CONFIG.write().unwrap().default_branch_limit = branch_limit;
+            last_default_branch_limit = branch_limit;
+
             let next_id = AtomicUsize::new(0);
-            bsp_root_preview = Some(build_bsp(&current_triangles, 0, branch_limit, &next_id));
+            bsp_root_preview =
+                Some(build_bsp(&current_triangles, 0, branch_limit, &next_id));
             selected_node = None;
             last_branch_limit = branch_limit;
         }
