@@ -311,11 +311,16 @@ pub fn draw_left_panel(
                     tr(lang, "Look speed", "Rychlost otáčení"),
                     cam.look_speed * 180.0 / std::f32::consts::PI
                 ));
-                ui.add(egui::Slider::new(&mut cam.look_speed, 0.5..=5.0).text(tr(
-                    lang,
-                    "Look speed",
-                    "Rychlost otáčení",
-                )));
+                if ui
+                    .add(egui::Slider::new(&mut cam.look_speed, 0.1..=10.0).text(tr(
+                        lang,
+                        "Look speed",
+                        "Rychlost otáčení",
+                    )))
+                    .changed()
+                {
+                    CONFIG.write().unwrap().look_speed = cam.look_speed;
+                }
             });
             CollapsingHeader::new(tr(lang, "Misc", "Různé")).show(ui, |ui| {
                 ui.label(tr(
