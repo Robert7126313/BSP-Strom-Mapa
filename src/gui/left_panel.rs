@@ -1,3 +1,5 @@
+//! Left-side control panel with file loading and visualization options.
+
 use crate::config::CONFIG;
 use cgmath::InnerSpace;
 use egui::{CollapsingHeader, Grid};

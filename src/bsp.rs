@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// BSP and geometry utilities
+//! Core BSP tree construction, traversal and visualization utilities.
 use cgmath::{Vector2, Vector3};
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicUsize, Ordering};

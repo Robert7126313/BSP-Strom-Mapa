@@ -1,3 +1,5 @@
+//! Basic geometric primitives and helpers used throughout the viewer.
+
 use cgmath::{InnerSpace, Vector2, Vector3};
 use three_d::Camera;
 
@@ -112,9 +114,21 @@ impl BoundingBox {
 
     pub fn intersects_plane(&self, plane: &Plane) -> bool {
         let p = Vector3::new(
-            if plane.n.x >= 0.0 { self.max.x } else { self.min.x },
-            if plane.n.y >= 0.0 { self.max.y } else { self.min.y },
-            if plane.n.z >= 0.0 { self.max.z } else { self.min.z },
+            if plane.n.x >= 0.0 {
+                self.max.x
+            } else {
+                self.min.x
+            },
+            if plane.n.y >= 0.0 {
+                self.max.y
+            } else {
+                self.min.y
+            },
+            if plane.n.z >= 0.0 {
+                self.max.z
+            } else {
+                self.min.z
+            },
         );
         plane.side(p) >= 0.0
     }
@@ -136,35 +150,53 @@ impl Frustum {
     pub fn from_camera(camera: &Camera) -> Self {
         let vp_matrix = camera.projection() * camera.view();
         let mat = [
-            vp_matrix.x.x, vp_matrix.x.y, vp_matrix.x.z, vp_matrix.x.w,
-            vp_matrix.y.x, vp_matrix.y.y, vp_matrix.y.z, vp_matrix.y.w,
-            vp_matrix.z.x, vp_matrix.z.y, vp_matrix.z.z, vp_matrix.z.w,
-            vp_matrix.w.x, vp_matrix.w.y, vp_matrix.w.z, vp_matrix.w.w,
+            vp_matrix.x.x,
+            vp_matrix.x.y,
+            vp_matrix.x.z,
+            vp_matrix.x.w,
+            vp_matrix.y.x,
+            vp_matrix.y.y,
+            vp_matrix.y.z,
+            vp_matrix.y.w,
+            vp_matrix.z.x,
+            vp_matrix.z.y,
+            vp_matrix.z.z,
+            vp_matrix.z.w,
+            vp_matrix.w.x,
+            vp_matrix.w.y,
+            vp_matrix.w.z,
+            vp_matrix.w.w,
         ];
 
         let left = Plane {
             n: Vector3::new(mat[3] + mat[0], mat[7] + mat[4], mat[11] + mat[8]).normalize(),
-            d: (mat[15] + mat[12]) / (mat[3] + mat[0]).hypot((mat[7] + mat[4]).hypot(mat[11] + mat[8])),
+            d: (mat[15] + mat[12])
+                / (mat[3] + mat[0]).hypot((mat[7] + mat[4]).hypot(mat[11] + mat[8])),
         };
         let right = Plane {
             n: Vector3::new(mat[3] - mat[0], mat[7] - mat[4], mat[11] - mat[8]).normalize(),
-            d: (mat[15] - mat[12]) / (mat[3] - mat[0]).hypot((mat[7] - mat[4]).hypot(mat[11] - mat[8])),
+            d: (mat[15] - mat[12])
+                / (mat[3] - mat[0]).hypot((mat[7] - mat[4]).hypot(mat[11] - mat[8])),
         };
         let bottom = Plane {
             n: Vector3::new(mat[3] + mat[1], mat[7] + mat[5], mat[11] + mat[9]).normalize(),
-            d: (mat[15] + mat[13]) / (mat[3] + mat[1]).hypot((mat[7] + mat[5]).hypot(mat[11] + mat[9])),
+            d: (mat[15] + mat[13])
+                / (mat[3] + mat[1]).hypot((mat[7] + mat[5]).hypot(mat[11] + mat[9])),
         };
         let top = Plane {
             n: Vector3::new(mat[3] - mat[1], mat[7] - mat[5], mat[11] - mat[9]).normalize(),
-            d: (mat[15] - mat[13]) / (mat[3] - mat[1]).hypot((mat[7] - mat[5]).hypot(mat[11] - mat[9])),
+            d: (mat[15] - mat[13])
+                / (mat[3] - mat[1]).hypot((mat[7] - mat[5]).hypot(mat[11] - mat[9])),
         };
         let near = Plane {
             n: Vector3::new(mat[3] + mat[2], mat[7] + mat[6], mat[11] + mat[10]).normalize(),
-            d: (mat[15] + mat[14]) / (mat[3] + mat[2]).hypot((mat[7] + mat[6]).hypot(mat[11] + mat[10])),
+            d: (mat[15] + mat[14])
+                / (mat[3] + mat[2]).hypot((mat[7] + mat[6]).hypot(mat[11] + mat[10])),
         };
         let far = Plane {
             n: Vector3::new(mat[3] - mat[2], mat[7] - mat[6], mat[11] - mat[10]).normalize(),
-            d: (mat[15] - mat[14]) / (mat[3] - mat[2]).hypot((mat[7] - mat[6]).hypot(mat[11] - mat[10])),
+            d: (mat[15] - mat[14])
+                / (mat[3] - mat[2]).hypot((mat[7] - mat[6]).hypot(mat[11] - mat[10])),
         };
 
         Self {
