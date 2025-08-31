@@ -1,3 +1,5 @@
+//! Minimal two-language helper (English and Czech).
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Language {
     English,

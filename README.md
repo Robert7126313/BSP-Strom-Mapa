@@ -60,4 +60,19 @@ and lighting can be customized by editing the constants in this file, e.g.:
 - `AMBIENT_LIGHT_INTENSITY` and `AMBIENT_LIGHT_COLOR` – ambient light settings.
 - `DEFAULT_FOV_DEG` – default field of view for the camera.
 - `camera_speed` and `look_speed` – movement speed and turning sensitivity.
+ 
+## Code Overview
 
+The project is split into a few small Rust modules:
+
+- [`bsp.rs`](src/bsp.rs) – builds and traverses the binary space partition tree used for culling and highlighting.
+- [`geometry.rs`](src/geometry.rs) – triangle, plane and bounding box types with helper math routines.
+- [`camera.rs`](src/camera.rs) – free‑flying camera with smooth keyboard controls.
+- [`input.rs`](src/input.rs) – thin wrapper translating keyboard events into movement vectors.
+- [`gui/`](src/gui) – `egui` panels for loading models, tweaking settings and visualising the BSP tree.
+- [`loader.rs`](src/loader.rs) – GLTF/GLB mesh loader with basic sanity checks.
+- [`config.rs`](src/config.rs) – centralized store of user‑tunable parameters.
+- [`lang.rs`](src/lang.rs) – minimal English/Czech translation helper.
+- [`main.rs`](src/main.rs) – application entry point tying everything together.
+
+For a per‑function index see [FUNCTIONS.md](FUNCTIONS.md).

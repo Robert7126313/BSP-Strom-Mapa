@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Input handling utilities
+//! Keyboard input handling and mapping to movement controls.
 
 use cgmath::InnerSpace;
 use cgmath::Vector3;

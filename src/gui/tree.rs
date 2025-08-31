@@ -1,3 +1,5 @@
+//! BSP tree visualization window built with `egui_plot`.
+
 use crate::config::CONFIG;
 use egui_plot::{Line, Plot, PlotPoint, Points, Text};
 use std::collections::{HashMap, HashSet};
@@ -17,7 +19,10 @@ fn layout_bsp_tree(
     data: &mut TreePlotData,
 ) {
     let self_x = (x_min + x_max) / 2.0;
-    let self_point = PlotPoint { x: self_x, y: -depth };
+    let self_point = PlotPoint {
+        x: self_x,
+        y: -depth,
+    };
     data.positions.insert(node.id, self_point);
 
     if let Some(ref front) = node.front {
@@ -42,14 +47,19 @@ pub fn draw_bsp_tree_window(
         .vscroll(true)
         .hscroll(true)
         .show(ctx, |ui| {
-            let mut data = TreePlotData { positions: HashMap::new(), edges: Vec::new() };
+            let mut data = TreePlotData {
+                positions: HashMap::new(),
+                edges: Vec::new(),
+            };
             layout_bsp_tree(root, 0.0, 0.0, 1.0, &mut data);
 
             let mut path_ids = HashSet::new();
             if let Some(sel_id) = *selected {
                 let mut path = Vec::new();
                 if crate::bsp::find_node_path(root, sel_id, &mut path) {
-                    for n in path { path_ids.insert(n.id); }
+                    for n in path {
+                        path_ids.insert(n.id);
+                    }
                 }
             }
 
@@ -60,7 +70,8 @@ pub fn draw_bsp_tree_window(
             let plot = Plot::new("bsp_tree_plot");
             let plot_resp = plot.show(ui, |plot_ui| {
                 for &(a, b) in &data.edges {
-                    if let (Some(&p1), Some(&p2)) = (data.positions.get(&a), data.positions.get(&b)) {
+                    if let (Some(&p1), Some(&p2)) = (data.positions.get(&a), data.positions.get(&b))
+                    {
                         let pts = vec![[p1.x, p1.y], [p2.x, p2.y]];
                         let color = if path_ids.contains(&a) && path_ids.contains(&b) {
                             highlight_color
@@ -104,7 +115,9 @@ pub fn draw_bsp_tree_window(
                             best = Some(id);
                         }
                     }
-                    if let Some(id) = best { *selected = Some(id); }
+                    if let Some(id) = best {
+                        *selected = Some(id);
+                    }
                 }
             }
         });
