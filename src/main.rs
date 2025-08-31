@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//! Application entry point orchestrating rendering, input and BSP updates.
 // -----------------------------------------------------------------------------
 // BSP Viewer – minimální demo pro three‑d 0.18.x
 // -----------------------------------------------------------------------------

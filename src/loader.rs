@@ -1,3 +1,5 @@
+//! GLTF/GLB mesh loading with basic validation and logging.
+
 use anyhow::Result;
 use log::{error, info, warn};
 use std::path::Path;
@@ -104,7 +106,11 @@ fn load_gltf_with_gltf_crate(path: &Path) -> Result<(CpuMesh, Option<CpuTexture>
         } else {
             Indices::U32(all_indices)
         },
-        uvs: if all_uvs.is_empty() { None } else { Some(all_uvs) },
+        uvs: if all_uvs.is_empty() {
+            None
+        } else {
+            Some(all_uvs)
+        },
         ..Default::default()
     };
     Ok((mesh, texture))

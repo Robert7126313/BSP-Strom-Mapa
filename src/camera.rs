@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Camera utilities
+//! Free‑flight and third‑person camera utilities.
 
 use crate::config::CONFIG;
 use crate::input::{InputManager, KeyCode};
