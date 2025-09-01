@@ -35,9 +35,9 @@ pub struct CameraStats {
 pub struct BspStats {
     pub total_nodes: u32,
     pub total_triangles: u32,
-    /// Statistiky vázané na aktuální kameru
+    /// Statistics tied to the active camera.
     pub camera: CameraStats,
-    /// Počet uzlů navštívených při posledním výběru uzlu
+    /// Number of nodes visited during the last node selection.
     pub nodes_to_selected: u32,
 }
 
@@ -60,7 +60,7 @@ impl BspNode {
         let total_count = 1 + front.node_count + back.node_count;
         let total_tris = front.subtree_tris + back.subtree_tris;
 
-        // Nejprve vytvoříme společný obalový objem, než přesuneme hodnoty do boxů
+        // Compute combined bounding box before moving nodes into boxes
         let bounds = BoundingBox::encompass(&front.bounds, &back.bounds);
 
         Self {
@@ -101,13 +101,13 @@ impl Vector3Ext<f32> for Vector3<f32> {
     }
 }
 
-/// Bucketovaná SAH pro O(n + K) split - mnohem rychlejší než původní O(n²) SAH
+/// Bucketed SAH for O(n + k) split – much faster than the original O(n²) SAH.
 fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
-    // 1) Parent BB a SA
+    // 1) Parent bounding box and surface area
     let parent_bb = BoundingBox::from_triangles(tris);
     let parent_sa = parent_bb.surface_area();
 
-    // 2) Spočti centroidy a rozsah (SoA)
+    // 2) Compute centroids and extent (SoA)
     let mut mins = Vector3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
     let mut maxs = Vector3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
     let mut centroid_x = Vec::with_capacity(tris.len());
@@ -124,14 +124,14 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
 
     let extent = maxs - mins;
 
-    // Ošetření degenerovaného případu - všechny centroidy na stejném místě
+    // Handle degenerate case – all centroids at the same position
     if extent.x < 1e-6 && extent.y < 1e-6 && extent.z < 1e-6 {
         // Fallback na střed parent BB
         let center = (parent_bb.min + parent_bb.max) * 0.5;
         return Plane::new(Vector3::unit_x(), center);
     }
 
-    // 3) Výběr osy podle největší extent
+    // 3) Pick axis with largest extent
     let axis = if extent.x >= extent.y && extent.x >= extent.z {
         0
     } else if extent.y >= extent.z {
@@ -140,7 +140,7 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
         2
     };
 
-    // Pokud je extent na vybrané ose téměř nulový, použij fallback
+    // If extent on chosen axis is nearly zero, use fallback
     if extent[axis] < 1e-6 {
         let center = (parent_bb.min + parent_bb.max) * 0.5;
         let normal = match axis {
@@ -151,7 +151,7 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
         return Plane::new(normal, center);
     }
 
-    // 4) Příprava bucketů
+    // 4) Prepare buckets
     #[derive(Clone)]
     struct Bucket {
         count: usize,
@@ -166,7 +166,7 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
         buckets
     ];
 
-    // 5) Jediný průchod: přiřaď každý trojúhelník do bucketu
+    // 5) Single pass: assign each triangle to a bucket
     let centroid_axis = match axis {
         0 => &centroid_x,
         1 => &centroid_y,
@@ -182,7 +182,7 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
         b.bb = BoundingBox::encompass(&b.bb, &BoundingBox::from_triangle(tri));
     }
 
-    // 6) Prefix/suffix výpočty
+    // 6) Prefix/suffix calculations
     let mut left_counts = vec![0; buckets];
     let mut left_bbs = vec![BoundingBox::new_empty(); buckets];
     let mut acc_bb = BoundingBox::new_empty();
@@ -207,7 +207,7 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
         right_bbs[j] = acc_bb2.clone();
     }
 
-    // 7) Najdi nejlepší rozdělení mezi buckety i a i+1
+    // 7) Find best split between buckets i and i+1
     let mut best_cost = f32::INFINITY;
     let mut best_i = 0;
 
@@ -231,12 +231,12 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
         }
     }
 
-    // 8) Vypočti pozici split-point mezi buckety best_i a best_i+1
+    // 8) Compute split position between buckets best_i and best_i+1
     let split_norm = (best_i as f32 + 1.0) / buckets as f32;
     let mut split_point = mins;
     split_point[axis] = mins[axis] + split_norm * extent[axis];
 
-    // 9) Vrať rovinu
+    // 9) Return splitting plane
     let normal = match axis {
         0 => Vector3::unit_x(),
         1 => Vector3::unit_y(),

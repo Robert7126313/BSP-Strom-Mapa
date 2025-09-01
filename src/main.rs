@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 //! Application entry point orchestrating rendering, input and BSP updates.
 // -----------------------------------------------------------------------------
-// BSP Viewer – minimální demo pro three‑d 0.18.x
+// BSP Viewer – minimal demo for three‑d 0.18.x
 // -----------------------------------------------------------------------------
 // Cargo.toml
 // -----------------------------------------------------------------------------
@@ -24,11 +24,10 @@
 
 use anyhow::Result;
 use cgmath::{Deg, InnerSpace, Vector3, Vector4};
-use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use std::sync::{atomic::AtomicUsize, mpsc};
 use std::thread;
-use three_d::*; // Add Rayon prelude for parallelization
+use three_d::*;
 
 use crate::bsp::{
     build_bsp, collect_triangles_in_subtree, cpu_mesh_to_triangles, create_highlight_mesh,
@@ -40,6 +39,7 @@ use crate::config::CONFIG;
 use crate::geometry::triangle_center;
 use crate::input::{InputManager, KeyCode};
 use crate::loader::load_cpu_mesh;
+use crate::mesh::create_visible_mesh;
 use log::info;
 
 mod bsp;
@@ -50,7 +50,8 @@ mod gui;
 mod input;
 mod lang;
 mod loader;
-// Message types for the channel
+mod mesh;
+/// Messages sent over the worker channel.
 #[derive(Debug)]
 enum Message {
     InitialTree(BspNode),
@@ -61,117 +62,6 @@ enum Message {
     },
 }
 
-// Funkce pro vytvoření meshe z viditelných trojúhelníků
-#[allow(dead_code)]
-fn create_visible_mesh_old(
-    triangles: &[Triangle],
-    context: &Context,
-) -> Gm<Mesh, PhysicalMaterial> {
-    // Paralelní zpracování pozic a indexů
-    let triangles_count = triangles.len();
-
-    // Předalokujeme pozice vrcholů a vyplníme je paralelně
-    let mut positions = vec![vec3(0.0, 0.0, 0.0); triangles_count * 3];
-    positions
-        .par_chunks_mut(3)
-        .enumerate()
-        .for_each(|(i, chunk)| {
-            let tri = &triangles[i];
-            chunk[0] = vec3(tri.a.x, tri.a.y, tri.a.z);
-            chunk[1] = vec3(tri.b.x, tri.b.y, tri.b.z);
-            chunk[2] = vec3(tri.c.x, tri.c.y, tri.c.z);
-        });
-
-    // Předalokujeme indexy a naplníme je paralelně
-    let mut indices = vec![0u32; triangles_count * 3];
-    indices
-        .par_chunks_mut(3)
-        .enumerate()
-        .for_each(|(i, chunk)| {
-            let base = i as u32 * 3;
-            chunk[0] = base;
-            chunk[1] = base + 1;
-            chunk[2] = base + 2;
-        });
-
-    // Vytvoření nového meshe
-    let visible_mesh = CpuMesh {
-        positions: Positions::F32(positions),
-        indices: Indices::U32(indices),
-        ..Default::default()
-    };
-
-    // Vytvoření materiálu a modelu
-    let model_color = CONFIG.read().unwrap().model_color;
-    let cpu_material = CpuMaterial {
-        albedo: model_color,
-        ..Default::default()
-    };
-    let material = if model_color.a < 255 {
-        PhysicalMaterial::new_transparent(context, &cpu_material)
-    } else {
-        PhysicalMaterial::new_opaque(context, &cpu_material)
-    };
-
-    Gm::new(Mesh::new(context, &visible_mesh), material)
-}
-
-fn create_visible_mesh(
-    triangles: &[Triangle],
-    context: &Context,
-    texture: Option<&Texture2DRef>,
-) -> Gm<Mesh, PhysicalMaterial> {
-    let triangles_count = triangles.len();
-    let mut positions = vec![vec3(0.0, 0.0, 0.0); triangles_count * 3];
-    let mut uvs = vec![vec2(0.0, 0.0); triangles_count * 3];
-    positions
-        .par_chunks_mut(3)
-        .zip(uvs.par_chunks_mut(3))
-        .enumerate()
-        .for_each(|(i, (p_chunk, uv_chunk))| {
-            let tri = &triangles[i];
-            p_chunk[0] = vec3(tri.a.x, tri.a.y, tri.a.z);
-            p_chunk[1] = vec3(tri.b.x, tri.b.y, tri.b.z);
-            p_chunk[2] = vec3(tri.c.x, tri.c.y, tri.c.z);
-            uv_chunk[0] = vec2(tri.uv_a.x, tri.uv_a.y);
-            uv_chunk[1] = vec2(tri.uv_b.x, tri.uv_b.y);
-            uv_chunk[2] = vec2(tri.uv_c.x, tri.uv_c.y);
-        });
-    let mut indices = vec![0u32; triangles_count * 3];
-    indices
-        .par_chunks_mut(3)
-        .enumerate()
-        .for_each(|(i, chunk)| {
-            let base = i as u32 * 3;
-            chunk[0] = base;
-            chunk[1] = base + 1;
-            chunk[2] = base + 2;
-        });
-    let visible_mesh = CpuMesh {
-        positions: Positions::F32(positions),
-        indices: Indices::U32(indices),
-        uvs: Some(uvs),
-        ..Default::default()
-    };
-    let model_color = CONFIG.read().unwrap().model_color;
-    let is_transparent = model_color.a < 255;
-    let render_states = if is_transparent {
-        RenderStates {
-            blend: Blend::TRANSPARENCY,
-            ..Default::default()
-        }
-    } else {
-        RenderStates::default()
-    };
-    let material = PhysicalMaterial {
-        albedo: model_color,
-        albedo_texture: texture.cloned(),
-        render_states,
-        is_transparent,
-        ..Default::default()
-    };
-    Gm::new(Mesh::new(context, &visible_mesh), material)
-}
 
 // ---------------- Main --------------------------------------------------- //
 
@@ -229,10 +119,10 @@ fn main() -> Result<()> {
     let triangles_clone = triangles.clone();
     let (tx, rx) = mpsc::channel();
 
-    // Vytvoření klonu tx pro GUI
+    // Clone sender for GUI
     let tx_gui = tx.clone();
 
-    // Spuštění stavby BSP stromu v jiném vlákně
+    // Build BSP tree on a background thread
     let branch_limit_clone = cfg.max_bsp_depth;
     thread::spawn(move || {
         let next_id = AtomicUsize::new(0);
@@ -241,7 +131,7 @@ fn main() -> Result<()> {
         tx.send(Message::InitialTree(tree)).unwrap();
     });
 
-    // Inicializujeme výchozí statistiky
+    // Initialize default statistics
     let mut total_stats = BspStats {
         total_nodes: 0,
         total_triangles: triangles.len() as u32,
@@ -366,7 +256,7 @@ fn main() -> Result<()> {
         )) * Mat4::from_scale(cfg.camera_marker_scale),
     );
 
-    // Inicializace InputManageru pro plynulé ovládání s více klávesami
+    // Initialize InputManager for smooth multi-key control
     let mut input_manager = InputManager::new();
 
     // ----------------------------------------------------------------------------

@@ -101,3 +101,15 @@ impl Default for Config {
 
 /// Global mutable configuration accessible across modules.
 pub static CONFIG: Lazy<RwLock<Config>> = Lazy::new(|| RwLock::new(Config::default()));
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_config_has_expected_values() {
+        let cfg = Config::default();
+        assert_eq!(cfg.camera_speed, 4.0);
+        assert!(matches!(cfg.language, Language::English));
+    }
+}

@@ -3,6 +3,7 @@
 use cgmath::{InnerSpace, Vector2, Vector3};
 use three_d::Camera;
 
+/// Triangle with 3D vertices and UV coordinates.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Triangle {
     pub a: Vector3<f32>,
@@ -209,6 +210,26 @@ impl Frustum {
     }
 }
 
+/// Compute the centroid of a triangle.
 pub fn triangle_center(tri: &Triangle) -> Vector3<f32> {
     (tri.a + tri.b + tri.c) / 3.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn triangle_centroid_is_average() {
+        let tri = Triangle {
+            a: Vector3::new(0.0, 0.0, 0.0),
+            b: Vector3::new(6.0, 0.0, 0.0),
+            c: Vector3::new(0.0, 6.0, 0.0),
+            uv_a: Vector2::new(0.0, 0.0),
+            uv_b: Vector2::new(1.0, 0.0),
+            uv_c: Vector2::new(0.0, 1.0),
+        };
+        let center = triangle_center(&tri);
+        assert_eq!(center, Vector3::new(2.0, 2.0, 0.0));
+    }
 }
