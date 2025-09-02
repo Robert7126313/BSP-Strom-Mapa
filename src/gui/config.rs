@@ -259,6 +259,32 @@ pub fn draw_config_window(
                 ),
             );
 
+            if ui
+                .button(tr(
+                    lang,
+                    "Swap spectator and third person",
+                    "Prohodit diváka a třetí osobu",
+                ))
+                .clicked()
+            {
+                std::mem::swap(spectator_state, third_person_state);
+                if mode == crate::camera::CamMode::Spectator {
+                    cam.pos = spectator_state.pos;
+                    cam.yaw = spectator_state.yaw;
+                    cam.pitch = spectator_state.pitch;
+                } else if mode == crate::camera::CamMode::ThirdPerson {
+                    cam.pos = third_person_state.pos;
+                    cam.yaw = third_person_state.yaw;
+                    cam.pitch = third_person_state.pitch;
+                }
+                cfg.default_spectator_pos = spectator_state.pos;
+                cfg.default_spectator_yaw = spectator_state.yaw;
+                cfg.default_spectator_pitch = spectator_state.pitch;
+                cfg.default_third_person_pos = third_person_state.pos;
+                cfg.default_third_person_yaw = third_person_state.yaw;
+                cfg.default_third_person_pitch = third_person_state.pitch;
+            }
+
             ui.horizontal(|ui| {
                 ui.label(tr(lang, "Spectator pos", "Pozice diváka"));
                 let mut changed = false;
