@@ -184,7 +184,7 @@ pub fn draw_left_panel(
                             current_stats.nodes_to_selected
                         ));
                         if let Some(ref plane) = node.plane {
-                            ui.label(tr(lang, "Splitting plane:", "Dělící rovina:"));
+                            ui.label(tr(lang, "Splitting plane", "Dělící rovina"));
                             ui.label(format!(
                                 "{}: ({:.2}, {:.2}, {:.2})",
                                 tr(lang, "Normal", "Normála"),
@@ -302,25 +302,25 @@ pub fn draw_left_panel(
                 ));
             });
             CollapsingHeader::new(tr(lang, "Looking around", "Rozhlížení")).show(ui, |ui| {
-                ui.label(tr(lang, "↑ - Look up", "↑ - dívat se nahoru"));
-                ui.label(tr(lang, "↓ - Look down", "↓ - dívat se dolů"));
-                ui.label(tr(lang, "← - Turn left", "← - otočit doleva"));
-                ui.label(tr(lang, "→ - Turn right", "→ - otočit doprava"));
-                ui.label(format!(
-                    "{}: {:.1}°/s",
-                    tr(lang, "Look speed", "Rychlost otáčení"),
-                    cam.look_speed * 180.0 / std::f32::consts::PI
-                ));
-                if ui
-                    .add(egui::Slider::new(&mut cam.look_speed, 0.1..=10.0).text(tr(
-                        lang,
-                        "Look speed",
-                        "Rychlost otáčení",
-                    )))
-                    .changed()
-                {
-                    CONFIG.write().unwrap().look_speed = cam.look_speed;
-                }
+                ui.label(tr(lang, "Arrow UP - Look up", "Šipka Nahoru - dívat se nahoru"));
+                ui.label(tr(lang, "Arrow DOWN - Look down", "Šipka Dolů - dívat se dolů"));
+                ui.label(tr(lang, "Arrow LEFT - Turn left", "Šipka vlevo - otočit doleva"));
+                ui.label(tr(lang, "Arrow RIGHT - Turn right", "Šipka vpravo - otočit doprava"));
+                // ui.label(format!(
+                //     "{}: {:.1}°/s",
+                //     tr(lang, "Look speed", "Rychlost otáčení"),
+                //     cam.look_speed * 180.0 / std::f32::consts::PI
+                // ));
+                // if ui
+                //     .add(egui::Slider::new(&mut cam.look_speed, 0.1..=10.0).text(tr(
+                //         lang,
+                //         "Look speed",
+                //         "Rychlost otáčení",
+                //     )))
+                //     .changed()
+                // {
+                //     CONFIG.write().unwrap().look_speed = cam.look_speed;
+                // }
             });
             CollapsingHeader::new(tr(lang, "Misc", "Různé")).show(ui, |ui| {
                 ui.label(tr(

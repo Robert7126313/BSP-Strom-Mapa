@@ -13,7 +13,7 @@
   <component name="ChangeListManager">
     <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="refactor: remove model loading and debug info UI from main panel in gui">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/gui/left_panel.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/gui/left_panel.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -22,6 +22,24 @@
   </component>
   <component name="ExecutionTargetManager" SELECTED_TARGET="RsBuildProfile:dev" />
   <component name="Git.Settings">
+    <favorite-branches>
+      <branch-storage>
+        <map>
+          <entry type="LOCAL">
+            <value>
+              <list>
+                <branch-info repo="$PROJECT_DIR$" source="Finished-30.8.-English-version" />
+              </list>
+            </value>
+          </entry>
+        </map>
+      </branch-storage>
+    </favorite-branches>
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="master" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
     <option name="UPDATE_TYPE" value="REBASE" />
   </component>
@@ -56,9 +74,10 @@
     &quot;Cargo.Run.executor&quot;: &quot;Run&quot;,
     &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;Finished-30.8.-English-version&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
@@ -77,6 +96,7 @@
   </component>
   <component name="RunManager">
     <configuration name="Run" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="buildProfileId" value="dev" />
       <option name="command" value="run --package BSP-Strom-Mapa --bin BSP-Strom-Mapa" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
@@ -117,6 +137,13 @@
       <workItem from="1751789732483" duration="3173000" />
       <workItem from="1751808131983" duration="1394000" />
       <workItem from="1751990153795" duration="648000" />
+      <workItem from="1756586060308" duration="2442000" />
+      <workItem from="1756629523036" duration="653000" />
+      <workItem from="1756638365132" duration="2793000" />
+      <workItem from="1756642310122" duration="58000" />
+      <workItem from="1756729172728" duration="124000" />
+      <workItem from="1756731299897" duration="2434000" />
+      <workItem from="1756804638299" duration="1233000" />
     </task>
     <task id="LOCAL-00001" summary="initialize new Rust project with basic structure and configuration files">
       <option name="closed" value="true" />
@@ -356,6 +383,17 @@
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="feat: add BSP tree controls and update UI for spectator mode" />
     <MESSAGE value="feat: add rfd dependency and implement file dialog for GLB model loading" />
@@ -383,5 +421,6 @@
     <MESSAGE value="perf: switch to structure-of-arrays for triangle centroid computation in BSP split" />
     <MESSAGE value="refactor: remove model loading and debug info UI from main panel in gui" />
     <option name="LAST_COMMIT_MESSAGE" value="refactor: remove model loading and debug info UI from main panel in gui" />
+    <option name="GROUP_MULTIFILE_MERGE_BY_DIRECTORY" value="true" />
   </component>
 </project>
