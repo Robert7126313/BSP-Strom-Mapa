@@ -38,7 +38,7 @@ source code so you can jump directly to the implementation.
 - [`triangle_center`](src/geometry.rs#L182-L184) – compute the centroid of a triangle.
 
 ## `src/gui/left_panel.rs`
-- [`draw_left_panel`](src/gui/left_panel.rs#L14-L490) – render the left control panel and handle UI interactions.
+- [`draw_left_panel`](src/gui/left_panel.rs#L14-L507) – render the left control panel and handle UI interactions.
 
 ## `src/gui/tree.rs`
 - [`layout_bsp_tree`](src/gui/tree.rs#L14-L33) – compute plot positions for BSP nodes.

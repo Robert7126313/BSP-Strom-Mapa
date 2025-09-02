@@ -259,72 +259,41 @@ pub fn draw_config_window(
                 ),
             );
 
-            if ui
-                .button(tr(
+            let button_text = match mode {
+                crate::camera::CamMode::Spectator => tr(
                     lang,
-                    "Teleport third person to spectator",
-                    "Teleportovat třetí osobu k divákovi",
-                ))
-                .clicked()
-            {
-                third_person_state.pos = spectator_state.pos;
-                third_person_state.yaw = spectator_state.yaw;
-                third_person_state.pitch = spectator_state.pitch;
-                if mode == crate::camera::CamMode::ThirdPerson {
-                    cam.pos = third_person_state.pos;
-                    cam.yaw = third_person_state.yaw;
-                    cam.pitch = third_person_state.pitch;
+                    "Teleport to third person",
+                    "Teleportovat k třetí osobě",
+                ),
+                crate::camera::CamMode::ThirdPerson => {
+                    tr(lang, "Teleport to spectator", "Teleportovat k divákovi")
                 }
-                cfg.default_third_person_pos = third_person_state.pos;
-                cfg.default_third_person_yaw = third_person_state.yaw;
-                cfg.default_third_person_pitch = third_person_state.pitch;
-            }
-
-            if ui
-                .button(tr(
-                    lang,
-                    "Teleport spectator to third person",
-                    "Teleportovat diváka k třetí osobě",
-                ))
-                .clicked()
-            {
-                spectator_state.pos = third_person_state.pos;
-                spectator_state.yaw = third_person_state.yaw;
-                spectator_state.pitch = third_person_state.pitch;
-                if mode == crate::camera::CamMode::Spectator {
-                    cam.pos = spectator_state.pos;
-                    cam.yaw = spectator_state.yaw;
-                    cam.pitch = spectator_state.pitch;
+            };
+            if ui.button(button_text).clicked() {
+                match mode {
+                    crate::camera::CamMode::Spectator => {
+                        spectator_state.pos = third_person_state.pos;
+                        spectator_state.yaw = third_person_state.yaw;
+                        spectator_state.pitch = third_person_state.pitch;
+                        cam.pos = spectator_state.pos;
+                        cam.yaw = spectator_state.yaw;
+                        cam.pitch = spectator_state.pitch;
+                        cfg.default_spectator_pos = spectator_state.pos;
+                        cfg.default_spectator_yaw = spectator_state.yaw;
+                        cfg.default_spectator_pitch = spectator_state.pitch;
+                    }
+                    crate::camera::CamMode::ThirdPerson => {
+                        third_person_state.pos = spectator_state.pos;
+                        third_person_state.yaw = spectator_state.yaw;
+                        third_person_state.pitch = spectator_state.pitch;
+                        cam.pos = third_person_state.pos;
+                        cam.yaw = third_person_state.yaw;
+                        cam.pitch = third_person_state.pitch;
+                        cfg.default_third_person_pos = third_person_state.pos;
+                        cfg.default_third_person_yaw = third_person_state.yaw;
+                        cfg.default_third_person_pitch = third_person_state.pitch;
+                    }
                 }
-                cfg.default_spectator_pos = spectator_state.pos;
-                cfg.default_spectator_yaw = spectator_state.yaw;
-                cfg.default_spectator_pitch = spectator_state.pitch;
-            }
-
-            if ui
-                .button(tr(
-                    lang,
-                    "Swap spectator and third person",
-                    "Prohodit diváka a třetí osobu",
-                ))
-                .clicked()
-            {
-                std::mem::swap(spectator_state, third_person_state);
-                if mode == crate::camera::CamMode::Spectator {
-                    cam.pos = spectator_state.pos;
-                    cam.yaw = spectator_state.yaw;
-                    cam.pitch = spectator_state.pitch;
-                } else if mode == crate::camera::CamMode::ThirdPerson {
-                    cam.pos = third_person_state.pos;
-                    cam.yaw = third_person_state.yaw;
-                    cam.pitch = third_person_state.pitch;
-                }
-                cfg.default_spectator_pos = spectator_state.pos;
-                cfg.default_spectator_yaw = spectator_state.yaw;
-                cfg.default_spectator_pitch = spectator_state.pitch;
-                cfg.default_third_person_pos = third_person_state.pos;
-                cfg.default_third_person_yaw = third_person_state.yaw;
-                cfg.default_third_person_pitch = third_person_state.pitch;
             }
 
             ui.horizontal(|ui| {

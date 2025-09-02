@@ -173,6 +173,59 @@ fn create_visible_mesh(
     Gm::new(Mesh::new(context, &visible_mesh), material)
 }
 
+fn create_fov_plane_mesh(
+    cam: &FreeCamera,
+    viewport: Viewport,
+    context: &Context,
+) -> Gm<Mesh, ColorMaterial> {
+    let cfg = CONFIG.read().unwrap();
+    let d = cfg.near_plane;
+    let aspect = viewport.width as f32 / viewport.height as f32;
+    let fov = cfg.default_fov_deg.to_radians();
+    let height = 2.0 * d * (fov * 0.5).tan();
+    let width = height * aspect;
+
+    let dir = cam.dir();
+    let right = cam.right();
+    let up = right.cross(dir).normalize();
+
+    let center = cam.pos + dir * d;
+    let u = right * (width * 0.5);
+    let v = up * (height * 0.5);
+    let corners = [
+        center + u + v,
+        center + u - v,
+        center - u - v,
+        center - u + v,
+    ];
+
+    let positions = vec![
+        vec3(corners[0].x, corners[0].y, corners[0].z),
+        vec3(corners[1].x, corners[1].y, corners[1].z),
+        vec3(corners[2].x, corners[2].y, corners[2].z),
+        vec3(corners[3].x, corners[3].y, corners[3].z),
+    ];
+    let indices = vec![0, 1, 2, 2, 3, 0];
+
+    let cpu_mesh = CpuMesh {
+        positions: Positions::F32(positions),
+        indices: Indices::U32(indices),
+        ..Default::default()
+    };
+
+    let cpu_material = CpuMaterial {
+        albedo: cfg.splitting_plane_color,
+        ..Default::default()
+    };
+    let material = if cfg.splitting_plane_color.a < 255 {
+        ColorMaterial::new_transparent(context, &cpu_material)
+    } else {
+        ColorMaterial::new_opaque(context, &cpu_material)
+    };
+
+    Gm::new(Mesh::new(context, &cpu_mesh), material)
+}
+
 // ---------------- Main --------------------------------------------------- //
 
 fn main() -> Result<()> {
@@ -252,6 +305,7 @@ fn main() -> Result<()> {
     };
 
     let mut disable_culling = false;
+    let mut show_fov_plane = false;
     let mut show_loaded_model = true;
     let mut show_selected_model = true;
     let mut tree_window_open = false;
@@ -540,6 +594,7 @@ fn main() -> Result<()> {
                     &mut selected_node,
                     &mut show_splitting_plane,
                     &mut disable_culling,
+                    &mut show_fov_plane,
                     &mut show_loaded_model,
                     &mut show_selected_model,
                     &mut show_texture,
@@ -989,6 +1044,14 @@ fn main() -> Result<()> {
         }
         if let Some(ref plane_mesh) = splitting_plane_mesh {
             objects_to_render.push(plane_mesh);
+        }
+
+        let mut fov_plane_mesh = None;
+        if show_fov_plane {
+            fov_plane_mesh = Some(create_fov_plane_mesh(&cam, frame_input.viewport, &context));
+        }
+        if let Some(ref plane) = fov_plane_mesh {
+            objects_to_render.push(plane);
         }
         if show_spectator_marker && mode == CamMode::ThirdPerson {
             objects_to_render.push(&spectator_glow);

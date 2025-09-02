@@ -27,6 +27,7 @@ pub fn draw_left_panel(
     selected_node: &mut Option<usize>,
     show_splitting_plane: &mut bool,
     disable_culling: &mut bool,
+    show_fov_plane: &mut bool,
     show_loaded_model: &mut bool,
     show_selected_model: &mut bool,
     show_texture: &mut bool,
@@ -93,7 +94,8 @@ pub fn draw_left_panel(
                             *current_texture = None;
                             *current_texture = Some(Texture2DRef::from_cpu_texture(gl, &tex));
                             *show_texture = true;
-                            *loaded_texture_name = path.file_name().unwrap().to_string_lossy().into_owned();
+                            *loaded_texture_name =
+                                path.file_name().unwrap().to_string_lossy().into_owned();
                         }
                         Err(e) => {
                             error!("Failed to load texture {}: {}", path.display(), e);
@@ -220,6 +222,10 @@ pub fn draw_left_panel(
                 tr(lang, "Disable culling", "Zakázat culling"),
             );
             ui.checkbox(
+                show_fov_plane,
+                tr(lang, "Show frustum plane", "Zobrazit rovinu zorného pole"),
+            );
+            ui.checkbox(
                 show_loaded_model,
                 tr(lang, "Show loaded model", "Zobrazit načtený model"),
             );
@@ -305,10 +311,26 @@ pub fn draw_left_panel(
                 ));
             });
             CollapsingHeader::new(tr(lang, "Looking around", "Rozhlížení")).show(ui, |ui| {
-                ui.label(tr(lang, "Arrow UP - Look up", "Šipka Nahoru - dívat se nahoru"));
-                ui.label(tr(lang, "Arrow DOWN - Look down", "Šipka Dolů - dívat se dolů"));
-                ui.label(tr(lang, "Arrow LEFT - Turn left", "Šipka vlevo - otočit doleva"));
-                ui.label(tr(lang, "Arrow RIGHT - Turn right", "Šipka vpravo - otočit doprava"));
+                ui.label(tr(
+                    lang,
+                    "Arrow UP - Look up",
+                    "Šipka Nahoru - dívat se nahoru",
+                ));
+                ui.label(tr(
+                    lang,
+                    "Arrow DOWN - Look down",
+                    "Šipka Dolů - dívat se dolů",
+                ));
+                ui.label(tr(
+                    lang,
+                    "Arrow LEFT - Turn left",
+                    "Šipka vlevo - otočit doleva",
+                ));
+                ui.label(tr(
+                    lang,
+                    "Arrow RIGHT - Turn right",
+                    "Šipka vpravo - otočit doprava",
+                ));
                 // ui.label(format!(
                 //     "{}: {:.1}°/s",
                 //     tr(lang, "Look speed", "Rychlost otáčení"),
