@@ -565,8 +565,7 @@ fn main() -> Result<()> {
             last_default_branch_limit = branch_limit;
 
             let next_id = AtomicUsize::new(0);
-            bsp_root_preview =
-                Some(build_bsp(&current_triangles, 0, branch_limit, &next_id));
+            bsp_root_preview = Some(build_bsp(&current_triangles, 0, branch_limit, &next_id));
             selected_node = None;
             last_branch_limit = branch_limit;
         }
@@ -756,12 +755,14 @@ fn main() -> Result<()> {
 
         // Obsluha klávesy Home - návrat na výchozí pozici pro aktuální režim
         if input_manager.is_key_pressed(KeyCode::Home) {
+            // Always reset to the hard-coded defaults rather than values from the config UI
+            let defaults = crate::config::Config::default();
             if mode == CamMode::Spectator {
                 // Vytvoření nového stavu kamery s výchozí pozicí, ale aktuální rychlostí kamery
                 let mut reset_state = CameraState::new(
-                    cfg.default_spectator_pos,
-                    cfg.default_spectator_yaw,
-                    cfg.default_spectator_pitch,
+                    defaults.default_spectator_pos,
+                    defaults.default_spectator_yaw,
+                    defaults.default_spectator_pitch,
                 );
                 reset_state.speed = cam.speed; // Zachová aktuální rychlost
                 reset_state.apply_to_camera(&mut cam);
@@ -770,9 +771,9 @@ fn main() -> Result<()> {
                 // ThirdPerson
                 // Vytvoření nového stavu kamery s výchozí pozicí, ale aktuální rychlostí kamery
                 let mut reset_state = CameraState::new(
-                    cfg.default_third_person_pos,
-                    cfg.default_third_person_yaw,
-                    cfg.default_third_person_pitch,
+                    defaults.default_third_person_pos,
+                    defaults.default_third_person_yaw,
+                    defaults.default_third_person_pitch,
                 );
                 reset_state.speed = cam.speed; // Zachová aktuální rychlost
                 reset_state.apply_to_camera(&mut cam);
