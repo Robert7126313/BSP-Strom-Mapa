@@ -472,7 +472,14 @@ pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
         Positions::F32(pos) => pos,
         _ => return Vec::new(), // Pokud nemáme F32 pozice, vrátíme prázdný vektor
     };
+    let default_uv = Vector2::new(0.0, 0.0);
     let uvs = mesh.uvs.as_ref();
+    let get_uv = |idx: usize| -> Vector2<f32> {
+        uvs.and_then(|u| u.get(idx))
+            .copied()
+            .map(|uv| Vector2::new(uv.x.clamp(0.0, 1.0), uv.y.clamp(0.0, 1.0)))
+            .unwrap_or(default_uv)
+    };
 
     match &mesh.indices {
         Indices::U32(indices) => {
@@ -487,14 +494,13 @@ pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
                 let c_idx = chunk[2] as usize;
 
                 if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len() {
-                    let default_uv = Vector2::new(0.0, 0.0);
                     Some(Triangle {
                         a: Vector3::new(positions[a_idx].x, positions[a_idx].y, positions[a_idx].z),
                         b: Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z),
                         c: Vector3::new(positions[c_idx].x, positions[c_idx].y, positions[c_idx].z),
-                        uv_a: uvs.map_or(default_uv, |u| u[a_idx]),
-                        uv_b: uvs.map_or(default_uv, |u| u[b_idx]),
-                        uv_c: uvs.map_or(default_uv, |u| u[c_idx]),
+                        uv_a: get_uv(a_idx),
+                        uv_b: get_uv(b_idx),
+                        uv_c: get_uv(c_idx),
                     })
                 } else {
                     None
@@ -514,14 +520,13 @@ pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
                 let c_idx = chunk[2] as usize;
 
                 if a_idx < positions.len() && b_idx < positions.len() && c_idx < positions.len() {
-                    let default_uv = Vector2::new(0.0, 0.0);
                     Some(Triangle {
                         a: Vector3::new(positions[a_idx].x, positions[a_idx].y, positions[a_idx].z),
                         b: Vector3::new(positions[b_idx].x, positions[b_idx].y, positions[b_idx].z),
                         c: Vector3::new(positions[c_idx].x, positions[c_idx].y, positions[c_idx].z),
-                        uv_a: uvs.map_or(default_uv, |u| u[a_idx]),
-                        uv_b: uvs.map_or(default_uv, |u| u[b_idx]),
-                        uv_c: uvs.map_or(default_uv, |u| u[c_idx]),
+                        uv_a: get_uv(a_idx),
+                        uv_b: get_uv(b_idx),
+                        uv_c: get_uv(c_idx),
                     })
                 } else {
                     None
@@ -532,7 +537,6 @@ pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
         Indices::None => {
             let tri_count = positions.len() / 3;
             let mut tris = Vec::with_capacity(tri_count);
-            let default_uv = Vector2::new(0.0, 0.0);
             tris.par_extend(
                 positions
                     .par_chunks(3)
@@ -546,9 +550,9 @@ pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
                             a: Vector3::new(chunk[0].x, chunk[0].y, chunk[0].z),
                             b: Vector3::new(chunk[1].x, chunk[1].y, chunk[1].z),
                             c: Vector3::new(chunk[2].x, chunk[2].y, chunk[2].z),
-                            uv_a: uvs.map_or(default_uv, |u| u[base]),
-                            uv_b: uvs.map_or(default_uv, |u| u[base + 1]),
-                            uv_c: uvs.map_or(default_uv, |u| u[base + 2]),
+                            uv_a: get_uv(base),
+                            uv_b: get_uv(base + 1),
+                            uv_c: get_uv(base + 2),
                         })
                     }),
             );
