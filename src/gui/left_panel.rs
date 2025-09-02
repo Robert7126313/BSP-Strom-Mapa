@@ -16,6 +16,7 @@ pub fn draw_left_panel(
     gl: &three_d::Context,
     mode: crate::camera::CamMode,
     loaded_file_name: &mut String,
+    loaded_texture_name: &mut String,
     file_loading: &mut bool,
     tx_gui: &std::sync::mpsc::Sender<crate::Message>,
     rx: &std::sync::mpsc::Receiver<crate::Message>,
@@ -44,7 +45,7 @@ pub fn draw_left_panel(
     egui::SidePanel::left("tree").show(ctx, |side_ui| {
         egui::ScrollArea::vertical().show(side_ui, |ui| {
             ui.heading(tr(lang, "BSP Tree", "BSP Strom"));
-            if ui.button(tr(lang, "⚙️ Settings", "⚙️ Nastavení")).clicked() {
+            if ui.button(tr(lang, "⚙ Settings", "⚙ Nastavení")).clicked() {
                 *config_window_open = true;
             }
             ui.label(format!("{}: {:?}", tr(lang, "Mode", "Režim"), mode));
@@ -77,6 +78,8 @@ pub fn draw_left_panel(
                     });
                 }
             }
+            ui.label(tr(lang, "Current texture:", "Aktuální textura:"));
+            ui.label(loaded_texture_name.as_str());
             if ui
                 .button(tr(lang, "📷 Load texture", "📷 Načíst texturu"))
                 .clicked()
@@ -87,10 +90,10 @@ pub fn draw_left_panel(
                 {
                     match three_d_asset::io::load_and_deserialize::<CpuTexture>(&path) {
                         Ok(tex) => {
-                            // Drop the previous texture (if any) so the new one is always used
                             *current_texture = None;
                             *current_texture = Some(Texture2DRef::from_cpu_texture(gl, &tex));
                             *show_texture = true;
+                            *loaded_texture_name = path.file_name().unwrap().to_string_lossy().into_owned();
                         }
                         Err(e) => {
                             error!("Failed to load texture {}: {}", path.display(), e);
@@ -141,7 +144,7 @@ pub fn draw_left_panel(
                 tr(lang, "Show splitting plane", "Zobrazit dělící rovinu"),
             );
             if ui
-                .button(tr(lang, "Open visualization", "Otevřít vizualizaci"))
+                .button(tr(lang, "👁 Open visualization", "👁 Otevřít vizualizaci"))
                 .clicked()
             {
                 *tree_window_open = true;

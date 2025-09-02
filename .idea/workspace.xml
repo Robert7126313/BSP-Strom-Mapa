@@ -11,9 +11,10 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="refactor: remove model loading and debug info UI from main panel in gui">
+    <list default="true" id="a8c8e5c5-81a8-404c-90f3-cd7b15f71821" name="Changes" comment="refactor: update look controls in left panel UI for clarity">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/gui/left_panel.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/gui/left_panel.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -143,7 +144,7 @@
       <workItem from="1756642310122" duration="58000" />
       <workItem from="1756729172728" duration="124000" />
       <workItem from="1756731299897" duration="2434000" />
-      <workItem from="1756804638299" duration="1233000" />
+      <workItem from="1756804638299" duration="1861000" />
     </task>
     <task id="LOCAL-00001" summary="initialize new Rust project with basic structure and configuration files">
       <option name="closed" value="true" />
@@ -377,7 +378,15 @@
       <option name="project" value="LOCAL" />
       <updated>1751983626401</updated>
     </task>
-    <option name="localTasksCounter" value="30" />
+    <task id="LOCAL-00030" summary="refactor: update look controls in left panel UI for clarity">
+      <option name="closed" value="true" />
+      <created>1756805962241</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1756805962241</updated>
+    </task>
+    <option name="localTasksCounter" value="31" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -395,7 +404,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="feat: add BSP tree controls and update UI for spectator mode" />
     <MESSAGE value="feat: add rfd dependency and implement file dialog for GLB model loading" />
     <MESSAGE value="feat: refactor GLB model loading and update camera controls" />
     <MESSAGE value="feat: implement BSP tree structure for efficient triangle rendering and traversal" />
@@ -420,7 +428,8 @@
     <MESSAGE value="feat: highlight triangles in selected BSP subtree during rendering" />
     <MESSAGE value="perf: switch to structure-of-arrays for triangle centroid computation in BSP split" />
     <MESSAGE value="refactor: remove model loading and debug info UI from main panel in gui" />
-    <option name="LAST_COMMIT_MESSAGE" value="refactor: remove model loading and debug info UI from main panel in gui" />
+    <MESSAGE value="refactor: update look controls in left panel UI for clarity" />
+    <option name="LAST_COMMIT_MESSAGE" value="refactor: update look controls in left panel UI for clarity" />
     <option name="GROUP_MULTIFILE_MERGE_BY_DIRECTORY" value="true" />
   </component>
 </project>

@@ -200,15 +200,18 @@ fn main() -> Result<()> {
     let (cpu_mesh, initial_texture, _load_status) = load_cpu_mesh(initial_path);
     info!("✓ Model loaded");
 
-    let mut loaded_file_name = if initial_path.exists() {
-        initial_path
+    let mut loaded_file_name = String::new();
+    let mut loaded_texture_name = String::new();
+
+    if initial_path.exists() {
+        loaded_file_name = initial_path
             .file_name()
             .unwrap()
             .to_string_lossy()
-            .into_owned()
+            .into_owned();
     } else {
-        "embedded sphere".to_string()
-    };
+        loaded_file_name = "embedded sphere".to_string();
+    }
 
     // Add state for file loading
     let mut current_cpu_mesh = cpu_mesh.clone();
@@ -526,6 +529,7 @@ fn main() -> Result<()> {
                     &context,
                     mode,
                     &mut loaded_file_name,
+                    &mut loaded_texture_name,
                     &mut file_loading,
                     &tx_gui,
                     &rx,
