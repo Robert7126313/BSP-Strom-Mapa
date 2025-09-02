@@ -196,7 +196,15 @@ fn process_primitive(
         let vertex_count = all_positions.len() - start_vertex_count;
         info!("Added {} vertices", vertex_count);
 
-        if let Some(tex) = reader.read_tex_coords(0) {
+        // Use the correct texture coordinate set as specified in the material.
+        let tex_coord_index = primitive
+            .material()
+            .pbr_metallic_roughness()
+            .base_color_texture()
+            .map(|t| t.tex_coord())
+            .unwrap_or(0);
+
+        if let Some(tex) = reader.read_tex_coords(tex_coord_index) {
             for tc in tex.into_f32() {
                 all_uvs.push(vec2(tc[0], 1.0 - tc[1]));
             }
