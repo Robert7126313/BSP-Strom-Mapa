@@ -12,36 +12,60 @@ pub use crate::geometry::{BoundingBox, Frustum, Plane, Triangle};
 
 // ---------------- BSP Implementation -------------------------------------- //
 
+/// A node in the BSP tree.
+///
+/// Each node can either be a leaf, containing a list of triangles, or an
+/// internal node, which has a splitting plane and two children (`front` and
+/// `back`).
 #[derive(Debug)]
 pub struct BspNode {
+    /// A unique identifier for this node.
     pub id: usize,
+    /// The splitting plane for this node. If `None`, this is a leaf node.
     pub plane: Option<Plane>,
+    /// The child node in front of the splitting plane.
     pub front: Option<Box<BspNode>>,
+    /// The child node behind the splitting plane.
     pub back: Option<Box<BspNode>>,
+    /// The triangles contained in this node (only for leaf nodes).
     pub triangles: Vec<Triangle>,
+    /// The bounding box that encloses all triangles in this node and its children.
     pub bounds: BoundingBox,
-    node_count: u32,   // Cache the total number of nodes in this subtree
-    subtree_tris: u32, // Cache the total number of triangles in this subtree
+    /// Cache the total number of nodes in this subtree.
+    node_count: u32,
+    /// Cache the total number of triangles in this subtree.
+    subtree_tris: u32,
 }
 
+/// Statistics related to camera-based culling.
 #[derive(Default)]
 pub struct CameraStats {
+    /// The number of BSP nodes visited during traversal.
     pub nodes_visited: u32,
+    /// The number of triangles rendered after culling.
     pub triangles_rendered: u32,
+    /// The number of vertices rendered after culling.
     pub vertices_rendered: u32,
 }
 
+/// A collection of statistics about the BSP tree and rendering process.
 #[derive(Default)]
 pub struct BspStats {
+    /// The total number of nodes in the BSP tree.
     pub total_nodes: u32,
+    /// The total number of triangles in the model.
     pub total_triangles: u32,
-    /// Statistiky vázané na aktuální kameru
+    /// Statistics related to the current camera view.
     pub camera: CameraStats,
-    /// Počet uzlů navštívených při posledním výběru uzlu
+    /// The number of nodes visited during the last node selection.
     pub nodes_to_selected: u32,
 }
 
 impl BspNode {
+    /// Creates a new leaf node.
+    ///
+    /// A leaf node has no splitting plane or children, and it contains a list of
+    /// triangles.
     pub fn new_leaf(triangles: Vec<Triangle>, id: usize) -> Self {
         Self {
             id,
@@ -55,12 +79,16 @@ impl BspNode {
         }
     }
 
+    /// Creates a new internal node.
+    ///
+    /// An internal node has a splitting plane and two children. It does not
+    /// directly contain any triangles.
     fn new_node(plane: Plane, front: BspNode, back: BspNode, id: usize) -> Self {
         // Calculate the node count and triangle count before moving the nodes into boxes
         let total_count = 1 + front.node_count + back.node_count;
         let total_tris = front.subtree_tris + back.subtree_tris;
 
-        // Nejprve vytvoříme společný obalový objem, než přesuneme hodnoty do boxů
+        // First, create a combined bounding box before moving the values into boxes
         let bounds = BoundingBox::encompass(&front.bounds, &back.bounds);
 
         Self {
@@ -75,17 +103,19 @@ impl BspNode {
         }
     }
 
+    /// Recursively counts the total number of nodes in this subtree.
     pub fn count_nodes(&self) -> u32 {
         1 + self.front.as_ref().map_or(0, |n| n.count_nodes())
             + self.back.as_ref().map_or(0, |n| n.count_nodes())
     }
 
+    /// Returns the total number of triangles in this subtree.
     pub fn subtree_triangles(&self) -> u32 {
         self.subtree_tris
     }
 }
 
-// před funkci triangle_center přidáme trait extension pro Vector3
+// Add a trait extension for Vector3 before the triangle_center function
 trait Vector3Ext<S> {
     fn map2<F>(self, other: Self, f: F) -> Self
     where
@@ -101,13 +131,13 @@ impl Vector3Ext<f32> for Vector3<f32> {
     }
 }
 
-/// Bucketovaná SAH pro O(n + K) split - mnohem rychlejší než původní O(n²) SAH
+/// Bucket-based SAH for O(n + K) split - much faster than the original O(n²) SAH
 fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
-    // 1) Parent BB a SA
+    // 1) Parent BB and SA
     let parent_bb = BoundingBox::from_triangles(tris);
     let parent_sa = parent_bb.surface_area();
 
-    // 2) Spočti centroidy a rozsah (SoA)
+    // 2) Calculate centroids and range (SoA)
     let mut mins = Vector3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
     let mut maxs = Vector3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
     let mut centroid_x = Vec::with_capacity(tris.len());
@@ -124,14 +154,14 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
 
     let extent = maxs - mins;
 
-    // Ošetření degenerovaného případu - všechny centroidy na stejném místě
+    // Handle degenerate case - all centroids at the same location
     if extent.x < 1e-6 && extent.y < 1e-6 && extent.z < 1e-6 {
-        // Fallback na střed parent BB
+        // Fallback to the center of the parent BB
         let center = (parent_bb.min + parent_bb.max) * 0.5;
         return Plane::new(Vector3::unit_x(), center);
     }
 
-    // 3) Výběr osy podle největší extent
+    // 3) Select axis based on the largest extent
     let axis = if extent.x >= extent.y && extent.x >= extent.z {
         0
     } else if extent.y >= extent.z {
@@ -140,7 +170,7 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
         2
     };
 
-    // Pokud je extent na vybrané ose téměř nulový, použij fallback
+    // If the extent on the selected axis is almost zero, use a fallback
     if extent[axis] < 1e-6 {
         let center = (parent_bb.min + parent_bb.max) * 0.5;
         let normal = match axis {
@@ -151,7 +181,7 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
         return Plane::new(normal, center);
     }
 
-    // 4) Příprava bucketů
+    // 4) Prepare buckets
     #[derive(Clone)]
     struct Bucket {
         count: usize,
@@ -166,7 +196,7 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
         buckets
     ];
 
-    // 5) Jediný průchod: přiřaď každý trojúhelník do bucketu
+    // 5) Single pass: assign each triangle to a bucket
     let centroid_axis = match axis {
         0 => &centroid_x,
         1 => &centroid_y,
@@ -182,7 +212,7 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
         b.bb = BoundingBox::encompass(&b.bb, &BoundingBox::from_triangle(tri));
     }
 
-    // 6) Prefix/suffix výpočty
+    // 6) Prefix/suffix calculations
     let mut left_counts = vec![0; buckets];
     let mut left_bbs = vec![BoundingBox::new_empty(); buckets];
     let mut acc_bb = BoundingBox::new_empty();
@@ -207,7 +237,7 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
         right_bbs[j] = acc_bb2.clone();
     }
 
-    // 7) Najdi nejlepší rozdělení mezi buckety i a i+1
+    // 7) Find the best split between buckets i and i+1
     let mut best_cost = f32::INFINITY;
     let mut best_i = 0;
 
@@ -231,12 +261,12 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
         }
     }
 
-    // 8) Vypočti pozici split-point mezi buckety best_i a best_i+1
+    // 8) Calculate the position of the split-point between buckets best_i and best_i+1
     let split_norm = (best_i as f32 + 1.0) / buckets as f32;
     let mut split_point = mins;
     split_point[axis] = mins[axis] + split_norm * extent[axis];
 
-    // 9) Vrať rovinu
+    // 9) Return the plane
     let normal = match axis {
         0 => Vector3::unit_x(),
         1 => Vector3::unit_y(),
@@ -246,7 +276,7 @@ fn bucketed_sah_plane(tris: &[Triangle], buckets: usize) -> Plane {
     Plane::new(normal, split_point)
 }
 
-// Upravená funkce build_bsp, která přiřazuje ID uzlům
+// Modified build_bsp function that assigns IDs to nodes
 pub fn build_bsp(
     triangles: &[Triangle],
     depth: u32,
@@ -264,10 +294,10 @@ pub fn build_bsp(
         return BspNode::new_leaf(Vec::new(), my_id);
     }
 
-    // Použij bucketed SAH algoritmus místo původního SAH - O(n + K) složitost
+    // Use the bucketed SAH algorithm instead of the original SAH - O(n + K) complexity
     let splitting_plane = bucketed_sah_plane(triangles, 16);
 
-    // Paralelní klasifikace trojúhelníků pomocí Rayon
+    // Parallel classification of triangles using Rayon
     let (front_triangles, back_triangles): (Vec<Triangle>, Vec<Triangle>) =
         triangles.par_iter().cloned().partition(|triangle| {
             let center = triangle_center(triangle);
@@ -279,7 +309,7 @@ pub fn build_bsp(
         return BspNode::new_leaf(triangles.to_vec(), my_id);
     }
 
-    // Rekurzivní stavba podstromů v paralelních větvích
+    // Recursive construction of subtrees in parallel branches
     let (front_node, back_node) = rayon::join(
         || build_bsp(&front_triangles, depth + 1, max_depth, next_id),
         || build_bsp(&back_triangles, depth + 1, max_depth, next_id),
@@ -288,7 +318,7 @@ pub fn build_bsp(
     BspNode::new_node(splitting_plane, front_node, back_node, my_id)
 }
 
-// Funkce pro rekurzivní hledání uzlu podle ID
+// Function for recursively finding a node by ID
 pub fn find_node(node: &BspNode, id: usize) -> Option<&BspNode> {
     if node.id == id {
         return Some(node);
@@ -346,9 +376,9 @@ pub fn find_deepest_node_containing_point<'a>(
     Some(node)
 }
 
-// Funkce pro sběr všech trojúhelníků v podstromu
+// Function to collect all triangles in a subtree
 pub fn collect_triangles_in_subtree(node: &BspNode, triangles: &mut Vec<Triangle>) {
-    // Iterativní varianta pro lepší výkon a menší stack usage
+    // Iterative version for better performance and less stack usage
     let mut stack = vec![node];
     while let Some(n) = stack.pop() {
         triangles.extend(n.triangles.iter().cloned());
@@ -361,7 +391,7 @@ pub fn collect_triangles_in_subtree(node: &BspNode, triangles: &mut Vec<Triangle
     }
 }
 
-// Funkce pro vytvoření zvýrazněného meshe
+// Function to create a highlighted mesh
 pub fn create_highlight_mesh(
     triangles: &[Triangle],
     context: &Context,
@@ -402,17 +432,17 @@ pub fn create_highlight_mesh(
     Gm::new(Mesh::new(context, &cpu_mesh), material)
 }
 
-// Funkce pro vytvoření meshe dělící roviny
+// Function to create a mesh for the splitting plane
 pub fn create_plane_mesh(
     plane: &Plane,
     bounds: &BoundingBox,
     context: &Context,
 ) -> Gm<Mesh, PhysicalMaterial> {
-    // Vypočítáme střed obalového objemu
+    // Calculate the center of the bounding box
     let center = (bounds.min + bounds.max) * 0.5;
 
-    // Potřebujeme najít dva vektory kolmé na normálu roviny
-    // Nejprve najdeme libovolný vektor kolmý na normálu
+    // We need to find two vectors perpendicular to the plane's normal
+    // First, find any vector perpendicular to the normal
     let n = plane.n;
     let u = if n.x.abs() < n.y.abs() && n.x.abs() < n.z.abs() {
         Vector3::new(0.0, -n.z, n.y).normalize()
@@ -422,13 +452,13 @@ pub fn create_plane_mesh(
         Vector3::new(-n.y, n.x, 0.0).normalize()
     };
 
-    // Druhý vektor kolmý na normálu a první vektor
+    // The second vector is perpendicular to the normal and the first vector
     let v = n.cross(u).normalize();
 
-    // Velikost roviny - vycházíme z velikosti obalového objemu
+    // The size of the plane is based on the size of the bounding box
     let extent = (bounds.max - bounds.min).magnitude() * 0.6;
 
-    // Vytvoříme čtyři rohy roviny
+    // Create the four corners of the plane
     let corners = [
         center + (u + v) * extent,
         center + (u - v) * extent,
@@ -436,7 +466,7 @@ pub fn create_plane_mesh(
         center + (-u + v) * extent,
     ];
 
-    // Vytvoříme pozice a indexy pro mesh
+    // Create positions and indices for the mesh
     let positions = vec![
         vec3(corners[0].x, corners[0].y, corners[0].z),
         vec3(corners[1].x, corners[1].y, corners[1].z),
@@ -444,7 +474,7 @@ pub fn create_plane_mesh(
         vec3(corners[3].x, corners[3].y, corners[3].z),
     ];
 
-    // Dva trojúlníky pro čtyřúhelník
+    // Two triangles for a quad
     let indices = vec![0, 1, 2, 2, 3, 0];
 
     let cpu_mesh = CpuMesh {
@@ -465,12 +495,12 @@ pub fn create_plane_mesh(
     Gm::new(Mesh::new(context, &cpu_mesh), material)
 }
 
-// ---------------- Free‑fly kamera ---------------------------------------- //
+// ---------------- Free-fly camera ---------------------------------------- //
 pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
-    // Získáme pozice vrcholů z meshe
+    // Get vertex positions from the mesh
     let positions = match &mesh.positions {
         Positions::F32(pos) => pos,
-        _ => return Vec::new(), // Pokud nemáme F32 pozice, vrátíme prázdný vektor
+        _ => return Vec::new(), // If we don't have F32 positions, return an empty vector
     };
     let uvs = mesh.uvs.as_ref();
 
@@ -554,11 +584,11 @@ pub fn cpu_mesh_to_triangles(mesh: &CpuMesh) -> Vec<Triangle> {
             );
             tris
         }
-        _ => Vec::new(), // Přidáno pro pokrytí všech případů
+        _ => Vec::new(), // Added to cover all cases
     }
 }
 
-// Funkce pro traverzování BSP stromu s frustum cullingem
+// Function to traverse the BSP tree with frustum culling
 pub fn traverse_bsp_with_frustum(
     node: &BspNode,
     observer_position: Vector3<f32>,
@@ -568,10 +598,10 @@ pub fn traverse_bsp_with_frustum(
 ) {
     stats.nodes_visited += 1;
 
-    // Nejprve zkontrolujeme, zda obalový objem uzlu protíná frustum
+    // First, check if the node's bounding box intersects the frustum
     let mut is_visible = true;
 
-    // Testujeme proti všem rovinám frustumu
+    // Test against all frustum planes
     for plane in &frustum.planes {
         if !node.bounds.intersects_plane(plane) {
             is_visible = false;
@@ -583,12 +613,12 @@ pub fn traverse_bsp_with_frustum(
         return;
     }
 
-    // Pokud je list a nemá trojúhelníky, ukonči dříve
+    // If it's a leaf and has no triangles, exit early
     if node.triangles.is_empty() && node.plane.is_none() {
         return;
     }
 
-    // Přidáme trojúhelníky z tohoto uzlu do viditelných
+    // Add triangles from this node to the visible set
     if !node.triangles.is_empty() {
         visible_triangles.extend(node.triangles.iter().cloned());
         let tris = node.triangles.len() as u32;
@@ -596,12 +626,12 @@ pub fn traverse_bsp_with_frustum(
         stats.vertices_rendered += tris * 3;
     }
 
-    // Pokud uzel není list, traverzujeme podstromy v závislosti na pozici pozorovatele
+    // If the node is not a leaf, traverse the subtrees depending on the observer's position
     if let Some(ref plane) = node.plane {
         let side = plane.classify(observer_position);
 
         if side >= 0 {
-            // Pozorovatel je před rovinou, nejprve front, pak back
+            // Observer is in front of the plane, traverse front then back
             match (node.front.as_ref(), node.back.as_ref()) {
                 (Some(front), Some(back)) => {
                     let (mut front_stats, mut front_tris, mut back_stats, mut back_tris) = (
@@ -659,7 +689,7 @@ pub fn traverse_bsp_with_frustum(
                 _ => {}
             }
         } else {
-            // Pozorovatel je za rovinou, nejprve back, pak front
+            // Observer is behind the plane, traverse back then front
             match (node.back.as_ref(), node.front.as_ref()) {
                 (Some(back), Some(front)) => {
                     let (mut back_stats, mut back_tris, mut front_stats, mut front_tris) = (

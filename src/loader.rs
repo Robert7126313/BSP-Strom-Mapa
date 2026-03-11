@@ -6,6 +6,11 @@ use std::path::Path;
 use three_d::*;
 
 /// Load a CpuMesh and optional texture from a GLTF/GLB file.
+///
+/// This function performs basic validation, such as checking if the file exists
+/// and if its size is within a reasonable limit. It then attempts to load the
+/// file using the `gltf` crate. If loading fails, it returns a default sphere
+/// mesh and an error message.
 pub fn load_cpu_mesh(path: &Path) -> (CpuMesh, Option<CpuTexture>, String) {
     info!("Attempting to load: {}", path.display());
 
@@ -54,6 +59,11 @@ pub fn load_cpu_mesh(path: &Path) -> (CpuMesh, Option<CpuTexture>, String) {
     }
 }
 
+/// Helper function to load a GLTF file using the `gltf` crate.
+///
+/// This function recursively processes the nodes in the GLTF scene, extracting
+/// vertex positions, indices, and UV coordinates. It also extracts the first
+/// texture it finds.
 fn load_gltf_with_gltf_crate(path: &Path) -> Result<(CpuMesh, Option<CpuTexture>)> {
     info!("Loading GLTF via gltf crate...");
     let (document, buffers, images) = gltf::import(path)?;
@@ -116,6 +126,7 @@ fn load_gltf_with_gltf_crate(path: &Path) -> Result<(CpuMesh, Option<CpuTexture>
     Ok((mesh, texture))
 }
 
+/// Recursively processes a node in the GLTF scene.
 fn process_node(
     node: &gltf::Node,
     buffers: &[gltf::buffer::Data],
@@ -168,6 +179,7 @@ fn process_node(
     Ok(())
 }
 
+/// Processes a primitive in a GLTF mesh.
 fn process_primitive(
     primitive: &gltf::Primitive,
     buffers: &[gltf::buffer::Data],

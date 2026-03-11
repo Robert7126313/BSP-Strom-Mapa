@@ -3,6 +3,7 @@
 use cgmath::{InnerSpace, Vector2, Vector3};
 use three_d::Camera;
 
+/// A triangle with 3D vertices and 2D UV coordinates.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Triangle {
     pub a: Vector3<f32>,
@@ -13,6 +14,7 @@ pub struct Triangle {
     pub uv_c: Vector2<f32>,
 }
 
+/// A 3D plane defined by a normal vector and a distance from the origin.
 #[derive(Clone, Debug)]
 pub struct Plane {
     pub n: Vector3<f32>,
@@ -20,16 +22,24 @@ pub struct Plane {
 }
 
 impl Plane {
+    /// Creates a new plane from a normal vector and a point on the plane.
     pub fn new(n: Vector3<f32>, point: Vector3<f32>) -> Self {
         let n = n.normalize();
         let d = -n.dot(point);
         Self { n, d }
     }
 
+    /// Calculates the signed distance from a point to the plane.
     pub fn side(&self, point: Vector3<f32>) -> f32 {
         self.n.dot(point) + self.d
     }
 
+    /// Classifies a point as being in front of, behind, or on the plane.
+    ///
+    /// Returns:
+    /// - `1` if the point is in front of the plane.
+    /// - `-1` if the point is behind the plane.
+    /// - `0` if the point is on the plane.
     pub fn classify(&self, point: Vector3<f32>) -> i32 {
         let dist = self.side(point);
         const EPSILON: f32 = 1e-6;
@@ -41,6 +51,7 @@ impl Plane {
     }
 }
 
+/// An axis-aligned bounding box.
 #[derive(Clone, Debug)]
 pub struct BoundingBox {
     pub min: Vector3<f32>,
@@ -48,6 +59,7 @@ pub struct BoundingBox {
 }
 
 impl BoundingBox {
+    /// Creates a new, empty bounding box.
     pub fn new_empty() -> Self {
         Self {
             min: Vector3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY),
@@ -55,6 +67,7 @@ impl BoundingBox {
         }
     }
 
+    /// Checks if the bounding box contains a point.
     pub fn contains(&self, point: Vector3<f32>) -> bool {
         point.x >= self.min.x
             && point.x <= self.max.x
@@ -64,6 +77,7 @@ impl BoundingBox {
             && point.z <= self.max.z
     }
 
+    /// Creates a bounding box that encloses a single triangle.
     pub fn from_triangle(tri: &Triangle) -> Self {
         let min = Vector3::new(
             tri.a.x.min(tri.b.x).min(tri.c.x),
@@ -78,6 +92,7 @@ impl BoundingBox {
         BoundingBox { min, max }
     }
 
+    /// Creates a bounding box that encloses a list of triangles.
     pub fn from_triangles(triangles: &[Triangle]) -> Self {
         if triangles.is_empty() {
             return Self::new_empty();
@@ -97,6 +112,7 @@ impl BoundingBox {
         BoundingBox { min, max }
     }
 
+    /// Creates a new bounding box that encompasses two other bounding boxes.
     pub fn encompass(box1: &Self, box2: &Self) -> Self {
         BoundingBox {
             min: Vector3::new(
@@ -112,6 +128,7 @@ impl BoundingBox {
         }
     }
 
+    /// Checks if the bounding box intersects a plane.
     pub fn intersects_plane(&self, plane: &Plane) -> bool {
         let p = Vector3::new(
             if plane.n.x >= 0.0 {
@@ -133,6 +150,7 @@ impl BoundingBox {
         plane.side(p) >= 0.0
     }
 
+    /// Calculates the surface area of the bounding box.
     pub fn surface_area(&self) -> f32 {
         let d = self.max - self.min;
         if d.x < 0.0 || d.y < 0.0 || d.z < 0.0 {
@@ -142,11 +160,13 @@ impl BoundingBox {
     }
 }
 
+/// A view frustum, defined by six planes.
 pub struct Frustum {
     pub planes: [Plane; 6],
 }
 
 impl Frustum {
+    /// Extracts the view frustum from a camera.
     pub fn from_camera(camera: &Camera) -> Self {
         let vp_matrix = camera.projection() * camera.view();
         let mat = [
@@ -204,11 +224,13 @@ impl Frustum {
         }
     }
 
+    /// Checks if the frustum intersects a bounding box.
     pub fn intersects(&self, bbox: &BoundingBox) -> bool {
         self.planes.iter().all(|p| bbox.intersects_plane(p))
     }
 }
 
+/// Calculates the centroid of a triangle.
 pub fn triangle_center(tri: &Triangle) -> Vector3<f32> {
     (tri.a + tri.b + tri.c) / 3.0
 }

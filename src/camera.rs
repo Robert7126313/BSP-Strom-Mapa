@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
-//! Free‑flight and third‑person camera utilities.
+//! Free-flight and third-person camera utilities.
 
 use crate::config::CONFIG;
 use crate::input::{InputManager, KeyCode};
 use cgmath::{Deg, Vector3};
 use three_d::*;
 
+/// A free-flight camera that can be controlled with the keyboard.
 #[derive(Clone)]
 pub struct FreeCamera {
     pub pos: Vector3<f32>,
@@ -16,6 +17,7 @@ pub struct FreeCamera {
 }
 
 impl FreeCamera {
+    /// Creates a new `FreeCamera` at the given position.
     pub fn new(pos: Vector3<f32>) -> Self {
         let cfg = CONFIG.read().unwrap();
         Self {
@@ -27,6 +29,7 @@ impl FreeCamera {
         }
     }
 
+    /// Returns the camera's direction vector.
     pub fn dir(&self) -> Vector3<f32> {
         Vector3::new(
             self.yaw.cos() * self.pitch.cos(),
@@ -36,10 +39,12 @@ impl FreeCamera {
         .normalize()
     }
 
+    /// Returns the camera's right vector.
     pub fn right(&self) -> Vector3<f32> {
         self.dir().cross(Vector3::unit_y()).normalize()
     }
 
+    /// Updates the camera's position and orientation based on keyboard input.
     pub fn update_smooth(&mut self, input_manager: &InputManager, dt: f32) {
         let raw_move_vec = input_manager.get_movement_vector();
         let tilt_value = input_manager.get_tilt_value();
@@ -71,6 +76,7 @@ impl FreeCamera {
             - std::f32::consts::PI;
     }
 
+    /// Creates a `three_d::Camera` from the `FreeCamera`'s state.
     pub fn cam(&self, vp: Viewport) -> Camera {
         let cfg = CONFIG.read().unwrap();
         Camera::new_perspective(
@@ -85,12 +91,16 @@ impl FreeCamera {
     }
 }
 
+/// The camera mode.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum CamMode {
+    /// A free-flying spectator camera.
     Spectator,
+    /// A third-person camera that looks at the spectator camera.
     ThirdPerson,
 }
 
+/// A snapshot of the camera's state.
 #[derive(Clone)]
 pub struct CameraState {
     pub pos: Vector3<f32>,
@@ -100,6 +110,7 @@ pub struct CameraState {
 }
 
 impl CameraState {
+    /// Creates a new `CameraState`.
     pub fn new(pos: Vector3<f32>, yaw: f32, pitch: f32) -> Self {
         let speed = CONFIG.read().unwrap().camera_speed;
         Self {
@@ -110,6 +121,7 @@ impl CameraState {
         }
     }
 
+    /// Creates a `CameraState` from a `FreeCamera`.
     pub fn from_camera(camera: &FreeCamera) -> Self {
         Self {
             pos: camera.pos,
@@ -119,10 +131,21 @@ impl CameraState {
         }
     }
 
+    /// Applies the `CameraState` to a `FreeCamera`.
     pub fn apply_to_camera(&self, camera: &mut FreeCamera) {
         camera.pos = self.pos;
         camera.yaw = self.yaw;
         camera.pitch = self.pitch;
         camera.speed = self.speed;
+    }
+
+    /// Returns the camera's direction vector.
+    pub fn dir(&self) -> Vector3<f32> {
+        Vector3::new(
+            self.yaw.cos() * self.pitch.cos(),
+            self.pitch.sin(),
+            self.yaw.sin() * self.pitch.cos(),
+        )
+        .normalize()
     }
 }

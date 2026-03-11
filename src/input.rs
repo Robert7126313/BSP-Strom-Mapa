@@ -6,12 +6,14 @@ use cgmath::Vector3;
 use std::collections::HashMap;
 use three_d::*;
 
+/// The state of a key.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum KeyState {
     Pressed,
     Released,
 }
 
+/// The key codes that are tracked by the `InputManager`.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum KeyCode {
     W,
@@ -32,6 +34,7 @@ pub enum KeyCode {
 }
 
 impl KeyCode {
+    /// Creates a `KeyCode` from a `three_d::Event`.
     pub fn from_event(event: &Event) -> Option<Self> {
         use KeyCode::*;
         match event {
@@ -58,6 +61,7 @@ impl KeyCode {
     }
 }
 
+/// A manager for keyboard input.
 pub struct InputManager {
     key_states: HashMap<KeyCode, KeyState>,
 }
@@ -71,10 +75,12 @@ impl Default for InputManager {
 }
 
 impl InputManager {
+    /// Creates a new `InputManager`.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Updates the key states from a list of events.
     pub fn update_key_states(&mut self, events: &[Event]) {
         for event in events {
             if let Some(key_code) = KeyCode::from_event(event) {
@@ -91,12 +97,14 @@ impl InputManager {
         }
     }
 
+    /// Checks if a key is currently pressed.
     pub fn is_key_pressed(&self, key_code: KeyCode) -> bool {
         self.key_states
             .get(&key_code)
             .map_or(false, |state| *state == KeyState::Pressed)
     }
 
+    /// Returns a normalized movement vector based on the current key states.
     pub fn get_movement_vector(&self) -> Vector3<f32> {
         let mut move_vec = Vector3::new(0.0, 0.0, 0.0);
 
@@ -128,6 +136,7 @@ impl InputManager {
         move_vec
     }
 
+    /// Returns a tilt value based on the current key states.
     pub fn get_tilt_value(&self) -> f32 {
         let mut tilt = 0.0;
 
